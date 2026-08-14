@@ -5,6 +5,8 @@
 services:
   github:
     build: .
+    # nombre explícito (ver comentario equivalente en apps/filesystem/docker-compose.yml)
+    image: lab-referencia-github:latest
     container_name: lab-referencia-github
     restart: unless-stopped
     mem_limit: 128m

@@ -1,6 +1,8 @@
 services:
   everything:
     build: .
+    # nombre explícito (ver comentario equivalente en apps/filesystem/docker-compose.yml)
+    image: lab-referencia-everything:latest
     container_name: lab-referencia-everything
     restart: unless-stopped
     mem_limit: 192m
