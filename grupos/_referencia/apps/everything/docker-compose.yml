@@ -1,0 +1,11 @@
+services:
+  everything:
+    build: .
+    container_name: lab-referencia-everything
+    restart: unless-stopped
+    mem_limit: 192m
+
+networks:
+  default:
+    name: lab_net
+    external: true
