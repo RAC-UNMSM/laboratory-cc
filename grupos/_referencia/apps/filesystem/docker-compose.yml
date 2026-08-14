@@ -1,6 +1,11 @@
 services:
   filesystem:
     build: .
+    # nombre explícito: sin esto, Docker Compose autogenera el nombre desde
+    # el project name ("lab-_referencia-filesystem"), y el "_" pegado al "-"
+    # produce un nombre de imagen inválido para Docker ("invalid reference
+    # format").
+    image: lab-referencia-filesystem:latest
     container_name: lab-referencia-filesystem
     restart: unless-stopped
     mem_limit: 192m

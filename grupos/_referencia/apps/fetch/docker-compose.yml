@@ -1,6 +1,8 @@
 services:
   fetch:
     build: .
+    # nombre explícito (ver comentario equivalente en apps/filesystem/docker-compose.yml)
+    image: lab-referencia-fetch:latest
     container_name: lab-referencia-fetch
     restart: unless-stopped
     mem_limit: 256m
