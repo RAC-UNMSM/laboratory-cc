@@ -1,6 +1,4 @@
 # Bloquea cualquier merge a main sin revisión del profesor (sección 1.3 del
-# plan). Reemplazar @CAMBIA_ESTO_USUARIO_GITHUB por el usuario real de
-# GitHub del profesor antes de conectar este repo a GitHub (Pendiente #1
-# del plan de infraestructura). Requiere además activar "branch protection"
-# en main con "Require review from Code Owners" en la configuración del repo.
-* @CAMBIA_ESTO_USUARIO_GITHUB
+# plan). Requiere además activar "branch protection" en main con "Require
+# review from Code Owners" en la configuración del repo (Settings -> Branches).
+* @julios-castillo
