@@ -46,3 +46,5 @@ peligroso, solo volúmenes nombrados (sin bind-mounts a rutas del host),
 Este repo **nunca** ejecuta código en la laptop del profesor directamente:
 el CI corre en runners de GitHub, no en la laptop (sección 1.4 del plan) —
 evita que un PR malicioso tenga RCE sobre el servidor real.
+
+<!-- prueba: dispara el primer CI para poder seleccionar status checks en el ruleset -->
