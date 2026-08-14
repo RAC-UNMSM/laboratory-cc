@@ -1,0 +1,39 @@
+# App piloto del grupo 01 (Fase 5, punto 3 del plan): despliegue de n8n vía
+# el mismo patrón que cualquier otra app open source.
+#
+# Reglas obligatorias (las valida ci/validate_resource_limits.py en el PR, y
+# de nuevo lab_pipelines/compose_policy.py justo antes de desplegar):
+#   - mem_limit en todo servicio
+#   - sin privileged / network_mode: host / pid: host / cap_add peligroso
+#   - solo volúmenes nombrados (nada de bind-mounts a rutas del host)
+#
+# container_name fijo y red externa "lab_net" para que Caddy pueda
+# encontrarlo por nombre (ver caddy/Caddyfile, ruta /g01/n8n).
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: lab-g01-n8n
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      # Detrás de Caddy en /g01/n8n — n8n necesita saber su ruta pública
+      # para generar webhooks/enlaces correctos.
+      N8N_PATH: /g01/n8n/
+      WEBHOOK_URL: https://${LAB_DOMAIN:-localhost}/g01/n8n/
+      GENERIC_TIMEZONE: America/Lima
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      default:
+        aliases:
+          - lab-g01-n8n
+
+networks:
+  default:
+    name: lab_net
+    external: true
+
+volumes:
+  n8n_data:
+    name: lab-g01-n8n_data

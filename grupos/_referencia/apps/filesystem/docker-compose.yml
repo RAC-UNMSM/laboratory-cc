@@ -1,0 +1,17 @@
+services:
+  filesystem:
+    build: .
+    container_name: lab-referencia-filesystem
+    restart: unless-stopped
+    mem_limit: 192m
+    volumes:
+      - referencia_filesystem_data:/data
+
+networks:
+  default:
+    name: lab_net
+    external: true
+
+volumes:
+  referencia_filesystem_data:
+    name: lab-referencia-filesystem_data

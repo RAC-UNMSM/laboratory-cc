@@ -1,0 +1,11 @@
+services:
+  fetch:
+    build: .
+    container_name: lab-referencia-fetch
+    restart: unless-stopped
+    mem_limit: 256m
+
+networks:
+  default:
+    name: lab_net
+    external: true

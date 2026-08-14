@@ -1,0 +1,17 @@
+# GITHUB_PERSONAL_ACCESS_TOKEN: usar un token con el scope MÍNIMO posible
+# (idealmente un fine-grained PAT de solo-lectura sobre un repo de prueba,
+# nunca un token con permisos amplios) — es justo el punto pedagógico de
+# esta semana (ACLs / permisos con alcance limitado).
+services:
+  github:
+    build: .
+    container_name: lab-referencia-github
+    restart: unless-stopped
+    mem_limit: 128m
+    environment:
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}
+
+networks:
+  default:
+    name: lab_net
+    external: true
