@@ -43,11 +43,22 @@ jobs:
           echo "### Dev-run efímero — resultado por app" > "$SUMMARY_FILE"
           OVERALL_STATUS=0
 
-          for compose_file in grupos/*/apps/*/docker-compose.yml; do
+          # _referencia: 2 niveles (apps/<app>). Grupos de alumnos: 3 niveles
+          # (<semana>/<tema>) -- el identificador de app pasa a ser
+          # "<grupo>_<semana>_<tema>" completo, igual que en discover_apps()
+          # del repo de infraestructura.
+          for compose_file in grupos/_referencia/apps/*/docker-compose.yml grupos/*/*/*/docker-compose.yml; do
             [ -e "$compose_file" ] || continue
             dir=$(dirname "$compose_file")
-            group=$(basename "$(dirname "$(dirname "$compose_file")")")
-            app=$(basename "$dir")
+            if [[ "$compose_file" == grupos/_referencia/apps/* ]]; then
+              group="_referencia"
+              app=$(basename "$dir")
+            else
+              group=$(basename "$(dirname "$(dirname "$dir")")")
+              semana=$(basename "$(dirname "$dir")")
+              tema=$(basename "$dir")
+              app="${group}_${semana}_${tema}"
+            fi
             project="ci-${group}-${app}"
 
             echo "--- Dev-run: ${group}/${app} ---"
