@@ -2,13 +2,13 @@
 # ejemplo-n8n, que es para desplegar una app open source ya armada). Ver
 # grupos/TEMPLATE/README.md para las reglas obligatorias.
 #
-# Reemplazar grupoNN/semanaNN/ejemplo-script por los valores reales, ej.
-# grupo01/semana02/mcpn8n -> identificador completo grupo01_semana02_mcpn8n.
+# container_name es automático (lo calcula el propio despliegue a partir de
+# la ubicación real de esta carpeta) — no hace falta tocarlo.
 
 services:
   ejemplo-script:
     build: .
-    container_name: lab-grupoNN_semanaNN_ejemplo-script # <- reemplazar por el identificador completo real
+    container_name: ${LAB_CONTAINER_NAME}
     restart: "no" # corre una vez y termina — no es un servicio de larga duración
     mem_limit: 256m
 
