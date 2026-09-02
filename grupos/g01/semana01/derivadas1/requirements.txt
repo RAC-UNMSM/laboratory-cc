@@ -1,0 +1,4 @@
+mcp
+sympy
+numpy
+matplotlib
