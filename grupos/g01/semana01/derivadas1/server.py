@@ -6,6 +6,9 @@ hagan con su tema asignado.
 """
 
 import io
+import urllib.error
+import urllib.request
+import uuid
 
 # matplotlib.use("Agg") ANTES de importar pyplot: le dice que dibuje a un
 # archivo/buffer en memoria en vez de abrir una ventana — el contenedor no
@@ -25,6 +28,56 @@ mcp = MCPServer("g01-derivadas1")
 # Símbolo matemático "x" que usa sympy para el cálculo simbólico (derivar,
 # evaluar, etc.) — se define una sola vez y se reusa en toda la tool.
 x = sp.symbols("x")
+
+# --- Storage de imágenes (SeaweedFS) ---
+# El bloque ImageContent de MCP (bytes crudos) llega al modelo pero ningún
+# cliente de chat (Claude Code, Desktop, web) lo pinta solo en el hilo
+# principal -- solo aparece si el usuario expande el detalle del tool call.
+# Lo único que un cliente de chat renderiza solo, sin pedirlo, es una URL
+# https normal dentro del texto de respuesta. Por eso subimos el PNG a
+# SeaweedFS (mismo storage que ya usa este lab, ver docker-compose.yml) y
+# devolvemos también un link -- "seaweedfs" resuelve por DNS interno de
+# Docker porque este contenedor comparte la red "lab_net" con él.
+SEAWEEDFS_S3_URL = "http://seaweedfs:8333"
+IMG_BUCKET = "derivadas1-imgs"
+# Ruta pública nueva en Caddy (ver caddy/Caddyfile), solo lectura, sin login
+# -- un login de GitHub no sirve acá: el fetch de la imagen lo hace el
+# cliente de chat de forma anónima, sin la cookie de sesión del usuario.
+PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/derivadas1"
+
+
+def _ensure_bucket() -> None:
+    """Crea el bucket si no existe. Falla en silencio: si SeaweedFS no está
+    listo todavía (orden de arranque de contenedores) o el bucket ya existe,
+    no es motivo para tumbar el servidor -- el upload real reintenta la
+    conexión de todos modos en cada llamada a derivar()."""
+    try:
+        req = urllib.request.Request(f"{SEAWEEDFS_S3_URL}/{IMG_BUCKET}/", method="PUT")
+        urllib.request.urlopen(req, timeout=5)
+    except (urllib.error.URLError, urllib.error.HTTPError):
+        pass
+
+
+_ensure_bucket()
+
+
+def _subir_imagen(png_bytes: bytes) -> str | None:
+    """Sube el PNG a SeaweedFS con una key random (no adivinable, no
+    secuencial) y devuelve la URL pública, o None si el storage no
+    respondió -- en ese caso derivar() sigue funcionando igual, solo sin
+    link (el ImageContent de respaldo todavía llega al modelo)."""
+    key = f"{uuid.uuid4().hex}.png"
+    try:
+        req = urllib.request.Request(
+            f"{SEAWEEDFS_S3_URL}/{IMG_BUCKET}/{key}",
+            data=png_bytes,
+            method="PUT",
+            headers={"Content-Type": "image/png"},
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except (urllib.error.URLError, urllib.error.HTTPError):
+        return None
+    return f"{PUBLIC_IMG_BASE_URL}/{key}"
 
 
 @mcp.tool()
@@ -109,6 +162,7 @@ def derivar(expresion: str, x_min: float = -10, x_max: float = 10):
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
     plt.close(fig)  # libera la figura de memoria; si no, se acumulan
+    png_bytes = buf.getvalue()
 
     # --- 6. Armar la respuesta ---
     # sp.latex() da la derivada en formato LaTeX (útil si el cliente MCP la
@@ -120,7 +174,21 @@ def derivar(expresion: str, x_min: float = -10, x_max: float = 10):
         f"f'(x) = {derivada}\n"
         f"f'(x) en LaTeX: {sp.latex(derivada)}"
     )
-    return [resumen, Image(data=buf.getvalue(), format="png")]
+
+    # El link (si el storage respondió) se agrega como instrucción explícita
+    # para el modelo: el ImageContent de abajo el modelo lo "ve" pero no lo
+    # puede reescribir; este texto sí lo puede repetir tal cual, y por eso
+    # es lo único que un cliente de chat va a renderizar solo, sin que el
+    # usuario lo pida.
+    imagen_url = _subir_imagen(png_bytes)
+    if imagen_url:
+        resumen += (
+            "\n\nIMPORTANTE: incluye el siguiente link tal cual, en formato "
+            "markdown, en tu respuesta al usuario -- no lo describas, "
+            f"muéstralo:\n\n![Gráfico de f(x) y f'(x)]({imagen_url})"
+        )
+
+    return [resumen, Image(data=png_bytes, format="png")]
 
 
 if __name__ == "__main__":
