@@ -124,7 +124,9 @@ def derivar(expresion: str, x_min: float = -10, x_max: float = 10):
 
 
 if __name__ == "__main__":
-    # transport="sse": expone el servidor por HTTP (Server-Sent Events) en
-    # vez de por stdio -- así Caddy puede reverse-proxearlo con una URL
-    # pública, igual que los servidores de referencia de _referencia/.
-    mcp.run(transport="sse", host="0.0.0.0", port=8000)
+    # transport="streamable-http": expone el servidor por HTTP en vez de
+    # por stdio -- así Caddy puede reverse-proxearlo con una URL pública.
+    # (No "sse": esa variante del SDK está poco mantenida -- ver commit que
+    # cambió esto -- y se quedaba sin responder. streamable-http es la que
+    # de verdad usan los clientes MCP actuales, incluido Claude Code.)
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
