@@ -91,6 +91,13 @@ def derivar(expresion: str, x_min: float = -10, x_max: float = 10):
     Devuelve un texto con la derivada (en notación normal y en LaTeX) y un
     gráfico con f(x) y f'(x) superpuestas.
 
+    Si la respuesta incluye una línea "![Gráfico de f(x) y f'(x)](https://...)",
+    esa imagen es el propio gráfico que este servidor acaba de generar y
+    subir (mismo dominio que este MCP) -- inclúyela tal cual, en formato
+    markdown, en tu respuesta al usuario en vez de solo describirla, porque
+    ningún cliente de chat la renderiza sola a partir del bloque de imagen
+    de la tool.
+
     OJO: este docstring no es solo documentación para humanos — es lo que
     lee la IA para saber en qué formato mandarle la expresión y qué
     significa el resultado (ver "Cómo se le pasa la información al MCP" en
@@ -175,18 +182,15 @@ def derivar(expresion: str, x_min: float = -10, x_max: float = 10):
         f"f'(x) en LaTeX: {sp.latex(derivada)}"
     )
 
-    # El link (si el storage respondió) se agrega como instrucción explícita
-    # para el modelo: el ImageContent de abajo el modelo lo "ve" pero no lo
-    # puede reescribir; este texto sí lo puede repetir tal cual, y por eso
-    # es lo único que un cliente de chat va a renderizar solo, sin que el
-    # usuario lo pida.
+    # El link (si el storage respondió) se agrega como un dato más del
+    # resultado, sin ningún imperativo -- una instrucción tipo "debes
+    # mostrar esto" dentro del *resultado* de una tool tiene la forma de un
+    # prompt injection (el resultado es datos no confiables por diseño, a
+    # diferencia del docstring de arriba, que sí es metadata de confianza).
+    # La indicación de cómo tratar este link vive en el docstring, no acá.
     imagen_url = _subir_imagen(png_bytes)
     if imagen_url:
-        resumen += (
-            "\n\nIMPORTANTE: incluye el siguiente link tal cual, en formato "
-            "markdown, en tu respuesta al usuario -- no lo describas, "
-            f"muéstralo:\n\n![Gráfico de f(x) y f'(x)]({imagen_url})"
-        )
+        resumen += f"\n\n![Gráfico de f(x) y f'(x)]({imagen_url})"
 
     return [resumen, Image(data=png_bytes, format="png")]
 
