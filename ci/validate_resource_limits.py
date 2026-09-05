@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Validador de CI: recorre grupos/*/apps/*/docker-compose.yml y rechaza
+"""Validador de CI: recorre los docker-compose.yml de cada grupo y rechaza
 cualquiera que no cumpla la política de recursos/privilegios (ver
 compose_policy.py). Se corre en cada PR contra `main` (ver
 .github/workflows/ci.yml) — es lo que hace cumplir, de forma automática,
 las reglas descritas en grupos/TEMPLATE/README.md.
+
+Dos convenciones de carpetas, según el grupo:
+  - grupos/_referencia/apps/<app>/docker-compose.yml (2 niveles, curado por
+    el profesor, sin "semana").
+  - grupos/<grupo>/<semana>/<tema>/docker-compose.yml (3 niveles, para
+    grupos de alumnos).
 
 Uso: python3 ci/validate_resource_limits.py
 Sale con código != 0 si hay al menos una violación (falla el job de CI).
@@ -28,20 +34,32 @@ def find_compose_files() -> list[tuple[str, Path]]:
     for group_dir in sorted(GROUPS_ROOT.iterdir()):
         if not group_dir.is_dir() or group_dir.name == "TEMPLATE":
             continue
-        apps_dir = group_dir / "apps"
-        if not apps_dir.is_dir():
+        group = group_dir.name
+
+        if group == "_referencia":
+            apps_dir = group_dir / "apps"
+            if not apps_dir.is_dir():
+                continue
+            for app_dir in sorted(apps_dir.iterdir()):
+                compose_file = app_dir / "docker-compose.yml"
+                if compose_file.is_file():
+                    found.append((group, compose_file))
             continue
-        for app_dir in sorted(apps_dir.iterdir()):
-            compose_file = app_dir / "docker-compose.yml"
-            if compose_file.is_file():
-                found.append((group_dir.name, compose_file))
+
+        for semana_dir in sorted(group_dir.iterdir()):
+            if not semana_dir.is_dir():
+                continue
+            for tema_dir in sorted(semana_dir.iterdir()):
+                compose_file = tema_dir / "docker-compose.yml"
+                if compose_file.is_file():
+                    found.append((group, compose_file))
     return found
 
 
 def main() -> int:
     compose_files = find_compose_files()
     if not compose_files:
-        print("No se encontraron docker-compose.yml bajo grupos/*/apps/ — nada que validar.")
+        print("No se encontraron docker-compose.yml bajo grupos/ — nada que validar.")
         return 0
 
     had_errors = False

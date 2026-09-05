@@ -10,12 +10,15 @@ infraestructura) para el razonamiento completo.
 
 ```
 grupos/
-  TEMPLATE/          <- copiar para un grupo nuevo (ver su README.md)
-  _referencia/        <- MCP servers de referencia, curados por el profesor
-  g01/, g02/, ...      <- un grupo por carpeta
-    apps/
-      <app>/
-        docker-compose.yml   <- obligatorio, ver reglas abajo
+  TEMPLATE/           <- copiar para un grupo nuevo (ver su README.md)
+  _referencia/         <- MCP servers de referencia, curados por el profesor (2 niveles: apps/<app>/)
+  grupo01/, grupo02/, ...  <- un grupo por carpeta
+    semanaNN/              <- una subcarpeta por semana
+      <tema>/                <- proyecto puntual de esa semana
+        docker-compose.yml     <- obligatorio, ver reglas abajo
+                                   (identificador completo: grupoNN_semanaNN_<tema>)
+templates/
+  simple_mcp_server/    <- plantilla de MCP server propio (semana 13+)
 ci/
   validate_resource_limits.py   <- corre en cada PR (ver .github/workflows/ci.yml)
   compose_policy.py             <- reglas (copia del repo de infraestructura)
@@ -24,16 +27,31 @@ ci/
   workflows/ci.yml
 ```
 
+## Primera tarea de cada grupo
+
+El plan detallado de cada semana (qué investigar, qué desplegar, entregables)
+vive en `docs/semana-01/plan.md` y `docs/semana-02/plan.md` **del repo de
+infraestructura** (`architecture-sm`, privado) — no en este repo. Resumen:
+
+- **Semana 1**: sin despliegue todavía — cada grupo investiga el repo, la
+  documentación y el grafo de conocimiento del laboratorio para encontrar
+  por su cuenta dónde está aplicado el modelo cliente-servidor visto en
+  clase.
+- **Semana 2**: primer despliegue real — cada grupo crea `grupos/grupoNN/`
+  vía PR y despliega un servidor MCP de referencia (sin necesidad de
+  tokens ni cuentas pagas).
+
 ## Reglas de todo `docker-compose.yml` de grupo
 
 Ver `grupos/TEMPLATE/README.md` para el detalle completo. Resumen:
 `mem_limit` obligatorio, nada de `privileged`/`network_mode: host`/`cap_add`
 peligroso, solo volúmenes nombrados (sin bind-mounts a rutas del host),
-`container_name: lab-gNN-<app>` fijo, red externa `lab_net`.
+`container_name: lab-grupoNN_semanaNN_<tema>` fijo (identificador completo),
+red externa `lab_net`.
 
 ## Cómo llega esto a producción
 
-1. Un grupo abre PR contra `main` con su carpeta `grupos/gNN/`.
+1. Un grupo abre PR contra `main` con su carpeta `grupos/grupoNN/semanaNN/<tema>/`.
 2. CI (`.github/workflows/ci.yml`) valida las reglas de arriba y hace un
    "dev-run" efímero (build + up + logs + down) publicando el resultado
    como comentario en el PR.
