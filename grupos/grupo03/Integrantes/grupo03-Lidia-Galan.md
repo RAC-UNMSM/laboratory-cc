@@ -1,0 +1,1 @@
+Soy Lidia Galan y pertenezco al grupo 03.
