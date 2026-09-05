@@ -1,0 +1,1 @@
+Soy Nicanor Yalo Palomino y pertenezco a grupo 10 uu
