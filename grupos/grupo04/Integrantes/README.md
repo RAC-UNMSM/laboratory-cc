@@ -4,7 +4,7 @@ Completar con los datos de cada integrante del grupo:
 
 | Nombre completo | Correo institucional | Usuario de GitHub |
 |---|---|---|
-|  |  |  |
+| Catalán Barrientos Cristopher Antoni | cristopher.catalan@unmsm.edu.pe | cristopher-catalan|
 |  |  |  |
 |  |  |  |
 |  |  |  |
