@@ -6,7 +6,7 @@ Completar con los datos de cada integrante del grupo:
 |---|---|---|
 |Jardiny Irazhova Guerra Velasquez  | jardiny.guerra@unmsm.edu.pe | Jardiny-guerra |
 |Cristopher Antoni Catalán Barrientos  | cristopher.catalan@unmsm.edu.pe  | cristopher-catalan |
-|  |  |  |
+|Omar Valentín Supo Martinez | omar.supo@unmsm.edu.pe | Omar-Supo |
 |  |  |  |
 |  |  |  |
 |  |  |  |
