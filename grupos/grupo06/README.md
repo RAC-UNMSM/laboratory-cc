@@ -12,11 +12,8 @@ Para un grupo nuevo (`gNN`):
      (`python:3.11-slim`) y corre una vez (`restart: "no"`). Para un
      servicio que debe quedarse corriendo (un servidor, una API), usar en
      su lugar el patrón de `ejemplo-n8n`.
-<<<<<<< HEAD
-4. Reglas obligatorias del `docker-compose.yml` (las valida el CI en el PR,
-=======
 3. Reglas obligatorias del `docker-compose.yml` (las valida el CI en el PR,
->>>>>>> 021caa0d96071be84de4cddb7d515bdc3297ee85
+4. Reglas obligatorias del `docker-compose.yml` (las valida el CI en el PR,
    y de nuevo el propio despliegue antes de tocar Docker — ver
    `ci/compose_policy.py`):
    - **`mem_limit`** en todo servicio.
@@ -25,7 +22,6 @@ Para un grupo nuevo (`gNN`):
      `SYS_MODULE`).
    - Solo **volúmenes nombrados** (nunca bind-mounts a una ruta del host:
      nada de `./algo:/algo` ni `/ruta/absoluta:/algo`).
-<<<<<<< HEAD
    - `container_name: lab-grupoNN_semanaNN_<tema>` fijo (el identificador
      completo del punto 2), y unirse a la red externa `lab_net` (copiar el
      bloque `networks:` del ejemplo).
@@ -41,7 +37,6 @@ Para un grupo nuevo (`gNN`):
    reverse_proxy lab-<identificador-completo>:<puerto> }`) — esa parte sí la
    hace el profesor, no va en este repo.
 7. Abrir PR contra `main`. El profesor (CODEOWNERS) revisa y mergea — el
-=======
    - `container_name: lab-gNN-<app>` fijo, y unirse a la red externa
      `lab_net` (copiar el bloque `networks:` del ejemplo).
 4. **No hace falta tocar nada del repo de infraestructura.** El asset de
@@ -56,7 +51,6 @@ Para un grupo nuevo (`gNN`):
    lab-gNN-<app>:<puerto> }`) — esa parte sí la hace el profesor, no va en
    este repo.
 6. Abrir PR contra `main`. El profesor (CODEOWNERS) revisa y mergea — el
->>>>>>> 021caa0d96071be84de4cddb7d515bdc3297ee85
    despliegue real ocurre solo, automáticamente, cuando el agente de deploy
    detecta el merge (nunca hay botón de "Materialize" que un alumno pueda
    apretar).
