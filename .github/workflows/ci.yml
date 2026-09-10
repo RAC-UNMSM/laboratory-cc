@@ -43,12 +43,45 @@ jobs:
           echo "### Dev-run efímero — resultado por app" > "$SUMMARY_FILE"
           OVERALL_STATUS=0
 
-          for compose_file in grupos/*/apps/*/docker-compose.yml; do
+          # _referencia: 2 niveles (apps/<app>). Grupos de alumnos: 3 niveles
+          # (<semana>/<tema>) -- el identificador de app pasa a ser
+          # "<grupo>_<semana>_<tema>" completo, igual que en discover_apps()
+          # del repo de infraestructura.
+          # sort -u: _referencia/apps/<app>/docker-compose.yml calza con los
+          # dos patrones del glob (es, de casualidad, también 3 niveles) y
+          # quedaría procesado dos veces si no se deduplica.
+          mapfile -t compose_files < <(printf '%s\n' grupos/_referencia/apps/*/docker-compose.yml grupos/*/*/*/docker-compose.yml | sort -u)
+          for compose_file in "${compose_files[@]}"; do
             [ -e "$compose_file" ] || continue
             dir=$(dirname "$compose_file")
-            group=$(basename "$(dirname "$(dirname "$compose_file")")")
-            app=$(basename "$dir")
+            if [[ "$compose_file" == grupos/_referencia/apps/* ]]; then
+              group="_referencia"
+              app=$(basename "$dir")
+            else
+              group=$(basename "$(dirname "$(dirname "$dir")")")
+              # _referencia ya se procesó arriba (glob específico) y TEMPLATE
+              # es solo la plantilla de referencia, no un grupo real: ninguno
+              # de los dos se despliega acá.
+              if [[ "$group" == "_referencia" || "$group" == "TEMPLATE" ]]; then
+                continue
+              fi
+              semana=$(basename "$(dirname "$dir")")
+              tema=$(basename "$dir")
+              app="${group}_${semana}_${tema}"
+            fi
             project="ci-${group}-${app}"
+
+            # Mismo cálculo que lab_pipelines (docker_resource.py /
+            # app_deploy.py) del repo de infraestructura: el nombre del
+            # contenedor y la ruta pública nunca se escriben a mano en el
+            # docker-compose.yml del grupo, se inyectan acá.
+            if [[ "$group" == "_referencia" ]]; then
+              container_name="lab-referencia-${app}"
+              public_path="/mcp/${app}"
+            else
+              container_name="lab-${app}"
+              public_path="/${group}/${app}"
+            fi
 
             echo "--- Dev-run: ${group}/${app} ---"
             echo "" >> "$SUMMARY_FILE"
@@ -60,6 +93,8 @@ jobs:
               cd "$dir"
               MCP_GITHUB_TOKEN="${MCP_GITHUB_TOKEN:-dummy-ci-token}" \
               LAB_DOMAIN="ci.localhost" \
+              LAB_CONTAINER_NAME="$container_name" \
+              LAB_PUBLIC_PATH="$public_path" \
                 docker compose -p "$project" up -d --build --quiet-pull 2>&1
             ) >> "$SUMMARY_FILE" 2>&1
             up_status=$?

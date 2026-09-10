@@ -1,16 +1,20 @@
 # Copiar esta carpeta como punto de partida para desplegar una app open
 # source cualquiera (n8n es solo el ejemplo del piloto, sección 2 del plan).
 # Ver grupos/TEMPLATE/README.md para las reglas obligatorias.
+#
+# container_name, la ruta pública y el nombre del volumen son automáticos
+# (los calcula el propio despliegue a partir de la ubicación real de esta
+# carpeta) — no hace falta tocarlos ni reemplazar nada acá.
 
 services:
   ejemplo-n8n:
     image: n8nio/n8n:latest
-    container_name: lab-gNN-ejemplo-n8n # <- reemplazar gNN por el número real del grupo
+    container_name: ${LAB_CONTAINER_NAME}
     restart: unless-stopped
     mem_limit: 512m
     environment:
-      N8N_PATH: /gNN/ejemplo-n8n/
-      WEBHOOK_URL: https://${LAB_DOMAIN:-localhost}/gNN/ejemplo-n8n/
+      N8N_PATH: ${LAB_PUBLIC_PATH}/
+      WEBHOOK_URL: https://${LAB_DOMAIN:-localhost}${LAB_PUBLIC_PATH}/
       GENERIC_TIMEZONE: America/Lima
     volumes:
       - ejemplo_n8n_data:/home/node/.n8n
@@ -22,4 +26,4 @@ networks:
 
 volumes:
   ejemplo_n8n_data:
-    name: lab-gNN-ejemplo-n8n_data
+    name: ${LAB_CONTAINER_NAME}_data
