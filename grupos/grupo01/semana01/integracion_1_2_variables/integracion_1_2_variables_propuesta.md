@@ -1,4 +1,4 @@
-# Integración simple y doble - Grupo 01
+# Integración simple y doble - Grupo 01 - Actualizando PR
 
 La tool recibe una función `f` de una o dos variables, sobre un intervalo o dominio rectangular y la integra de forma simbólica exacta (con `sympy`, no aproximada). Devuelve la integral (un número real) y la gráfica asociada.
 
