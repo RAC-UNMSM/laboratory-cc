@@ -1,0 +1,1 @@
+Soy Lucia Mora y pertenezco al grupo 03
