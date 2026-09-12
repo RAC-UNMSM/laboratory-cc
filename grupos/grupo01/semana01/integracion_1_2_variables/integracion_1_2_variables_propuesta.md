@@ -1,17 +1,21 @@
-# Integración simple y doble - Grupo 01 - Actualizando PR
+# Tema: Integración simple y doble
 
+# Contenido
 La tool recibe una función `f` de una o dos variables, sobre un intervalo o dominio rectangular y la integra de forma simbólica exacta (con `sympy`, no aproximada). Devuelve la integral (un número real) y la gráfica asociada.
 
 ## Por qué está dividido en varios archivos
 
 Un servidor MCP de verdad lo va a construir un grupo de 6-7 personas. Si todo vive en un solo `server.py` , todos terminan editando el mismo archivo al mismo tiempo y se pisan los cambios. Por eso en el diseño de esta tool se ha separado el trabajo en un módulo por rol, y `server.py` queda como el único archivo que conecta todo (el "orquestador"):
 
+# Roles
 ```text
-server.py        orquestador: define la tool MCP, llama a los demás módulos     Responsable: Melanie
-validacion.py    rol "Validación de entradas"                                   Responsables: Sebas
-matematica.py    rol "Lógica matemática"                                        Responsable: Saúl - Jan
-visualizacion.py rol "Visualización"                                            Responsable: Cielo - Sachy
-storage.py       rol "Storage/infra"                                            Responsable: Melanine
+- Melanie ->     server (server.py)        orquestador: define la tool MCP, llama a los demás módulos
+- Sebastian ->   validacion.py             rol "Validación de entradas"
+- Saúl ->        matematica.py             rol "Lógica matemática"
+- Jan ->         matematica.py             rol "Lógica matemática"
+- Cielo ->       visualizacion.py          rol "Visualización"
+- Sachy ->       visualizacion.py          rol "Visualización"
+- Melanie ->     storage.py                rol "Storage/infra"
 ```
 
 Cada módulo se puede leer, entender y modificar sin tener que entender los otros tres. matematica.py, por ejemplo, no importa nada de mcp ni hace ninguna llamada de red — es sympy y numpy puro, así que la persona responsable de ese rol lo puede probar con un test normal sin levantar el servidor.
