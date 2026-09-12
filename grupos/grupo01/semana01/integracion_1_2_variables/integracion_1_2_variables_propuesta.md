@@ -9,12 +9,12 @@ Un servidor MCP de verdad lo va a construir un grupo de 6-7 personas. Si todo vi
 
 # Roles
 ```text
-- Melanie ->     server.py                 orquestador: define la tool MCP, llama a los demás módulos
 - Sebastian ->   validacion.py             rol "Validación de entradas"
 - Saúl ->        matematica.py             rol "Lógica matemática"
 - Jan ->         matematica.py             rol "Lógica matemática"
 - Cielo ->       visualizacion.py          rol "Visualización"
 - Sachy ->       visualizacion.py          rol "Visualización"
+- Melanie ->     server.py                 rol "orquestador" (define la tool MCP, llama a los demás módulos)
 - Melanie ->     storage.py                rol "Storage/infra"
 ```
 
