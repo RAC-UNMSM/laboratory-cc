@@ -9,7 +9,7 @@ Completar con los datos de cada integrante del grupo:
 | Rosales Izquierdo Yhin | yhin.rosales@unmsm.edu.pe | yhin-rosales |
 | Vilcapoma Pariona Jefferson | jefferson.vilcapoma@unmsm.edu.pe | jefferson-vilcapoma |
 | Meza Nolorbe Angel | angel.meza@unmsm.edu.pe | angel-meza |
-| Lau Huamantoma Carlos Yang Hu | carlos.lau@unmsm.edu.pe | carlos-lau |
+| Lau Huamantoma Carlos Yang Hu | carlos.lauh@unmsm.edu.pe | carlos-lau |
 
 El usuario de GitHub se deriva del correo institucional
 `nombre.apellido@unmsm.edu.pe` -> `nombre-apellido`.
