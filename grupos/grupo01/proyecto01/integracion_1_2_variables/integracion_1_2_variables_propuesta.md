@@ -1,7 +1,7 @@
 # Tema: Integración simple y doble
 
 # Contenido
-La tool recibe una función `f` de una o dos variables. En el caso univariable, el dominio es un intervalo y en el caso de dos variables puede ser un dominio general, es decir, no necesarimente rectangular. Con esa información, se determina la integral con el uso de la librería `sympy`. Devuelve la integral (un número real) y la gráfica asociada, es decir, en el caso univarable el área bajo la curva y en caso de dos variables el volumen bajo la superficie.
+La tool recibe una función `f` de una o dos variables. En el caso univariado, el dominio es un intervalo y en el caso de dos variables puede ser un dominio general, es decir, no necesarimente rectangular. Con esa información, se determina la integral con el uso de la librería `sympy`. Devuelve la integral (un número real) y la gráfica asociada, es decir, en el caso univarable el área bajo la curva y en caso de dos variables el volumen bajo la superficie.
 
 ## Por qué está dividido en varios archivos
 
