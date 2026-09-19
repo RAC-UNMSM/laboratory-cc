@@ -20,7 +20,6 @@ Los módulos que vamos a desarrollar son:
 | **Bulirsch-Stoer (EDOs)** | Resolución de ecuaciones diferenciales usando Runge-Kutta + Richardson |
 | **Análisis de convergencia** | Comparación gráfica del error antes y después de extrapolar |
 
-*La selección está sujeta a ajustes según la retroalimentación del docente.*
 
 ---
 
