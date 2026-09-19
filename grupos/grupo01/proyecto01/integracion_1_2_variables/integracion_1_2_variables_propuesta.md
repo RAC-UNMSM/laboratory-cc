@@ -1,7 +1,7 @@
 # Tema: Integración simple y doble
 
 # Contenido
-La tool recibe una función `f` de una o dos variables, sobre un intervalo o dominio rectangular y la integra de forma simbólica exacta (con `sympy`, no aproximada). Devuelve la integral (un número real) y la gráfica asociada.
+La tool recibe una función `f` de una o dos variables. En el caso univariable, el dominio es un intervalo y en el caso de dos variables puede ser un dominio general, es decir, no necesarimente rectangular. Con esa información, se determina la integral con el uso de la librería `sympy`. Devuelve la integral (un número real) y la gráfica asociada, es decir, en el caso univarable el área bajo la curva y en caso de dos variables el volumen bajo la superficie.
 
 ## Por qué está dividido en varios archivos
 
@@ -22,13 +22,13 @@ Cada módulo se puede leer, entender y modificar sin tener que entender los otro
 
 ## El flujo completo
 
-1. El usuario llama a la tool `integra_simple(expresion, x_min, x_max)` o `integra_doble(expresion, x_min, x_max, y_min, y_max)` o . Nótese que se solicitan parámetros en función de si se trata una integral simple o doble: `expresion` es la función de una o dos variables a integrar y el dominio queda definido por `x_min`, `x_max`, `y_min` y `y_max`.
+1. El usuario llama a la tool bajo tres opciones: `integra_simple(expresion, x_min, x_max)` para integrales simples, `integra_doble_rectangular(expresion, x_min, x_max, y_min, y_max)` para integrales dobles sobre un dominio rectagular y `integra_doble_general(expresion, (y, g_1(x), g_2(x)), (x, x_min, y_max))` o `integra_doble_general(expresion, (x, h_1(y), h_2(y)), (y, y_min, y_max))` para integrales dobles sobre dominios no rectangualares (el escenario más complicado). En los tres casos, `expresion` es la función de una o dos variables a integrar y el dominio queda definido por `x_min`, `x_max` como los extremos del intervalo para el caso simple, `x_min`, `x_max`,`y_min` y `y_max` como los vértices del rectángulo para el caso de dominio rectangular. Para el caso de dominio general, se debe usar un dominio tipo x o dominio tipo y luego enviar las funciones y reales resultantes.
 
 2. `validacion.py` revisa que `x_min < x_max`, `y_min < y_max` y que los ingresos sean numéricos. También convierte el texto de la expresión en un objeto `sympy`. Coteja asimismo que solo usen las variables `x` y `y`. Si algo estuviera mal ingresado, se corta la tool con un mensaje de error explicativo.
 
-3. `matematica.py` integra `expresion` simbólicamente usando (`sp.integrate`) según la sintaxis `sp.integrate(expresion, (x, x_min, x_max))` o `sp.integrate(expresion, (x, x_min, x_max), (y, y_min, y_max))` habiendo definido `x, y = sp.symbols('x y')`. Se entiende que esta cargada la librería `sympy` como `sp`.
+3. `matematica.py` integra `expresion` simbólicamente usando (`sp.integrate`) según la sintaxis `sp.integrate(expresion, (x, x_min, x_max))` o `sp.integrate(expresion, (x, x_min, x_max), (y, y_min, y_max))` o `sp.integrate(expresion, y, g_1(x), g_2(x)), (x, x_min, y_max))` o `sp.integrate(expresion, (x, h_1(y), h_2(y)), (y, y_min, y_max))`  habiendo definido `x, y = sp.symbols('x y')`. Se entiende que esta cargada la librería `sympy` como `sp`.
 
-4. `visualizacion.py` grafica la función de una o dos variables definida por `expresion` en un archivo PNG (en memoria, nunca en disco — el contenedor no persiste nada entre llamadas).
+4. `visualizacion.py` grafica la función de una o dos variables definida por `expresion` en un archivo PNG (en memoria, nunca en disco — el contenedor no persiste nada entre llamadas). La interpretación geométrica en una variables es el área o volumne bajo la gráfica de `expresion` según se trate de una función de una o dos variables.
 
 5. `storage.py` sube ese PNG a `SeaweedFS` y devuelve una URL pública.
 
