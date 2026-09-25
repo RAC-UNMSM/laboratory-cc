@@ -4,7 +4,7 @@ Completar con los datos de cada integrante del grupo:
 
 | Nombre completo | Correo institucional | Usuario de GitHub |
 |---|---|---|
-|  |  |  |
+|franco solimano  |franco.solimano@unmsm.edu.pe  |franco-solimano  |
 |  |  |  |
 |  |  |  |
 |  |  |  |
