@@ -1,0 +1,14 @@
+# Servidor MCP del Grupo 02.
+#
+# mcp va PINNEADO a 2.x a proposito: en la v2 del SDK la clase `FastMCP` del
+# modulo `mcp.server.fastmcp` paso a llamarse `MCPServer` y a vivir en
+# `mcp.server.mcpserver` (ver server.py). Sin el pin, un `pip install` puede
+# resolver a la linea 1.x y romper el import; y al reves, un `mcp>=2` con el
+# import viejo tambien. El pin evita las dos condiciones.
+mcp==2.1.1
+
+# Motores matematicos. sympy es el que hace los calculos exactos; numpy lo
+# usan los modulos de tools/ para las partes numericas (integracion numerica,
+# muestreo para graficas, metodos iterativos).
+sympy>=1.12
+numpy>=1.26
