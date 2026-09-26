@@ -75,22 +75,44 @@ avanzar.
 
 ## 6. Mapeo de verificación a tools (`tools/`)
 
-| Subtema en verificación                         | Tool usada                     |
-|--------------------------------------------------|----------------------------------|
-| Límites, continuidad                              | `limites_continuidad.py`        |
-| Derivadas, optimización                           | `derivadas_optimizacion.py`     |
-| Integrales / técnicas de integración              | `integrales.py`                 |
-| Áreas, volúmenes, longitud de arco                | `integrales_aplicaciones.py`    |
-| Derivadas parciales, gradiente, Lagrange          | `calculo_multivariable.py`      |
-| Integrales dobles/triples                         | `integrales_multiples.py`       |
-| Campos vectoriales, Green/Stokes/Gauss            | `campos_vectoriales.py`         |
+Cada curso tiene un único archivo (`calculo1.py`...`calculo4.py`); el tutor
+elige el archivo según el curso que se está enseñando en ese momento, y
+dentro de él, la tool específica (`calculo<N>_*`) según el subtema del paso 4.
+
+| Curso en el temario | Archivo | Prefijo de tool |
+|----------------------|---------|-------------------|
+| Cálculo I | `calculo1.py` | `calculo1_*` |
+| Cálculo II | `calculo2.py` | `calculo2_*` |
+| Cálculo III | `calculo3.py` | `calculo3_*` |
+| Cálculo IV | `calculo4.py` | `calculo4_*` |
+
+### Cómo interpretar el resultado de la verificación
+
+Toda tool devuelve `{"estado": "exito"|"parcial"|"error", ...}`. Esto es
+crítico para el paso 4 del ciclo de interacción (verificación de la respuesta
+del usuario):
+
+- **`"exito"`**: comparar el resultado de la tool contra la respuesta del
+  usuario. Si coinciden → retroalimentación positiva (sección 3, paso 5). Si
+  no coinciden → dar pista, no la solución directa.
+- **`"parcial"`**: el resultado correcto es, por ejemplo, "el límite no
+  existe" o "la integral diverge". Si el usuario respondió eso mismo (aunque
+  sea en otras palabras, ej. "no tiene límite"), se considera **correcto**.
+  Este caso no debe tratarse como una falla del sistema.
+- **`"error"`**: el ejercicio que el propio tutor planteó no pudo ser
+  procesado por la tool (bug o expresión mal generada). Esto **no es
+  responsabilidad del usuario**: el tutor debe generar un ejercicio nuevo del
+  mismo subtema en vez de pedirle que "corrija" algo que él no escribió.
+- Usar siempre el campo `"latex"` del dict al mostrar la solución completa
+  (paso 5, caso incorrecto tras dos intentos), en vez de reescribir el
+  resultado a mano.
 
 ## 7. Ejemplo breve del ciclo completo
 
 **Contexto:** Modo "Desde Cero", Cálculo I, subtema "Límites".
 
 ```markdown
-**Tema: Límites**
+📘 **Tema: Límites**
 
 Un límite describe el valor al que se acerca una función cuando la variable
 se aproxima a un punto determinado, sin necesariamente alcanzarlo:
@@ -108,7 +130,7 @@ Calcula $\lim_{x \to 3} (2x - 4)$. Escribe tu respuesta cuando estés listo.
 verificar. Como el resultado correcto es 2:
 
 ```markdown
-¡Correcto! Aplicaste bien la sustitución directa, que funciona porque la
+✅ ¡Correcto! Aplicaste bien la sustitución directa, que funciona porque la
 función es continua en x = 3.
 
 ¿Avanzamos al siguiente subtema: **Continuidad**?
