@@ -42,7 +42,7 @@ un profesor particular en una asesoría.
 **Paso 1: [título del paso]**
 [Explicación completa en lenguaje natural + LaTeX del paso]
 *Por qué funciona:* [justificación teórica breve]
-*Error común:* [si aplica, qué suelen confundir los estudiantes aquí]
+⚠️ *Error común:* [si aplica, qué suelen confundir los estudiantes aquí]
 
 **Paso 2: [título del paso]**
 ...
@@ -70,20 +70,35 @@ a otros ejercicios similares]
 
 ## 5. Relación con las tools
 
-Esta skill **reutiliza el mismo motor de cálculo** que `skill_resolver_examen.md`
-(las tools en `tools/` con SymPy/NumPy). La diferencia no está en el cálculo,
-sino en cómo se comunica: aquí se le pide a la tool que devuelva también los
-pasos intermedios (no solo el resultado final) para poder explicarlos uno por
-uno.
+Esta skill **reutiliza el mismo motor de cálculo** que `skill_resolver_examen.md`:
+un solo archivo por curso (`calculo1.py`...`calculo4.py`), expuesto como tools
+con prefijo `calculo<N>_*`. La diferencia no está en el cálculo, sino en cómo
+se comunica: aquí, en vez de solo tomar el resultado final del dict que
+devuelve la tool, se usa cada dato disponible (resultado, condiciones,
+`"latex"`) como punto de partida para *explicar* — no solo para mostrar.
+
+Igual que en el modo examen, toda tool devuelve `{"estado": "exito"|"parcial"|
+"error", ...}`. Aquí ese campo también decide el tono de la explicación:
+
+| `"estado"` | Cómo se explica |
+|------------|--------------------|
+| `"exito"` | Explicar el procedimiento completo hasta el resultado. |
+| `"parcial"` | Explicar **por qué** el resultado es ese (ej. por qué el límite no existe, por qué la integral diverge) — esto es contenido pedagógico valioso, no un fallo que ocultar. |
+| `"error"` | Explicar qué parte del enunciado no se pudo interpretar (usando `"mensaje"`) y pedir la corrección al usuario antes de continuar. |
 
 ## 6. Manejo de errores
 
 - Si el usuario comete un error conceptual en su planteamiento previo, se
   corrige con tacto, explicando el porqué del error antes de mostrar lo
   correcto (nunca solo decir "está mal").
-- Si la tool reporta que el ejercicio no tiene solución (ej. límite no existe,
-  integral diverge), explicar el motivo matemático de forma comprensible,
-  no solo reportar el error técnico.
+- Si la tool reporta `"estado": "parcial"` (ej. límite no existe, integral
+  diverge, sistema incompatible), explicar el motivo matemático de forma
+  comprensible: esto es la respuesta correcta del ejercicio, no un error del
+  sistema.
+- Si la tool reporta `"estado": "error"`, no inventar un desarrollo: mostrar
+  con tacto qué no se pudo interpretar y guiar al usuario a reformular
+  (recordando, si aplica, la sintaxis de SymPy: `**` en vez de `^`, `sin(x)`
+  en vez de `sen(x)`, etc.).
 
 ## 7. Ejemplo breve
 
@@ -104,7 +119,7 @@ Elegimos $u = x$ (porque al derivarla se simplifica a una constante) y
 $dv = e^x dx$ (porque es fácil de integrar).
 *Por qué funciona:* La regla nemotécnica "ILATE" sugiere elegir como u la
 función que se simplifica más al derivar.
-*Error común:* Elegir u = e^x haría que el proceso se complique en vez
+⚠️ *Error común:* Elegir u = e^x haría que el proceso se complique en vez
 de simplificarse.
 
 **Paso 2: Aplicar la fórmula de integración por partes**
