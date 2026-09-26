@@ -1,55 +1,65 @@
 import io
-import numpy as np
+import os
+import tempfile
+import subprocess
+import matplotlib
+matplotlib.use('Agg')  # Backend sin interfaz gráfica
 import matplotlib.pyplot as plt
+import numpy as np
 import sympy as sp
 
-x, y = sp.symbols('x y')
+def generar_grafico_png(expr_sp, x_min: float, x_max: float, y_min: float = None, y_max: float = None) -> bytes:
+    """Genera un gráfico PNG, lo abre automáticamente en macOS y devuelve sus bytes."""
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
+    
+    x = sp.Symbol('x')
+    f_num = sp.lambdify(x, expr_sp, modules=['numpy', 'math'])
+    
+    margin = (x_max - x_min) * 0.2 if x_max != x_min else 1.0
+    x_plot = np.linspace(x_min - margin, x_max + margin, 300)
+    
+    try:
+        y_plot = f_num(x_plot)
+        if np.isscalar(y_plot):
+            y_plot = np.full_like(x_plot, y_plot)
+    except Exception:
+        y_plot = np.zeros_like(x_plot)
 
-def generar_grafico_png(expr: sp.Expr, x_min: float, x_max: float, y_min: float = None, y_max: float = None) -> bytes:
-    fig = plt.figure(figsize=(7, 5))
+    ax.plot(x_plot, y_plot, label=f"$f(x) = {sp.latex(expr_sp)}$", color='#1f77b4', linewidth=2)
     
-    es_doble = (y in expr.free_symbols) or (y_min is not None and y_max is not None)
-    
-    if not es_doble:
-        # Interpretación 2D: Área bajo la curva
-        f_num = sp.lambdify(x, expr, 'numpy')
-        x_vals = np.linspace(x_min, x_max, 300)
-        y_vals = f_num(x_vals)
-        if np.isscalar(y_vals):
-            y_vals = np.full_like(x_vals, y_vals)
-            
-        ax = fig.add_subplot(111)
-        ax.plot(x_vals, y_vals, 'b-', label=f"$f(x) = {sp.latex(expr)}$")
-        ax.fill_between(x_vals, 0, y_vals, color='skyblue', alpha=0.5, label='Área de integración')
-        ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
-        ax.set_title("Área bajo la gráfica")
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.grid(True)
-        ax.legend()
-    else:
-        # Interpretación 3D: Volumen bajo la superficie
-        y_min_val = y_min if y_min is not None else -5.0
-        y_max_val = y_max if y_max is not None else 5.0
+    x_fill = np.linspace(x_min, x_max, 150)
+    try:
+        y_fill = f_num(x_fill)
+        if np.isscalar(y_fill):
+            y_fill = np.full_like(x_fill, y_fill)
+    except Exception:
+        y_fill = np.zeros_like(x_fill)
         
-        f_num = sp.lambdify((x, y), expr, 'numpy')
-        x_vals = np.linspace(x_min, x_max, 50)
-        y_vals = np.linspace(y_min_val, y_max_val, 50)
-        X, Y = np.meshgrid(x_vals, y_vals)
-        Z = f_num(X, Y)
-        if np.isscalar(Z):
-            Z = np.full_like(X, Z)
-            
-        ax = fig.add_subplot(111, projection='3d')
-        surf = ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.85)
-        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-        ax.set_title("Volumen bajo la superficie")
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format='png', bbox_inches='tight')
+    ax.fill_between(x_fill, 0, y_fill, color='#1f77b4', alpha=0.3, label='Área de integración')
+    
+    ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
+    ax.axvline(0, color='black', linewidth=0.8, linestyle='--')
+    ax.set_title("Área bajo la curva", fontsize=11, fontweight='bold')
+    ax.set_xlabel("x")
+    ax.set_ylabel("f(x)")
+    ax.legend(loc='upper right')
+    ax.grid(True, linestyle=':', alpha=0.6)
+    
+    # 1. Guardar en un archivo temporal local
+    temp_dir = tempfile.gettempdir()
+    filepath = os.path.join(temp_dir, "grafico_integral.png")
+    plt.savefig(filepath, format='png', bbox_inches='tight')
+    
+    # 2. Guardar en memoria para devolver a Claude MCP
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
     plt.close(fig)
-    buffer.seek(0)
-    return buffer.getvalue()
+    buf.seek(0)
+    
+    # 3. Abrir automáticamente la imagen en macOS
+    try:
+        subprocess.run(["open", filepath])
+    except Exception:
+        pass
+    
+    return buf.getvalue()
