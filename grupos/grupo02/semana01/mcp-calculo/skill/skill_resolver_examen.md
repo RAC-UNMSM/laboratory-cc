@@ -65,15 +65,25 @@ en la hoja de respuestas de una evaluación presencial.
 
 ## 5. Mapeo de ejercicios a tools (`tools/`)
 
-| Tipo de ejercicio                                   | Archivo de tool                    | Curso |
-|------------------------------------------------------|-------------------------------------|-------|
-| Límites, continuidad, asíntotas                       | `limites_continuidad.py`            | I     |
-| Derivadas, optimización, máx/mín                      | `derivadas_optimizacion.py`         | I     |
-| Integrales indefinidas/definidas, sustitución, partes  | `integrales.py`                     | II    |
-| Áreas, volúmenes de revolución, longitud de arco       | `integrales_aplicaciones.py`        | II    |
-| Derivadas parciales, gradiente, multiplicadores Lagrange | `calculo_multivariable.py`        | III   |
-| Integrales dobles/triples, cambio de coordenadas       | `integrales_multiples.py`           | IV    |
-| Campos vectoriales, Green, Stokes, Gauss               | `campos_vectoriales.py`             | IV    |
+`tools/` tiene **un archivo por persona**, y cada archivo expone sus funciones
+como tools MCP con el prefijo de su módulo. Para exercise de Cálculo I, la tool
+es `calculo1_algo`.
+
+| Tipo de ejercicio                        | Tool (prefijo)     | Módulo          |
+|------------------------------------------|--------------------|-----------------|
+| Límites, continuidad, asíntotas           | `calculo1_*`       | `calculo1.py`   |
+| Derivadas, optimización, máx/mín          | `calculo1_*`       | `calculo1.py`   |
+| Antiderivadas, técnicas de integración     | `calculo2_*`       | `calculo2.py`   |
+| Áreas, volúmenes de revolución, long. arco| `calculo2_*`       | `calculo2.py`   |
+| Derivadas parciales, gradiente, Lagrange  | `calculo3_*`       | `calculo3.py`   |
+| Geometría en R³, superficies               | `calculo3_*`       | `calculo3.py`   |
+| Integrales dobles/triples, cambio de coord.| `calculo4_*`      | `calculo4.py`   |
+| Campos vectoriales, Green, Stokes, Gauss   | `calculo4_*`       | `calculo4.py`   |
+
+Además, el servidor trae 4 tools base que funcionan siempre, incluso antes de
+que existan los módulos: `calcular_derivada`, `calcular_integral`,
+`calcular_gradiente` y `verificar_respuesta`. Si el ejercicio cae en algo que
+ningún módulo cubre todavía, se usa la que más se le acerque.
 
 ## 6. Manejo de errores
 

@@ -1,0 +1,33 @@
+# Servidor MCP-Calculo del Grupo 02.
+#
+# Reglas obligatorias del compose (ver grupos/TEMPLATE/README.md y
+# ci/compose_policy.py, que las valida en cada PR):
+#   - mem_limit declarado en todo servicio                        [OK, 512m]
+#   - nada de privileged / network_mode: host / pid: host / cap_add peligroso
+#   - solo volumenes nombrados, nunca bind-mounts de rutas del host  [OK: no
+#     hay ninguno; el servidor no necesita persistir nada]
+#   - container_name con el identificador completo, y red externa lab_net
+#
+# container_name lo inyecta el despliegue: ${LAB_CONTAINER_NAME} lo calcula el
+# propio despliegue a partir de la ruta de la carpeta. El repo lo deja como
+# variable justamente para que el nombre nunca se escriba a mano y no se
+# desincronice -- ver el commented-out de mas abajo para el nombre fijo.
+
+services:
+  mcp-calculo:
+    build: .
+    container_name: ${LAB_CONTAINER_NAME}
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      # Ver SECCION 4 de server.py: en un contenedor de larga duracion el
+      # transporte tiene que ser streamable-http, no stdio.
+      MCP_TRANSPORT: streamable-http
+      MCP_PORT: "8000"
+    # Si el profesor pidiera el nombre fijo, es esta linea:
+    #   container_name: lab-grupo02_semana01_mcp-calculo
+
+networks:
+  default:
+    name: lab_net
+    external: true

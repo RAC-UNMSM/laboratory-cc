@@ -1,0 +1,16 @@
+# Contexto: no dejar que caches locales de Python terminen adentro de la imagen
+# (hinchan la imagen y confunden el diagnostico si hay versions distintas).
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Las pruebas no se ejecutan dentro del contenedor (el CI solo hace
+# `docker compose up` y lee logs), asi que no hacen falta en la imagen.
+tests/
+
+# Este .dockerignore se copia a si mismo si alguien hace `COPY . .`; evitarlo
+# es cosmetico, pero deja el build mas limpio.
+.dockerignore

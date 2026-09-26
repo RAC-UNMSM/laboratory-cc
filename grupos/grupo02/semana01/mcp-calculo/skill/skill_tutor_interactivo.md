@@ -4,6 +4,7 @@
 **Ventana de contexto:** Independiente del Apartado 1 (no comparte reglas con
 `skill_resolver_examen.md` ni `skill_paso_a_paso.md`)
 **Cursos cubiertos:** Cálculo I, II, III, IV
+**Autor:** Lau Huamantoma Carlos Yang Hu (Prompts & QA)
 
 ## 1. Propósito
 
@@ -42,10 +43,14 @@ avanzar.
 3. **Plantear un ejercicio de práctica** al usuario, de dificultad similar al
    ejemplo, y esperar su respuesta. No revelar la solución en este paso.
 4. **Verificación matemática obligatoria vía tool de Python:** cuando el
-   usuario responde, el MCP debe llamar a la tool correspondiente (`tools/`)
-   para comparar simbólicamente/numéricamente la respuesta del usuario contra
-   el resultado correcto. **Nunca evaluar "a ojo" si la respuesta es correcta:
-   siempre delegar la verificación al motor de cálculo.**
+   usuario responde, el MCP debe llamar a la tool `verificar_respuesta` (ver
+   sección 6) pasando la respuesta del alumno y la expresión o el valor de
+   referencia. **Nunca evaluar "a ojo" si la respuesta es correcta: siempre
+   delegar la verificación al motor de cálculo.** Si `verificar_respuesta`
+   devuelve `correcta: false`, el campo `diferencia` es el insumo para la
+   retroalimentación: si la diferencia es un término constante, el error es de
+   integración (falta el `+ C`); si es un factor de la función, el error es de
+   técnica.
 5. **Retroalimentar** según el resultado de la verificación:
    - Si es correcta: reforzar brevemente el concepto y preguntar si desea
      continuar al siguiente subtema.
@@ -75,15 +80,33 @@ avanzar.
 
 ## 6. Mapeo de verificación a tools (`tools/`)
 
-| Subtema en verificación                         | Tool usada                     |
-|--------------------------------------------------|----------------------------------|
-| Límites, continuidad                              | `limites_continuidad.py`        |
-| Derivadas, optimización                           | `derivadas_optimizacion.py`     |
-| Integrales / técnicas de integración              | `integrales.py`                 |
-| Áreas, volúmenes, longitud de arco                | `integrales_aplicaciones.py`    |
-| Derivadas parciales, gradiente, Lagrange          | `calculo_multivariable.py`      |
-| Integrales dobles/triples                         | `integrales_multiples.py`       |
-| Campos vectoriales, Green/Stokes/Gauss            | `campos_vectoriales.py`         |
+Un archivo por persona; las tools se llaman con el prefijo de su módulo.
+
+| Subtema en verificación                        | Tool (prefijo)   | Módulo          |
+|------------------------------------------------|------------------|-----------------|
+| Límites, continuidad                            | `calculo1_*`     | `calculo1.py`   |
+| Derivadas, optimización                         | `calculo1_*`     | `calculo1.py`   |
+| Integrales / técnicas de integración            | `calculo2_*`     | `calculo2.py`   |
+| Áreas, volúmenes, longitud de arco              | `calculo2_*`     | `calculo2.py`   |
+| Derivadas parciales, gradiente, Lagrange        | `calculo3_*`     | `calculo3.py`   |
+| Geometría en R³, superficies                     | `calculo3_*`     | `calculo3.py`   |
+| Integrales dobles/triples                       | `calculo4_*`     | `calculo4.py`   |
+| Campos vectoriales, Green/Stokes/Gauss          | `calculo4_*`     | `calculo4.py`   |
+
+**Y en todos los casos, sin importar el curso:** la tool
+`verificar_respuesta`. Es la que se usa para el paso 4 del ciclo (el "obligatorio"
+de la sección 3), y es la única forma válida de decirle al usuario si su
+respuesta es correcta o no:
+
+```json
+verificar_respuesta(respuesta_alumno="x*exp(x) - exp(x) + C", expresion="x*exp(x)")
+→ { "correcta": true, "diferencia": "0" }
+```
+
+Compara **simbólicamente**, no a ojo ni con redondeo: `"2/pi"` y `"0.6366"`
+darán `correcta: false` (que es lo correcto: no son el mismo número), mientras
+que `"3*x**2"` y `"x**2*3"` darán `true`. El campo `diferencia` es lo que
+permite decirle al usuario *en qué* se equivocó.
 
 ## 7. Ejemplo breve del ciclo completo
 
@@ -104,8 +127,9 @@ $$ \lim_{x \to 2} (3x + 1) = 7 $$
 Calcula $\lim_{x \to 3} (2x - 4)$. Escribe tu respuesta cuando estés listo.
 ```
 
-*(Usuario responde "2")* → El MCP llama a `limites_continuidad.py` para
-verificar. Como el resultado correcto es 2:
+*(Usuario responde "2")* → El MCP verifica con la tool
+`verificar_respuesta(respuesta_alumno="2", referencia="2")`, que devuelve
+`correcta: true`:
 
 ```markdown
 ¡Correcto! Aplicaste bien la sustitución directa, que funciona porque la

@@ -25,7 +25,12 @@ un profesor particular en una asesoría.
 1. **Identificar el tipo de problema y el curso**, igual que en el modo examen.
 2. **Delegar el cálculo exacto a la tool de Python correspondiente** (ver tabla
    en `skill_resolver_examen.md`, sección 5) para obtener el resultado y los
-   pasos intermedios verificados.
+   pasos intermedios verificados. En la práctica, eso significa: elegir la
+   función `calculo<N>_<tema>` que resuelve el punto exacto del ejercicio, y
+   si ninguna encaja del todo, usar la tool base más cercana
+   (`calcular_derivada`, `calcular_integral`, `calcular_gradiente`) Y ADEMÁS
+   invocar a mano las tools `calculo<N>_*` necesarias para las etapas
+   intermedias, en vez de pedir un "paso a paso" a una sola tool.
 3. **Expandir cada paso recibido de la tool** en una explicación completa:
    qué se hizo, por qué se puede hacer (justificación teórica/propiedad),
    y qué error común se evita al hacerlo así.
@@ -72,9 +77,9 @@ a otros ejercicios similares]
 
 Esta skill **reutiliza el mismo motor de cálculo** que `skill_resolver_examen.md`
 (las tools en `tools/` con SymPy/NumPy). La diferencia no está en el cálculo,
-sino en cómo se comunica: aquí se le pide a la tool que devuelva también los
-pasos intermedios (no solo el resultado final) para poder explicarlos uno por
-uno.
+sino en cómo se comunica: aquí se invoca a **más de una tool por ejercicio**, una
+por etapa, en vez de pedirle a una sola el resultado completo. Eso es lo que
+permite explicar paso a paso sin inventar las etapas intermedias.
 
 ## 6. Manejo de errores
 
