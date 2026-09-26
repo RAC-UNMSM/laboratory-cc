@@ -1,11 +1,12 @@
-# MCP-Cálculo — Grupo 02 — semana 01
+# MCP-Cálculo — Grupo 02
 
 Servidor **MCP (Model Context Protocol)** que conecta una IA con motores de
 cálculo simbólico en Python (**SymPy**) para resolver y enseñar Cálculo I a IV
 de forma **exacta**, no aproximada.
 
-- **Identificador de la app:** `grupo02_semana01_mcp-calculo`
-- **Contenedor:** `lab-grupo02_semana01_mcp-calculo`
+- **Ubicación:** `grupos/grupo02/proyecto01/calculo-i-iv/`
+- **Identificador de la app:** `grupo02_proyecto01_calculo-i-iv`
+- **Contenedor:** `lab-grupo02_proyecto01_calculo-i-iv`
 - **Red:** `lab_net` (externa)
 - **Transporte:** `streamable-http` en el puerto 8000 (dentro de Docker);
   `stdio` en local
@@ -96,7 +97,7 @@ Sin Docker, con Python 3.11+ y las dependencias instaladas
 (`pip install -r requirements.txt`):
 
 ```bash
-cd grupos/grupo02/semana01/mcp-calculo
+cd grupos/grupo02/proyecto01/calculo-i-iv
 python server.py
 ```
 
@@ -128,7 +129,7 @@ python -m unittest discover -s tests -v
 
 ```bash
 docker network create lab_net        # la red externa, una sola vez
-cd grupos/grupo02/semana01/mcp-calculo
+cd grupos/grupo02/proyecto01/calculo-i-iv
 docker compose up --build
 ```
 

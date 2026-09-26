@@ -217,7 +217,7 @@ al principio. SymPy tiene para eso `sympify`, `parse_expr` y `nsimplify`.
 ### 5.1 En la terminal (lo que pide el profesor)
 
 ```bash
-cd grupos/grupo02/semana01/mcp-calculo
+cd grupos/grupo02/proyecto01/calculo-i-iv
 python tools/calculo1.py
 ```
 
@@ -255,13 +255,15 @@ ni el SDK de MCP, ni PyYAML: solo la librería estándar. Corren en 1 segundo.
 
 ## 6. Los 6 temas de tu área
 
-El detalle completo está en el plan del grupo
-(`grupos/grupo02/proyecto01/calculo-i-iv/calculo-i-iv.md`).
+El detalle completo está en el plan del grupo, en el `.md` de esta misma
+carpeta: `calculo-i-iv.md`.
 
-> Esa propuesta vive en `proyecto01/` porque ahí es donde el repo pide el `.md`
-> del tema. **El código, en cambio, vive en `grupos/grupo02/semana01/mcp-calculo/`**,
-> que es la ruta que el CI escanea y por la que se despliega. Son dos carpetas
-> distintas a propósito; no las mezcles.
+> Esta carpeta (`grupos/grupo02/proyecto01/calculo-i-iv/`) contiene las dos
+> cosas: la propuesta del tema (`calculo-i-iv.md`) y el código desplegable
+> (`server.py`, `tools/`, `skill/`). Es lo que pidió el profesor: que el
+> proyecto viva dentro de `proyecto01/`. Los tres niveles
+> (`grupo`/`proyecto01`/`tema`) son los que escanea el CI, así que el
+> despliegue sale automático de tener el `docker-compose.yml` acá.
 
 ### `calculo1.py` — Cálculo I
 1. Relaciones y funciones reales: dominio, rango, gráfica, inversa.

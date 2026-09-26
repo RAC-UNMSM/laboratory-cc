@@ -189,6 +189,19 @@ class TestCompose(unittest.TestCase):
         dockerfile = (APP_DIR / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("MCP_TRANSPORT", dockerfile)
 
+    def test_la_salida_del_servidor_no_queda_en_el_buffer(self) -> None:
+        """El CI lee `docker compose logs` para ver si la app arranco. Sin
+        PYTHONUNBUFFERED, los `print` del banner de arranque de server.py se
+        quedan en el buffer de stdout -- porque cuando la salida no es una
+        terminal Python no hace flush, y el proceso nunca termina -- y el
+        profesor ve un log vacio aunque el servidor este andaando."""
+        dockerfile = (APP_DIR / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn(
+            "PYTHONUNBUFFERED", dockerfile,
+            "falta PYTHONUNBUFFERED=1 en el Dockerfile: el banner de arranque "
+            "no va a aparecer en docker compose logs",
+        )
+
 
 if __name__ == "__main__":
     sys.exit(0 if unittest.main(exit=False, verbosity=2).result.wasSuccessful() else 1)

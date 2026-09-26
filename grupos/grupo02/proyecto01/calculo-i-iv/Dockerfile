@@ -29,4 +29,11 @@ EXPOSE 8000
 ENV MCP_TRANSPORT=streamable-http \
     MCP_PORT=8000
 
+# PYTHONUNBUFFERED: sin esto, el banner de arranque de server.py (los print con
+# el resumen de skills y tools) se queda en el buffer de stdout y NO aparece en
+# `docker compose logs`. Pasa porque cuando la salida no es una terminal, Python
+# no hace flush: el proceso vive, asi que nunca descarga el buffer, y el CI se
+# queda sin ver nada de lo que el servidor reporta al arrancar.
+ENV PYTHONUNBUFFERED=1
+
 CMD ["python", "server.py"]
