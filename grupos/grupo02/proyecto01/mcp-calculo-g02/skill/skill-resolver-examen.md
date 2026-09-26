@@ -65,22 +65,35 @@ en la hoja de respuestas de una evaluación presencial.
 
 ## 5. Mapeo de ejercicios a tools (`tools/`)
 
-| Tipo de ejercicio                                   | Archivo de tool                    | Curso |
-|------------------------------------------------------|-------------------------------------|-------|
-| Límites, continuidad, asíntotas                       | `limites_continuidad.py`            | I     |
-| Derivadas, optimización, máx/mín                      | `derivadas_optimizacion.py`         | I     |
-| Integrales indefinidas/definidas, sustitución, partes  | `integrales.py`                     | II    |
-| Áreas, volúmenes de revolución, longitud de arco       | `integrales_aplicaciones.py`        | II    |
-| Derivadas parciales, gradiente, multiplicadores Lagrange | `calculo_multivariable.py`        | III   |
-| Integrales dobles/triples, cambio de coordenadas       | `integrales_multiples.py`           | IV    |
-| Campos vectoriales, Green, Stokes, Gauss               | `campos_vectoriales.py`             | IV    |
+Cada curso vive en **un solo archivo**, y el servidor expone sus funciones
+como tools con el prefijo `calculo<N>_`. No existen archivos separados por
+tema: los 6 temas de cada curso son funciones distintas dentro del mismo
+archivo.
 
-## 6. Manejo de errores
+| Curso | Archivo | Prefijo de tool | Temas que cubre |
+|-------|---------|------------------|-------------------|
+| Cálculo I | `calculo1.py` | `calculo1_*` | funciones reales, límites, continuidad, derivadas, aplicaciones (Rolle, TVM, optimización, L'Hôpital) |
+| Cálculo II | `calculo2.py` | `calculo2_*` | antiderivadas, técnicas de integración, Riemann/TFC, áreas y volúmenes, centro de masa, integrales impropias |
+| Cálculo III | `calculo3.py` | `calculo3_*` | R³, superficies, funciones vectoriales, derivadas parciales/gradiente, optimización multivariable/Lagrange |
+| Cálculo IV | `calculo4.py` | `calculo4_*` | campos vectoriales, integrales de línea, integrales dobles/triples, Green, Stokes, Gauss |
 
-- Si la tool devuelve un error (ejercicio mal planteado, dominio inválido,
-  integral divergente), reportarlo de forma directa y formal:
-  > "La integral no converge en el intervalo dado. Verifique los límites de
-  > integración."
+No es necesario adivinar el nombre exacto de la función: el cliente MCP lista
+las tools disponibles con su prefijo (`calculo1_...`, `calculo2_...`, etc.);
+basta con elegir la del curso correcto según el tema identificado en el paso 1.
+
+## 6. Cómo leer el resultado de la tool (contrato obligatorio)
+
+Toda tool de `tools/` devuelve un `dict` con una clave `"estado"`. Antes de
+redactar la respuesta, revisar ese campo:
+
+| `"estado"` | Qué significa | Qué hacer en la respuesta |
+|------------|----------------|------------------------------|
+| `"exito"` | Se resolvió por completo. | Usar el resultado y el campo `"latex"` tal cual para la respuesta final. |
+| `"parcial"` | Es un resultado matemático válido, no un fallo (ej. el límite no existe, la serie diverge, el sistema es incompatible). | Reportarlo como la respuesta correcta del ejercicio, no como un error del sistema. Revisar el campo que lo explique (ej. `"existe": false`). |
+| `"error"` | La tool no pudo procesar la entrada (sintaxis inválida, excepción). | Nunca inventar un resultado. Reportar el contenido de `"mensaje"` de forma directa y formal, y si la causa es una entrada ambigua del usuario, pedir la aclaración antes de reintentar. |
+
+- Siempre usar el campo `"latex"` del dict para la notación matemática de la
+  respuesta final; no reconstruir el LaTeX a mano si la tool ya lo entrega.
 - Nunca "arreglar" el enunciado del usuario sin avisar. Si hay ambigüedad
   (ej. falta un límite de integración), pedir la aclaración puntual antes de
   llamar a la tool.
