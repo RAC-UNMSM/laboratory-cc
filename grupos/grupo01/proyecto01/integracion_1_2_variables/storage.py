@@ -1,20 +1,34 @@
 import os
 import requests
-import uuid
 
 SEAWEEDFS_FILER_URL = os.getenv("SEAWEEDFS_FILER_URL", "http://localhost:8888")
 
 def subir_a_seaweedfs(imagen_bytes: bytes) -> str:
-    filename = f"integral_{uuid.uuid4().hex}.png"
-    upload_url = f"{SEAWEEDFS_FILER_URL.rstrip('/')}/{filename}"
-    
+    # 1. Intenta subir a SeaweedFS local si está activo
     try:
         response = requests.post(
-            upload_url,
-            files={'file': (filename, imagen_bytes, 'image/png')}
+            f"{SEAWEEDFS_FILER_URL.rstrip('/')}/integral.png",
+            files={'file': ('integral.png', imagen_bytes, 'image/png')},
+            timeout=1
         )
-        response.raise_for_status()
-        return upload_url
+        if response.status_code in (200, 201):
+            return f"{SEAWEEDFS_FILER_URL.rstrip('/')}/integral.png"
+    except Exception:
+        pass
+
+    # 2. Fallback: sube a un servidor público gratuito para generar una URL https:// directa
+    try:
+        response = requests.post(
+            "https://tmpfiles.org/api/v1/upload",
+            files={"file": ("integral.png", imagen_bytes, "image/png")},
+            timeout=5
+        )
+        if response.status_code == 200:
+            url_pagina = response.json()["data"]["url"]
+            # Convertir URL de vista previa a URL de descarga directa
+            direct_url = url_pagina.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+            return direct_url
     except Exception as e:
-        # Fallback local en caso de desconexión del servicio de almacenamiento
-        return f"{SEAWEEDFS_FILER_URL}/{filename}"
+        print(f"Error al subir imagen: {e}")
+        
+    return "http://localhost:8888/integral.png"
