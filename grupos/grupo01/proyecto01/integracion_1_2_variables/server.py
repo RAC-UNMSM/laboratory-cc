@@ -31,7 +31,7 @@ def integra_doble_rectangular(expresion: str, x_min: float, x_max: float, y_min:
     expr_sp = validar_y_parsear_expresion(expresion)
     
     resultado, latex_str = integrar_doble_rectangular(expr_sp, x_min, x_max, y_min, y_max)
-    png_bytes = generar_grafico_png(expr_sp, x_min, x_max, y_min, y_max)
+    png_bytes = generar_grafico_png(expr_sp, x_min, x_max, y_min=y_min, y_max=y_max)
     
     texto = (
         f"### Resultado - Integral Doble Rectangular\n"
@@ -57,7 +57,7 @@ def integra_doble_general(
     resultado, latex_str = integrar_doble_general(
         expr_sp, var_interna, g1_str, g2_str, var_externa, ext_min, ext_max
     )
-    png_bytes = generar_grafico_png(expr_sp, ext_min, ext_max)
+    png_bytes = generar_grafico_png(expr_sp, ext_min, ext_max, g1_str=g1_str, g2_str=g2_str)
     
     texto = (
         f"### Resultado - Integral Doble General\n"
