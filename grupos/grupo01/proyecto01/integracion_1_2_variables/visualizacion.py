@@ -3,32 +3,60 @@ import os
 import tempfile
 import subprocess
 import matplotlib
-matplotlib.use('Agg')  # Backend sin GUI
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # Habilita proyección 3D
 import numpy as np
 import sympy as sp
 
-def generar_grafico_png(expr_sp, x_min: float, x_max: float, y_min: float = None, y_max: float = None) -> bytes:
+def generar_grafico_png(
+    expr_sp, 
+    x_min: float, 
+    x_max: float, 
+    y_min: float = None, 
+    y_max: float = None,
+    g1_str: str = None,
+    g2_str: str = None
+) -> bytes:
     """
-    Genera un gráfico PNG adaptativo (1D o 2D) según las variables presentes en la expresión.
-    Guarda la imagen, la abre en macOS y devuelve sus bytes.
+    Genera gráficos 2D para 1 variable o gráficos 3D (superficie/volumen) 
+    para integrales dobles sobre dominios rectangulares o generales.
     """
-    fig, ax = plt.subplots(figsize=(6, 4.5), dpi=100)
     x, y = sp.symbols('x y')
-    simbolos_presentes = expr_sp.free_symbols
-    
-    # Configuración de rango en X
-    margin_x = (x_max - x_min) * 0.2 if x_max != x_min else 1.0
-    x_plot = np.linspace(x_min - margin_x, x_max + margin_x, 200)
-    
+    simbolos = expr_sp.free_symbols
+    es_2d = (y in simbolos) or (y_min is not None) or (g1_str is not None)
+
     # -------------------------------------------------------------
-    # CASO A: FUNCIÓN DE 2 VARIABLES f(x, y) -> Mapa de contornos 2D
+    # CASO INTEGRALES DOBLES: Superficie 3D z = f(x, y)
     # -------------------------------------------------------------
-    if y in simbolos_presentes or y_min is not None:
-        y_min_val = y_min if y_min is not None else -abs(x_max if x_max != 0 else 1)
-        y_max_val = y_max if y_max is not None else abs(x_max if x_max != 0 else 1)
-        margin_y = (y_max_val - y_min_val) * 0.2 if y_max_val != y_min_val else 1.0
-        y_plot = np.linspace(y_min_val - margin_y, y_max_val + margin_y, 200)
+    if es_2d:
+        fig = plt.figure(figsize=(7, 5.5), dpi=100)
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Malla en X
+        margin_x = (x_max - x_min) * 0.15 if x_max != x_min else 1.0
+        x_plot = np.linspace(x_min - margin_x, x_max + margin_x, 120)
+        
+        # Determinar rango y funciones para Y
+        if g1_str and g2_str:
+            g1_sym = sp.sympify(g1_str)
+            g2_sym = sp.sympify(g2_str)
+            g1_func = sp.lambdify(x, g1_sym, modules=['numpy', 'math'])
+            g2_func = sp.lambdify(x, g2_sym, modules=['numpy', 'math'])
+            
+            g1_vals = g1_func(x_plot)
+            g2_vals = g2_func(x_plot)
+            if np.isscalar(g1_vals): g1_vals = np.full_like(x_plot, g1_vals)
+            if np.isscalar(g2_vals): g2_vals = np.full_like(x_plot, g2_vals)
+            
+            y_min_val = float(np.nanmin(g1_vals))
+            y_max_val = float(np.nanmax(g2_vals))
+        else:
+            y_min_val = y_min if y_min is not None else -2.0
+            y_max_val = y_max if y_max is not None else 2.0
+            
+        margin_y = (y_max_val - y_min_val) * 0.15 if y_max_val != y_min_val else 1.0
+        y_plot = np.linspace(y_min_val - margin_y, y_max_val + margin_y, 120)
         
         X, Y = np.meshgrid(x_plot, y_plot)
         f_num = sp.lambdify((x, y), expr_sp, modules=['numpy', 'math'])
@@ -39,18 +67,31 @@ def generar_grafico_png(expr_sp, x_min: float, x_max: float, y_min: float = None
                 Z = np.full_like(X, Z)
         except Exception:
             Z = np.zeros_like(X)
-            
-        cp = ax.contourf(X, Y, Z, levels=25, cmap='viridis')
-        fig.colorbar(cp, ax=ax, label=f"$f(x,y) = {sp.latex(expr_sp)}$")
+
+        # Máscara para dominios generales (ej. círculos): descarta puntos fuera de [g1(x), g2(x)]
+        if g1_str and g2_str:
+            G1 = g1_func(X)
+            G2 = g2_func(X)
+            mask = (Y >= G1) & (Y <= G2) & (X >= x_min) & (X <= x_max)
+            Z[~mask] = np.nan
+
+        # Dibujar superficie 3D
+        surf = ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.85, edgecolor='k', linewidth=0.1)
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, pad=0.1, label=f"$z = {sp.latex(expr_sp)}$")
         
-        ax.set_title("Superficie / Campo $f(x, y)$", fontsize=11, fontweight='bold')
+        ax.set_title(f"Volumen: $z = {sp.latex(expr_sp)}$", fontsize=11, fontweight='bold')
         ax.set_xlabel("x")
         ax.set_ylabel("y")
-        
+        ax.set_zlabel("z")
+
     # -------------------------------------------------------------
-    # CASO B: FUNCIÓN DE 1 VARIABLE f(x) -> Curva y Área en 2D
+    # CASO INTEGRALES SIMPLES: Curva y Área 2D
     # -------------------------------------------------------------
     else:
+        fig, ax = plt.subplots(figsize=(6, 4.5), dpi=100)
+        margin_x = (x_max - x_min) * 0.2 if x_max != x_min else 1.0
+        x_plot = np.linspace(x_min - margin_x, x_max + margin_x, 200)
+        
         f_num = sp.lambdify(x, expr_sp, modules=['numpy', 'math'])
         try:
             y_plot = f_num(x_plot)
@@ -74,18 +115,15 @@ def generar_grafico_png(expr_sp, x_min: float, x_max: float, y_min: float = None
         ax.set_xlabel("x")
         ax.set_ylabel("f(x)")
         ax.legend(loc='upper right')
+        ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
+        ax.axvline(0, color='black', linewidth=0.8, linestyle='--')
+        ax.grid(True, linestyle=':', alpha=0.6)
 
-    # Elementos comunes
-    ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
-    ax.axvline(0, color='black', linewidth=0.8, linestyle='--')
-    ax.grid(True, linestyle=':', alpha=0.6)
-    
-    # 1. Guardar localmente para abrir con 'open' en macOS
+    # Exportación y apertura local
     temp_dir = tempfile.gettempdir()
     filepath = os.path.join(temp_dir, "grafico_integral.png")
     plt.savefig(filepath, format='png', bbox_inches='tight')
     
-    # 2. Guardar en memoria para FastMCP
     buf = io.BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
     plt.close(fig)
