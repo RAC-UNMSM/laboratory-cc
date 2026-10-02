@@ -1,4 +1,0 @@
-# Bloquea cualquier merge a main sin revisión del profesor (sección 1.3 del
-# plan). Requiere además activar "branch protection" en main con "Require
-# review from Code Owners" en la configuración del repo (Settings -> Branches).
-* @julios-castillo

@@ -1,6 +1,5 @@
 """
 analisis_estabilidad.py
-========================
 
 Responsable: Tisnado Yarleque Christian David (Matemático II — Estabilidad y
 bifurcaciones), según "Grupo_09_Propuesta_actualizada.md".
@@ -1129,6 +1128,11 @@ def imprimir_reporte_estabilidad(resultado: Dict[str, Any]) -> None:
 # conservan SIN cambios de lógica porque `server.py` las importa y porque
 # `analisis_bifurcaciones.py` las reutiliza para clasificar cada equilibrio de
 # un barrido (el modelo llega como función, no como texto).
+
+"""Cálculo numérico de Jacobiano y estabilidad local."""
+
+import numpy as np
+
 
 def jacobiano(modelo, punto, parametros=None, t=0.0, paso=1e-6):
     """Aproxima el Jacobiano respecto del estado mediante diferencias centrales."""

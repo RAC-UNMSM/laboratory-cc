@@ -10,6 +10,7 @@ from analisis_estabilidad import (
     formatear_equilibrios_numericos,
     imprimir_reporte_estabilidad,
 )
+from analisis_estabilidad import analizar_equilibrios
 from modelo_edos import resolver_edo
 from modelos_referencia import obtener_modelo
 from visualizacion import graficar_retrato_fase_1d, graficar_solucion
@@ -31,6 +32,9 @@ def ejecutar_demo(nombre="logistico"):
         resultados = analizar_equilibrios(modelo, config["equilibrios"](config["parametros"]), config["parametros"])
         print("\nEquilibrios y estabilidad local:")
         print(formatear_equilibrios_numericos(resultados))
+        for resultado in resultados:
+            eq = resultado["equilibrio"]
+            print(f"  x = {eq[0]:g}: {resultado['clasificacion']}; autovalores = {resultado['autovalores']}")
 
     ruta = Path(__file__).resolve().parent / f"grafica_{nombre}.png"
     guardada = graficar_solucion(solucion, titulo=f"Modelo {nombre.capitalize()}", archivo_salida=ruta)
@@ -79,3 +83,8 @@ if __name__ == "__main__":
         if args.estabilidad:
             print()
             ejecutar_estabilidad(args.modelo)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Demo local de modelos de EDO del grupo 09")
+    parser.add_argument("--modelo", choices=("lineal", "logistico", "lorenz"), default="logistico")
+    args = parser.parse_args()
+    ejecutar_demo(args.modelo)
