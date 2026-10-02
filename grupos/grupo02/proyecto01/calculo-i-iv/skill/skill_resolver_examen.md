@@ -26,10 +26,22 @@ en la hoja de respuestas de una evaluación presencial.
 2. **Delegar el cálculo exacto a la tool de Python correspondiente** (SymPy/NumPy)
    según la tabla de la sección 5. Nunca inventar ni aproximar un resultado
    numérico o simbólico "de memoria": el LLM solo formatea y explica, la tool
-   calcula.
-3. **Recibir el resultado estructurado de la tool** (pasos intermedios clave,
-   resultado final, dominio/condiciones de validez si aplica).
-4. **Redactar la respuesta en el formato de salida** de la sección 4.
+   calcula. Las expresiones se pasan a las tools en sintaxis SymPy (`x**2`,
+   no `x^2`; `sin`, `cos`, `log`, `sqrt`, no `sen` ni `ln`).
+3. **Leer el resultado de la tool.** Toda tool devuelve un diccionario con el
+   campo `estado`: éxito es `"exito"` (o `"ok"`, que es lo que devuelve
+   `calculo1.py`); resultado incompleto es `"parcial"` (o `"no_determinado"`);
+   fallo es `"error"`. En éxito, el diccionario trae el resultado y, **solo si
+   la tool los entrega**, pasos y condiciones de validez (dominio,
+   convergencia). Si la tool devuelve LaTeX (campo `latex`), usarlo tal cual
+   en vez de reescribirlo. Si la tool tiene parámetro `modo` (las de
+   `calculo1.py`), llamarla con `modo="examen"`, que devuelve solo el paso
+   final. Para resultados incompletos o errores, ver la sección 7.
+4. **Redactar la respuesta en el formato de salida** de la sección 4. Los pasos
+   del desarrollo salen de lo que devolvió la tool. Si la tool solo entregó el
+   resultado final, el desarrollo se reconstruye con pasos que se puedan
+   respaldar con llamadas adicionales a las tools (por ejemplo, derivar `u`
+   o integrar `dv`), nunca con pasos supuestos.
 
 ## 4. Formato de salida (obligatorio)
 
@@ -66,36 +78,104 @@ en la hoja de respuestas de una evaluación presencial.
 ## 5. Mapeo de ejercicios a tools (`tools/`)
 
 `tools/` tiene **un archivo por persona**, y cada archivo expone sus funciones
-como tools MCP con el prefijo de su módulo. Para exercise de Cálculo I, la tool
-es `calculo1_algo`.
+como tools MCP con el prefijo de su módulo. Para un ejercicio de Cálculo I, la
+tool es `calculo1_<tema>`.
 
-| Tipo de ejercicio                        | Tool (prefijo)     | Módulo          |
-|------------------------------------------|--------------------|-----------------|
-| Límites, continuidad, asíntotas           | `calculo1_*`       | `calculo1.py`   |
-| Derivadas, optimización, máx/mín          | `calculo1_*`       | `calculo1.py`   |
-| Antiderivadas, técnicas de integración     | `calculo2_*`       | `calculo2.py`   |
-| Áreas, volúmenes de revolución, long. arco| `calculo2_*`       | `calculo2.py`   |
-| Derivadas parciales, gradiente, Lagrange  | `calculo3_*`       | `calculo3.py`   |
-| Geometría en R³, superficies               | `calculo3_*`       | `calculo3.py`   |
-| Integrales dobles/triples, cambio de coord.| `calculo4_*`      | `calculo4.py`   |
-| Campos vectoriales, Green, Stokes, Gauss   | `calculo4_*`       | `calculo4.py`   |
+| Tipo de ejercicio                         | Tool (prefijo)  | Módulo          |
+|-------------------------------------------|-----------------|-----------------|
+| Límites, continuidad, asíntotas            | `calculo1_*`    | `calculo1.py`   |
+| Derivadas, optimización, máx/mín           | `calculo1_*`    | `calculo1.py`   |
+| Antiderivadas, técnicas de integración      | `calculo2_*`    | `calculo2.py`   |
+| Áreas, volúmenes de revolución, long. arco | `calculo2_*`    | `calculo2.py`   |
+| Derivadas parciales, gradiente, Lagrange   | `calculo3_*`    | `calculo3.py`   |
+| Geometría en R³, superficies                | `calculo3_*`    | `calculo3.py`   |
+| Integrales dobles/triples, cambio de coord. | `calculo4_*`    | `calculo4.py`   |
+| Campos vectoriales, Green, Stokes, Gauss    | `calculo4_*`    | `calculo4.py`   |
 
-Además, el servidor trae 4 tools base que funcionan siempre, incluso antes de
-que existan los módulos: `calcular_derivada`, `calcular_integral`,
-`calcular_gradiente` y `verificar_respuesta`. Si el ejercicio cae en algo que
-ningún módulo cubre todavía, se usa la que más se le acerque.
+### Tools base
 
-## 6. Manejo de errores
+El servidor trae 5 tools base que funcionan siempre, incluso antes de que
+existan los módulos:
 
-- Si la tool devuelve un error (ejercicio mal planteado, dominio inválido,
-  integral divergente), reportarlo de forma directa y formal:
+- Cuatro de cálculo: `calcular_derivada`, `calcular_integral`,
+  `calcular_gradiente` y `verificar_respuesta`.
+- Una de diagnóstico: `estado_del_servidor`. No sirve para resolver
+  ejercicios; solo informa qué módulos están cargados.
+
+### Tools de los módulos (estado actual)
+
+Cada tool se llama `<modulo>_<funcion>`. Los parámetros listados son los
+principales; el resto está en el esquema de cada tool.
+
+**`calculo1.py` (Cálculo I).** Todas tienen el parámetro `modo`
+(`"examen"` o `"paso_a_paso"`) y devuelven el resultado dentro de `datos`
+(con `exacto` y `latex`) más la lista `pasos`. Los ángulos van en radianes.
+
+- `calculo1_calcular_limite(expresion, punto, variable, direccion)`:
+  `direccion` es `"bilateral"`, `"+"` o `"-"`.
+- `calculo1_analizar_continuidad(expresion, punto, variable)`
+- `calculo1_analizar_asintotas(expresion, variable)`: solo funciones racionales.
+- `calculo1_calcular_derivada(expresion, variable, orden)`: `orden` de 1 a 6.
+- `calculo1_derivada_implicita(ecuacion, variable, dependiente)`
+- `calculo1_recta_tangente(expresion, punto, variable)`
+- `calculo1_optimizar_polinomio(expresion, inicio, fin)`: polinomios de grado
+  ≤ 6 con coeficientes y extremos racionales.
+- `calculo1_verificar_derivada(expresion, respuesta, variable)`: ver la skill
+  del tutor.
+
+No cubre funciones por tramos, L'Hôpital ni los teoremas de Rolle y del valor
+medio.
+
+**`calculo4.py` (Cálculo IV).** No tienen parámetro `modo`: devuelven el
+resultado final, no una lista de pasos.
+
+- `calculo4_parametrizacion_curva(x, y, z, parametro, inicio, fin, campo)`
+- `calculo4_integral_linea(campo, curva_x, curva_y, curva_z, parametro, inicio, fin)`
+- `calculo4_integral_doble(expresion, ..., límites, cambio_x, cambio_y)`:
+  región rectangular, con Jacobiano opcional.
+- `calculo4_green(P, Q, límites)`: solo rectángulos.
+- `calculo4_integrales_triples_superficie(densidad, límites, superficie_z, ...)`
+- `calculo4_teoremas_integrales_vectoriales(campo, límites)`: divergencia,
+  rotacional y Gauss, solo en cuboides.
+
+No hay tool para Stokes ni para regiones que no sean rectángulos o cuboides.
+
+**`calculo2.py` y `calculo3.py`** aún no están en el repositorio: mientras no
+carguen, se aplica la sección 6.
+
+## 6. Si el módulo no está disponible
+
+Los módulos `calculo1.py` … `calculo4.py` se cargan al arrancar el servidor y
+pueden faltar. Si la tool `calculo<N>_*` que corresponde no aparece entre las
+tools disponibles:
+
+1. Llamar a `estado_del_servidor` para confirmar en `modulos_faltantes` que
+   el módulo no está cargado.
+2. Usar la tool base más cercana al ejercicio (`calcular_derivada`,
+   `calcular_integral` o `calcular_gradiente`).
+3. Si ninguna tool cubre el ejercicio (o este sale de los límites de la
+   tool, por ejemplo una región no rectangular en `calculo4.py`), decirlo en una línea
+   ("Este tipo de ejercicio aún no tiene motor de cálculo en el servidor, por
+   lo que el resultado no puede verificarse") y entregar solo el
+   **Planteamiento** y el método a seguir. **Nunca** completar el cálculo de
+   memoria.
+
+## 7. Manejo de errores
+
+- Si la tool devuelve `estado: "parcial"` o `"no_determinado"` (por ejemplo, `calcular_integral`
+  cuando SymPy no resuelve la integral completa), reportar solo lo que se
+  calculó y decir con claridad que el resto no pudo resolverse. No completar
+  el resultado de memoria.
+- Si la tool devuelve `estado: "error"`, leer el campo `mensaje` y reportarlo
+  de forma directa y formal (ejercicio mal planteado, dominio inválido,
+  integral divergente):
   > "La integral no converge en el intervalo dado. Verifique los límites de
   > integración."
 - Nunca "arreglar" el enunciado del usuario sin avisar. Si hay ambigüedad
   (ej. falta un límite de integración), pedir la aclaración puntual antes de
   llamar a la tool.
 
-## 7. Ejemplo breve
+## 8. Ejemplo breve
 
 **Entrada del usuario:** "Modo examen: resuelve ∫x·e^x dx"
 
