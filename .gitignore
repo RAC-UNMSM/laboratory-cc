@@ -11,6 +11,7 @@
 # dentro de grupos/grupoNN/.
 /*
 !/.github/
+!/.claude/
 !/.gitignore
 !/README.md
 !/ci/
@@ -99,7 +100,10 @@ id_ed25519*
 *.toc
 
 # --- Herramientas locales ----------------------------------------------------
-.claude/
+# De .claude/ solo se versionan las skills del repo (ej. revisar-entrega);
+# la configuración local de cada quien se queda fuera.
+**/.claude/*
+!**/.claude/skills/
 graphify-out/
 
 # --- Editores y sistema operativo --------------------------------------------
