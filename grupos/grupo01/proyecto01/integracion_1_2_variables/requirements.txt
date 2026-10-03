@@ -1,0 +1,5 @@
+mcp
+sympy
+matplotlib
+numpy
+requests
