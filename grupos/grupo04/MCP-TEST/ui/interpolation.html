@@ -1,0 +1,387 @@
+<div id="interpolation-app">
+  <style>
+    #interpolation-app{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e8e8e8;background:#171717;padding:18px;border-radius:12px}
+    #interpolation-app *{box-sizing:border-box}
+    #interpolation-app .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    #interpolation-app .card{background:#222;border:1px solid #383838;border-radius:10px;padding:14px}
+    #interpolation-app h2,#interpolation-app h3{margin:0 0 10px}
+    #interpolation-app .big{font-size:26px;font-weight:700;word-break:break-word}
+    #interpolation-app .muted{color:#aaa;font-size:13px}
+    #interpolation-app .badge{display:inline-block;padding:5px 9px;border-radius:20px;background:#333;margin:4px 6px 4px 0}
+    #interpolation-app .poly{font-family:Consolas,monospace;background:#161616;padding:10px;border-radius:8px;overflow-wrap:anywhere}
+    #interpolation-app table{width:100%;border-collapse:collapse;font-size:13px}
+    #interpolation-app th,#interpolation-app td{border-bottom:1px solid #3a3a3a;padding:7px;text-align:right;white-space:nowrap}
+    #interpolation-app th:first-child,#interpolation-app td:first-child{text-align:left}
+    #interpolation-app .table-wrap{overflow-x:auto}
+    #interpolation-app canvas{display:block;width:100%;height:320px;background:#111;border-radius:8px}
+    #interpolation-app .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    #interpolation-app .tab-btn{border:1px solid #444;background:#252525;color:#ddd;padding:8px 12px;border-radius:8px;cursor:pointer}
+    #interpolation-app .tab-btn.active{background:#3a3a3a;border-color:#666}
+    #interpolation-app .tab-panel{display:none}
+    #interpolation-app .tab-panel.active{display:block}
+    #interpolation-app .formula{font-family:Consolas,monospace;background:#151515;padding:10px;border-radius:8px;margin:8px 0;white-space:pre-wrap}
+    #interpolation-app .empty{color:#888;font-style:italic}
+    @media(max-width:700px){#interpolation-app .grid{grid-template-columns:1fr}}
+  </style>
+
+  <div class="tabs">
+    <button type="button" class="tab-btn active" data-tab="resultado">Resultado</button>
+    <button type="button" class="tab-btn" data-tab="desarrollo">Desarrollo</button>
+    <button type="button" class="tab-btn" data-tab="grafica">Gráfica</button>
+  </div>
+
+  <section id="tab-resultado" class="tab-panel active">
+    <div class="grid">
+      <div class="card">
+        <div class="muted">Método</div>
+        <div id="method" class="big">—</div>
+
+        <div style="margin-top:12px" class="muted">Valor interpolado</div>
+        <div id="value" class="big">—</div>
+
+        <div style="margin-top:12px" class="muted">Polinomio</div>
+        <div id="polynomial" class="poly">—</div>
+      </div>
+
+      <div class="card">
+        <div class="muted">Comparación de métodos</div>
+
+        <div style="margin-top:10px">
+          <span class="badge">Lagrange: <b id="lagrange-value">—</b></span>
+          <span class="badge">Newton: <b id="newton-value">—</b></span>
+        </div>
+
+        <div style="margin-top:12px" class="muted">Diferencia absoluta</div>
+        <div id="difference" class="big">—</div>
+
+        <div style="margin-top:12px" class="muted">Punto evaluado</div>
+        <div id="x-eval">—</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Puntos utilizados</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>x</th>
+              <th>f(x)</th>
+            </tr>
+          </thead>
+          <tbody id="points-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-desarrollo" class="tab-panel">
+    <div class="card">
+      <h3>Desarrollo del método</h3>
+      <div id="development" class="formula">Esperando resultados...</div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Diferencias divididas de Newton</h3>
+      <div class="table-wrap">
+        <table id="difference-table"></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Bases de Lagrange</h3>
+      <div id="lagrange-basis"></div>
+    </div>
+  </section>
+
+  <section id="tab-grafica" class="tab-panel">
+    <div class="card">
+      <h3>Polinomio interpolante</h3>
+      <canvas id="graph" width="900" height="320"></canvas>
+      <div class="muted" style="margin-top:8px">
+        La curva representa el polinomio interpolante; los puntos corresponden a los datos originales.
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      const root = document.querySelector("#interpolation-app");
+      if (!root || root.dataset.ready === "1") return;
+      root.dataset.ready = "1";
+
+      const qs = (s) => root.querySelector(s);
+      const qsa = (s) => [...root.querySelectorAll(s)];
+
+      const number = (v) => {
+        if (typeof v !== "number" || !Number.isFinite(v)) return v ?? "—";
+        if (Math.abs(v) < 1e-12) return 0;
+        return Number(v.toPrecision(8));
+      };
+
+      function render(data) {
+        if (!data) return;
+
+        qs("#method").textContent = data.method ?? "—";
+        qs("#value").textContent = number(data.value);
+        qs("#lagrange-value").textContent = number(data.lagrange_value);
+        qs("#newton-value").textContent = number(data.newton_value);
+        qs("#difference").textContent = number(data.difference);
+        qs("#x-eval").textContent = data.x_eval !== undefined ? `x = ${number(data.x_eval)}` : "—";
+        qs("#polynomial").textContent = `P(x) = ${data.polynomial ?? "—"}`;
+
+        renderPoints(data.points || []);
+        renderDifferenceTable(data.difference_table || []);
+        renderBasis(data.basis || [], data.points || [], data.x_eval);
+        renderDevelopment(data);
+        renderGraph(data);
+      }
+
+      function renderPoints(points) {
+        const tbody = qs("#points-body");
+        tbody.innerHTML = "";
+
+        if (!points.length) {
+          tbody.innerHTML = `<tr><td colspan="3" class="empty">Sin puntos disponibles.</td></tr>`;
+          return;
+        }
+
+        points.forEach((p, i) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${i + 1}</td>
+            <td>${number(p.x)}</td>
+            <td>${number(p.y)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderDifferenceTable(rows) {
+        const table = qs("#difference-table");
+
+        if (!rows.length) {
+          table.innerHTML = `<tbody><tr><td class="empty">No hay tabla disponible.</td></tr></tbody>`;
+          return;
+        }
+
+        let maxOrder = 0;
+
+        rows.forEach(r => {
+          Object.keys(r).forEach(k => {
+            const m = k.match(/^d(\d+)$/);
+            if (m) maxOrder = Math.max(maxOrder, Number(m[1]));
+          });
+        });
+
+        let html = "<thead><tr><th>x</th><th>f(x)</th>";
+
+        for (let i = 1; i <= maxOrder; i++) {
+          html += `<th>Δ${i}</th>`;
+        }
+
+        html += "</tr></thead><tbody>";
+
+        rows.forEach(r => {
+          html += `<tr><td>${number(r.x)}</td><td>${number(r.f)}</td>`;
+
+          for (let i = 1; i <= maxOrder; i++) {
+            const value = r["d" + i];
+            html += `<td>${value !== undefined ? number(value) : ""}</td>`;
+          }
+
+          html += "</tr>";
+        });
+
+        html += "</tbody>";
+        table.innerHTML = html;
+      }
+
+      function renderBasis(basis, points, xEval) {
+        const box = qs("#lagrange-basis");
+        box.innerHTML = "";
+
+        if (!basis.length) {
+          box.innerHTML = `<div class="empty">No hay bases de Lagrange disponibles.</div>`;
+          return;
+        }
+
+        basis.forEach((value, i) => {
+          const div = document.createElement("div");
+          div.className = "formula";
+
+          const xi = points[i]?.x ?? i;
+          div.textContent =
+            `L${i}(${number(xEval)}) = ${number(value)}  |  x${i} = ${number(xi)}`;
+
+          box.appendChild(div);
+        });
+      }
+
+      function renderDevelopment(data) {
+        const box = qs("#development");
+        const points = data.points || [];
+        const xEval = data.x_eval;
+        const method = String(data.method || "").toLowerCase();
+
+        if (!points.length) {
+          box.textContent = "No hay datos suficientes.";
+          return;
+        }
+
+        let text = "";
+
+        if (method.includes("lagrange")) {
+          text += `Método de Lagrange\n\n`;
+          text += `P(x) = Σ yi · Li(x)\n\n`;
+
+          points.forEach((p, i) => {
+            const li = data.basis?.[i];
+            text += `i = ${i}\n`;
+            text += `xi = ${number(p.x)}, yi = ${number(p.y)}\n`;
+            if (li !== undefined) {
+              text += `L${i}(${number(xEval)}) = ${number(li)}\n`;
+              text += `yi·L${i} = ${number(p.y * li)}\n`;
+            }
+            text += "\n";
+          });
+
+          text += `Resultado:\n`;
+          text += `P(${number(xEval)}) = ${number(data.value)}\n`;
+        } else {
+          text += `Método de Newton por diferencias divididas\n\n`;
+          text += `P(x) = f[x0]\n`;
+          text += `     + f[x0,x1](x-x0)\n`;
+          text += `     + f[x0,x1,x2](x-x0)(x-x1)\n`;
+          text += `     + ...\n\n`;
+
+          if (Array.isArray(data.divided_differences)) {
+            data.divided_differences.forEach((order, i) => {
+              if (order?.length) {
+                text += `Orden ${i}: ${order.map(number).join(", ")}\n`;
+              }
+            });
+          }
+
+          text += `\nResultado:\n`;
+          text += `P(${number(xEval)}) = ${number(data.value)}\n`;
+        }
+
+        text += `\nPolinomio final:\nP(x) = ${data.polynomial ?? "—"}`;
+
+        box.textContent = text;
+      }
+
+      function renderGraph(data) {
+        const canvas = qs("#graph");
+        const ctx = canvas.getContext("2d");
+
+        const xs = data.curve?.x || [];
+        const ys = data.curve?.y || [];
+        const points = data.points || [];
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!xs.length || !ys.length) {
+          ctx.fillStyle = "#888";
+          ctx.font = "16px system-ui";
+          ctx.fillText("No hay datos suficientes para graficar.", 30, 50);
+          return;
+        }
+
+        let minX = Math.min(...xs);
+        let maxX = Math.max(...xs);
+        let minY = Math.min(...ys, ...points.map(p => p.y));
+        let maxY = Math.max(...ys, ...points.map(p => p.y));
+
+        if (minX === maxX) {
+          minX -= 1;
+          maxX += 1;
+        }
+
+        if (minY === maxY) {
+          minY -= 1;
+          maxY += 1;
+        }
+
+        const pad = 50;
+
+        const sx = x =>
+          pad + (x - minX) / (maxX - minX) * (canvas.width - pad * 2);
+
+        const sy = y =>
+          canvas.height - pad - (y - minY) / (maxY - minY) * (canvas.height - pad * 2);
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#555";
+
+        if (minY <= 0 && maxY >= 0) {
+          ctx.beginPath();
+          ctx.moveTo(pad, sy(0));
+          ctx.lineTo(canvas.width - pad, sy(0));
+          ctx.stroke();
+        }
+
+        if (minX <= 0 && maxX >= 0) {
+          ctx.beginPath();
+          ctx.moveTo(sx(0), pad);
+          ctx.lineTo(sx(0), canvas.height - pad);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = "#78aefc";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        xs.forEach((x, i) => {
+          const X = sx(x);
+          const Y = sy(ys[i]);
+
+          if (i === 0) ctx.moveTo(X, Y);
+          else ctx.lineTo(X, Y);
+        });
+
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffbd66";
+
+        points.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(sx(p.x), sy(p.y), 5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        if (data.x_eval !== undefined && data.value !== undefined) {
+          ctx.fillStyle = "#72dc95";
+          ctx.beginPath();
+          ctx.arc(sx(data.x_eval), sy(data.value), 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = "#aaa";
+        ctx.font = "12px system-ui";
+        ctx.fillText(`x: ${number(minX)} → ${number(maxX)}`, pad, canvas.height - 12);
+        ctx.fillText(`y: ${number(minY)} → ${number(maxY)}`, canvas.width - 180, canvas.height - 12);
+      }
+
+      qsa(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          qsa(".tab-btn").forEach(b => b.classList.remove("active"));
+          qsa(".tab-panel").forEach(p => p.classList.remove("active"));
+
+          btn.classList.add("active");
+          qs("#tab-" + btn.dataset.tab).classList.add("active");
+        });
+      });
+
+      const initial = window.openai?.toolOutput;
+      if (initial) render(initial);
+
+      window.addEventListener("openai:set_globals", event => {
+        const data = event.detail?.globals?.toolOutput;
+        if (data) render(data);
+      });
+    })();
+  </script>
+</div>

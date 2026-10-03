@@ -1,5 +1,39 @@
 # TRABAJO CON RAMAS GRUPALES E INDIVIDUALES EN GIT
 
+-- VER LOS COMMITS
+```bash
+Primero mira los commits:
+git log --oneline
+
+Verás algo así:
+a1b2c3d ultimo cambio
+e4f5g6h version estable
+9i8j7k6 commit anterior
+
+Si solo quieres ir a un commit anterior para revisarlo:
+git checkout e4f5g6h
+
+o mejor:
+git switch --detach e4f5g6h
+
+Para regresar luego a tu rama:
+git switch main
+
+Si quieres que tu rama retroceda realmente a ese commit y eliminar los commits posteriores localmente:
+git reset --hard e4f5g6h
+
+Por ejemplo, retroceder un commit:
+git reset --hard HEAD~1
+
+Dos commits:
+git reset --hard HEAD~2
+
+⚠️ --hard elimina también los cambios locales no guardados.
+Si ya habías hecho git push y quieres deshacer un commit sin reescribir el historial, lo más seguro es:
+git revert e4f5g6h
+
+Eso crea un nuevo commit que revierte los cambios.
+```
 Por el momento, se nos indicó subir los cambios de una rama grupal, trabajando cada integrante desde una rama individual.
 
 ## 1. CLONAR LA RAMA GRUPAL
