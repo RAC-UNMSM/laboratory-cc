@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>INTERPOLA-MCP | Métodos Numéricos II</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <span class="axis-y"></span><span class="axis-x"></span><span class="curve-icon"></span>
+      </div>
+      <div class="brand-title">INTERPOLA-MCP</div>
+      <div class="brand-divider"></div>
+      <div class="course">Métodos Numéricos II</div>
+    </div>
+
+    <div class="server-status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Conectado al servidor MCP</span>
+      <button class="gear" id="btnSettings" title="Configuración">⚙</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <button class="nav-item active" data-target="inicio"><span>⌂</span><b>Inicio</b></button>
+      <button class="nav-item" data-target="interpolacion"><span>⌁</span><b>Interpolación</b></button>
+      <button class="nav-item" data-target="comparacion"><span>⚖</span><b>Comparación</b></button>
+      <button class="nav-item" data-target="historial"><span>◷</span><b>Historial</b></button>
+      <button class="nav-item" data-target="ayuda"><span>?</span><b>Ayuda</b></button>
+    </aside>
+
+    <main class="content">
+      <section class="hero" id="inicio">
+        <div>
+          <h1>Interpolación Polinomial</h1>
+          <p>Ingresa tus puntos, selecciona el método y visualiza los resultados<br>
+          junto con la gráfica de la interpolación.</p>
+        </div>
+        <div class="formula-hero">P(x) = <span>∑</span><sub>i=0</sub><sup>n</sup> aᵢxⁱ</div>
+        <div class="hero-curve"></div>
+      </section>
+
+      <section class="main-grid" id="interpolacion">
+        <div class="card input-card">
+          <div class="card-title"><span class="title-icon">♟</span>Datos de entrada</div>
+
+          <label>Método de interpolación</label>
+          <select id="method">
+            <option value="lagrange">Lagrange</option>
+            <option value="newton">Newton</option>
+          </select>
+
+          <label>Puntos (x, y)</label>
+          <div class="point-head"><span>x</span><span>y</span><span></span></div>
+          <div id="pointsContainer"></div>
+
+          <button class="add-point" id="addPoint">＋ Agregar punto</button>
+
+          <label class="eval-label">Valor a evaluar (x)</label>
+          <input id="xEval" type="number" step="any" value="2.5">
+
+          <button class="calculate" id="calculate">
+            <span class="play">▶</span> Calcular
+          </button>
+        </div>
+
+        <div class="card graph-card">
+          <div class="card-title"><span class="title-icon">⌁</span>Gráfica de interpolación</div>
+          <div id="plot"></div>
+        </div>
+      </section>
+
+      <section class="bottom-grid">
+        <div class="card result-card" id="resultado">
+          <div class="card-title"><span class="success-icon">✓</span>Resultado</div>
+          <div class="big-result" id="bigResult">P(2.5) = 7.2500</div>
+          <div class="detail-row"><span>Método utilizado:</span><strong id="methodResult">Lagrange</strong></div>
+          <div class="detail-row"><span>Polinomio:</span><strong class="math" id="polyResult">P(x) = x² + 1</strong></div>
+          <div class="detail-row"><span>Coeficientes:</span><strong id="coeffResult">[1, 0, 1]</strong></div>
+        </div>
+
+        <div class="card poly-card">
+          <div class="card-title"><span class="code-icon">&lt;/&gt;</span>Polinomio de interpolación</div>
+          <div class="poly-box math" id="polyBox">P(x) = x² + 1</div>
+          <button class="secondary" id="showDetails">◎ &nbsp; Ver detalles</button>
+        </div>
+
+        <div class="card differences-card">
+          <div class="card-title"><span class="table-icon">▦</span>Tabla de diferencias divididas</div>
+          <div class="table-wrap">
+            <table id="diffTable"></table>
+          </div>
+          <button class="secondary" id="showFullTable">▣ &nbsp; Ver tabla completa</button>
+        </div>
+
+        <div class="card comparison-card" id="comparacion">
+          <div class="card-title"><span class="scale-icon">⚖</span>Comparación de métodos</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Método</th><th>Resultado</th><th>Error</th></tr></thead>
+              <tbody>
+                <tr><td class="method-cell">Lagrange</td><td id="lagValue">7.2500</td><td id="lagError">0.0000</td></tr>
+                <tr><td class="method-cell">Newton</td><td id="newValue">7.2500</td><td id="newError">0.0000</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="match-box">
+            <span class="success-icon small">✓</span>
+            <div>
+              <b id="matchTitle">Ambos métodos coinciden</b>
+              <p>La diferencia entre los métodos es <strong id="difference">0.0000</strong></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="hidden-section" id="historial">
+        <div class="card history-card">
+          <div class="card-title"><span class="title-icon">◷</span>Historial de cálculos</div>
+          <div id="historyList"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="modal-panel">
+      <button class="close" id="closeModal">×</button>
+      <h2 id="modalTitle">Detalles</h2>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

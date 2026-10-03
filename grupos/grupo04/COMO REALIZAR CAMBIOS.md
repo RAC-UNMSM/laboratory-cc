@@ -226,6 +226,47 @@ git push
 
 ---
 
+
+## #######################################
+SI TE APARECE ESTO:
+ES PORQUE HAY CAMBIOS QUE SE HICIERON EN LA RAMA EN EL REMOTO
+
+```bash
+git fetch origin
+```
+
+-- PARA ESTO SE NECESITA GUARDAR CAMBIOS DE TU RAMA 
+```bash
+git pull --rebase origin grupo04
+```
+
+-- VOLVEMOS A SUBIR LOS CAMBIOS
+
+```bash
+git push -u origin grupo04
+```
+
+
+## ################
+ARCHIVOS AFECTADOS?
+```bash
+git status
+```
+## ################
+
+```bash
+C:\Users\User\Desktop\PROYECTO MCP JULIUS\laboratory-cc>git push -u origin grupo04
+To https://github.com/RAC-UNMSM/laboratory-cc.git
+ ! [rejected]        grupo04 -> grupo04 (fetch first)
+error: failed to push some refs to 'https://github.com/RAC-UNMSM/laboratory-cc.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+```
+
+## ########################################
 # ================================================================
 
 # RUTA PARA REGISTRAR NUEVOS CAMBIOS
