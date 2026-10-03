@@ -7,8 +7,8 @@ Para un grupo nuevo (`grupoNN`):
    semana, una subcarpeta **por tema** (proyecto/app puntual de esa
    semana), con su `docker-compose.yml`:
    ```
-   grupos/grupoNN/
-     semanaNN/
+   grupos/grupo08/
+     semanafinal/
        <tema>/
          docker-compose.yml
    ```
