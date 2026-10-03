@@ -1,0 +1,1 @@
+soy llordi rosales y pertenezco al grupo 02
