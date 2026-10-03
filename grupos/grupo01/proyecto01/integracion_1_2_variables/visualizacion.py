@@ -1,137 +1,134 @@
 import io
 import os
-import tempfile
+import platform
 import subprocess
+import tempfile
+import numpy as np
+import sympy as sp
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # Habilita proyección 3D
-import numpy as np
-import sympy as sp
+
+def abrir_imagen_sistema(filepath: str):
+    """Abre el archivo de imagen según el sistema operativo del usuario."""
+    sistema = platform.system().lower()
+    try:
+        if sistema == "darwin":      # macOS
+            subprocess.run(["open", filepath], check=False)
+        elif sistema == "windows":  # Windows
+            os.startfile(filepath)
+        elif sistema == "linux":    # Linux
+            subprocess.run(["xdg-open", filepath], check=False)
+    except Exception:
+        pass  # Si no hay entorno gráfico disponible, ignora la apertura.
 
 def generar_grafico_png(
-    expr_sp, 
-    x_min: float, 
-    x_max: float, 
-    y_min: float = None, 
+    expr: sp.Expr,
+    x_min: float,
+    x_max: float,
+    y_min: float = None,
     y_max: float = None,
     g1_str: str = None,
-    g2_str: str = None
+    g2_str: str = None,
+    mostrar_local: bool = True
 ) -> bytes:
     """
-    Genera gráficos 2D para 1 variable o gráficos 3D (superficie/volumen) 
-    para integrales dobles sobre dominios rectangulares o generales.
+    Genera un gráfico PNG de la función dada.
+    - Si es de 1 variable, genera un gráfico 2D con el área sombreada.
+    - Si es de 2 variables, genera una superficie 3D recortada con proyección en el suelo.
     """
-    x, y = sp.symbols('x y')
-    simbolos = expr_sp.free_symbols
-    es_2d = (y in simbolos) or (y_min is not None) or (g1_str is not None)
+    es_1d = (y_min is None and g1_str is None)
+    fig = plt.figure(figsize=(8, 6), dpi=120)
 
-    # -------------------------------------------------------------
-    # CASO INTEGRALES DOBLES: Superficie 3D z = f(x, y)
-    # -------------------------------------------------------------
-    if es_2d:
-        fig = plt.figure(figsize=(7, 5.5), dpi=100)
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Malla en X
-        margin_x = (x_max - x_min) * 0.15 if x_max != x_min else 1.0
-        x_plot = np.linspace(x_min - margin_x, x_max + margin_x, 120)
-        
-        # Determinar rango y funciones para Y
-        if g1_str and g2_str:
-            g1_sym = sp.sympify(g1_str)
-            g2_sym = sp.sympify(g2_str)
-            g1_func = sp.lambdify(x, g1_sym, modules=['numpy', 'math'])
-            g2_func = sp.lambdify(x, g2_sym, modules=['numpy', 'math'])
-            
-            g1_vals = g1_func(x_plot)
-            g2_vals = g2_func(x_plot)
-            if np.isscalar(g1_vals): g1_vals = np.full_like(x_plot, g1_vals)
-            if np.isscalar(g2_vals): g2_vals = np.full_like(x_plot, g2_vals)
-            
-            y_min_val = float(np.nanmin(g1_vals))
-            y_max_val = float(np.nanmax(g2_vals))
-        else:
-            y_min_val = y_min if y_min is not None else -2.0
-            y_max_val = y_max if y_max is not None else 2.0
-            
-        margin_y = (y_max_val - y_min_val) * 0.15 if y_max_val != y_min_val else 1.0
-        y_plot = np.linspace(y_min_val - margin_y, y_max_val + margin_y, 120)
-        
-        X, Y = np.meshgrid(x_plot, y_plot)
-        f_num = sp.lambdify((x, y), expr_sp, modules=['numpy', 'math'])
-        
+    if es_1d:
+        ax = fig.add_subplot(111)
+        x_vals = np.linspace(x_min, x_max, 400)
+        f_lamb = sp.lambdify(sp.Symbol('x'), expr, modules=['numpy'])
         try:
-            Z = f_num(X, Y)
+            y_vals = f_lamb(x_vals)
+            if np.isscalar(y_vals):
+                y_vals = np.full_like(x_vals, y_vals)
+        except Exception:
+            y_vals = np.zeros_like(x_vals)
+
+        ax.plot(x_vals, y_vals, label=f"$f(x) = {sp.latex(expr)}$", color='#1f77b4', lw=2)
+        ax.fill_between(x_vals, y_vals, alpha=0.3, color='#1f77b4')
+        ax.axhline(0, color='black', lw=0.8, ls='--')
+        ax.axvline(0, color='black', lw=0.8, ls='--')
+        ax.set_title("Área Bajo la Curva (Integral Simple)", fontsize=12, fontweight='bold')
+        ax.set_xlabel("x")
+        ax.set_ylabel("f(x)")
+        ax.grid(True, linestyle=':', alpha=0.6)
+        ax.legend()
+
+    else:
+        ax = fig.add_subplot(111, projection='3d')
+        x_vals = np.linspace(x_min, x_max, 150)
+
+        # Determinar límites en Y
+        if g1_str is not None and g2_str is not None:
+            x_sym = sp.Symbol('x')
+            g1_lamb = sp.lambdify(x_sym, sp.sympify(g1_str), modules=['numpy'])
+            g2_lamb = sp.lambdify(x_sym, sp.sympify(g2_str), modules=['numpy'])
+
+            g1_eval = g1_lamb(x_vals)
+            g2_eval = g2_lamb(x_vals)
+            if np.isscalar(g1_eval): g1_eval = np.full_like(x_vals, g1_eval)
+            if np.isscalar(g2_eval): g2_eval = np.full_like(x_vals, g2_eval)
+
+            y_m = float(np.nanmin(g1_eval)) if y_min is None else y_min
+            y_M = float(np.nanmax(g2_eval)) if y_max is None else y_max
+        else:
+            y_m = y_min if y_min is not None else -1.0
+            y_M = y_max if y_max is not None else 1.0
+
+        y_vals = np.linspace(y_m, y_M, 150)
+        X, Y = np.meshgrid(x_vals, y_vals)
+
+        f_lamb = sp.lambdify((sp.Symbol('x'), sp.Symbol('y')), expr, modules=['numpy'])
+        try:
+            Z = f_lamb(X, Y)
             if np.isscalar(Z):
                 Z = np.full_like(X, Z)
         except Exception:
             Z = np.zeros_like(X)
 
-        # Máscara para dominios generales (ej. círculos): descarta puntos fuera de [g1(x), g2(x)]
-        if g1_str and g2_str:
-            G1 = g1_func(X)
-            G2 = g2_func(X)
-            mask = (Y >= G1) & (Y <= G2) & (X >= x_min) & (X <= x_max)
-            Z[~mask] = np.nan
+        # Máscara para dominios no rectangulares g1(x) <= y <= g2(x)
+        if g1_str is not None and g2_str is not None:
+            x_sym = sp.Symbol('x')
+            g1_l = sp.lambdify(x_sym, sp.sympify(g1_str), modules=['numpy'])
+            g2_l = sp.lambdify(x_sym, sp.sympify(g2_str), modules=['numpy'])
+            G1 = g1_l(X)
+            G2 = g2_l(X)
+            mask = (Y >= G1) & (Y <= G2)
+            Z = np.where(mask, Z, np.nan)
 
-        # Dibujar superficie 3D
         surf = ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.85, edgecolor='k', linewidth=0.1)
-        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, pad=0.1, label=f"$z = {sp.latex(expr_sp)}$")
-        
-        ax.set_title(f"Volumen: $z = {sp.latex(expr_sp)}$", fontsize=11, fontweight='bold')
+
+        # Sombra proyectada del dominio en el suelo z_min
+        z_min_val = np.nanmin(Z) if not np.all(np.isnan(Z)) else 0
+        if not np.isnan(z_min_val):
+            ax.contourf(X, Y, Z, zdir='z', offset=z_min_val, cmap='viridis', alpha=0.3)
+            ax.set_zlim(z_min_val, np.nanmax(Z) if not np.all(np.isnan(Z)) else z_min_val + 1)
+
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, label='f(x, y)')
+        ax.set_title("Volumen Bajo la Superficie (Integral Doble)", fontsize=12, fontweight='bold')
         ax.set_xlabel("x")
         ax.set_ylabel("y")
-        ax.set_zlabel("z")
+        ax.set_zlabel("f(x, y)")
 
-    # -------------------------------------------------------------
-    # CASO INTEGRALES SIMPLES: Curva y Área 2D
-    # -------------------------------------------------------------
-    else:
-        fig, ax = plt.subplots(figsize=(6, 4.5), dpi=100)
-        margin_x = (x_max - x_min) * 0.2 if x_max != x_min else 1.0
-        x_plot = np.linspace(x_min - margin_x, x_max + margin_x, 200)
-        
-        f_num = sp.lambdify(x, expr_sp, modules=['numpy', 'math'])
-        try:
-            y_plot = f_num(x_plot)
-            if np.isscalar(y_plot):
-                y_plot = np.full_like(x_plot, y_plot)
-        except Exception:
-            y_plot = np.zeros_like(x_plot)
+    plt.tight_layout()
 
-        ax.plot(x_plot, y_plot, label=f"$f(x) = {sp.latex(expr_sp)}$", color='#1f77b4', linewidth=2)
-        
-        x_fill = np.linspace(x_min, x_max, 150)
-        try:
-            y_fill = f_num(x_fill)
-            if np.isscalar(y_fill):
-                y_fill = np.full_like(x_fill, y_fill)
-        except Exception:
-            y_fill = np.zeros_like(x_fill)
-            
-        ax.fill_between(x_fill, 0, y_fill, color='#1f77b4', alpha=0.3, label='Área de integración')
-        ax.set_title("Área bajo la curva", fontsize=11, fontweight='bold')
-        ax.set_xlabel("x")
-        ax.set_ylabel("f(x)")
-        ax.legend(loc='upper right')
-        ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
-        ax.axvline(0, color='black', linewidth=0.8, linestyle='--')
-        ax.grid(True, linestyle=':', alpha=0.6)
-
-    # Exportación y apertura local
-    temp_dir = tempfile.gettempdir()
-    filepath = os.path.join(temp_dir, "grafico_integral.png")
-    plt.savefig(filepath, format='png', bbox_inches='tight')
-    
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
-    plt.close(fig)
+    plt.savefig(buf, format='png', dpi=120)
     buf.seek(0)
-    
-    try:
-        subprocess.run(["open", filepath])
-    except Exception:
-        pass
-        
-    return buf.getvalue()
+    png_bytes = buf.getvalue()
+
+    if mostrar_local:
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            tmp.write(png_bytes)
+            tmp_path = tmp.name
+        abrir_imagen_sistema(tmp_path)
+
+    plt.close(fig)
+    return png_bytes
