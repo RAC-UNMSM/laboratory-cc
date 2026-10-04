@@ -1,5 +1,9 @@
+import os
+import base64
+import subprocess
 import sympy as sp
-from fastmcp import FastMCP, Image
+from fastmcp import FastMCP
+from mcp.types import ImageContent
 from validacion import (
     validar_y_parsear_expresion,
     validar_limites_numericos,
@@ -10,7 +14,17 @@ from matematica import integrar_simple, integrar_doble_rectangular, integrar_dob
 from visualizacion import generar_grafico_png
 from reporte_html import generar_reporte_html
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPORTE_PATH = os.path.join(BASE_DIR, "reporte_integral.html")
+
 mcp = FastMCP("Calculadora Integrales")
+
+def abrir_reporte_en_mac(ruta):
+    """Fuerza la apertura del archivo HTML en el navegador predeterminado de macOS."""
+    try:
+        subprocess.Popen(["open", ruta])
+    except Exception:
+        pass
 
 @mcp.tool()
 def integra_simple(expresion: str, x_min: str, x_max: str):
@@ -22,25 +36,26 @@ def integra_simple(expresion: str, x_min: str, x_max: str):
         resultado, latex_str = integrar_simple(expr_sp, xmin_num, xmax_num)
         png_bytes = generar_grafico_png(expr_sp, xmin_num, xmax_num, mostrar_local=False)
 
-        # Guarda localmente una copia del informe HTML
         generar_reporte_html(
             tipo_integral="Integral Simple",
             latex_str=latex_str,
             resultado_exacto=sp.latex(resultado),
             resultado_decimal=float(resultado),
             png_bytes=png_bytes,
-            nombre_archivo="reporte_integral.html",
+            nombre_archivo=REPORTE_PATH,
             abrir_en_navegador=False
         )
+        abrir_reporte_en_mac(REPORTE_PATH)
 
         texto = (
             f"### Resultado - Integral Simple\n"
             f"- **Expresión LaTeX:** $${latex_str} = {sp.latex(resultado)}$$\n"
             f"- **Resultado exacto:** `{resultado}`\n"
             f"- **Resultado decimal:** `{float(resultado):.4f}`\n"
-            f"- **Informe HTML:** Guardado como `reporte_integral.html`\n"
+            f"- **Informe HTML:** Guardado en `{REPORTE_PATH}`\n"
         )
-        return [texto, Image(data=png_bytes, format="png")]
+        img_b64 = base64.b64encode(png_bytes).decode("utf-8")
+        return [texto, ImageContent(type="image", data=img_b64, mimeType="image/png")]
     except ErrorDeEntrada as e:
         return f"Error de validación:\n{e}"
     except Exception as e:
@@ -67,18 +82,20 @@ def integra_doble_rectangular(expresion: str, x_min: str, x_max: str, y_min: str
             resultado_exacto=sp.latex(resultado),
             resultado_decimal=float(resultado),
             png_bytes=png_bytes,
-            nombre_archivo="reporte_integral.html",
+            nombre_archivo=REPORTE_PATH,
             abrir_en_navegador=False
         )
+        abrir_reporte_en_mac(REPORTE_PATH)
 
         texto = (
             f"### Resultado - Integral Doble Rectangular\n"
             f"- **Expresión LaTeX:** $${latex_str} = {sp.latex(resultado)}$$\n"
             f"- **Resultado exacto:** `{resultado}`\n"
             f"- **Resultado decimal:** `{float(resultado):.4f}`\n"
-            f"- **Informe HTML:** Guardado como `reporte_integral.html`\n"
+            f"- **Informe HTML:** Guardado en `{REPORTE_PATH}`\n"
         )
-        return [texto, Image(data=png_bytes, format="png")]
+        img_b64 = base64.b64encode(png_bytes).decode("utf-8")
+        return [texto, ImageContent(type="image", data=img_b64, mimeType="image/png")]
     except ErrorDeEntrada as e:
         return f"Error de validación:\n{e}"
     except Exception as e:
@@ -113,18 +130,20 @@ def integra_doble_general(
             resultado_exacto=sp.latex(resultado),
             resultado_decimal=float(resultado),
             png_bytes=png_bytes,
-            nombre_archivo="reporte_integral.html",
+            nombre_archivo=REPORTE_PATH,
             abrir_en_navegador=False
         )
+        abrir_reporte_en_mac(REPORTE_PATH)
 
         texto = (
             f"### Resultado - Integral Doble General\n"
             f"- **Expresión LaTeX:** $${latex_str} = {sp.latex(resultado)}$$\n"
             f"- **Resultado exacto:** `{resultado}`\n"
             f"- **Resultado decimal:** `{float(resultado):.4f}`\n"
-            f"- **Informe HTML:** Guardado como `reporte_integral.html`\n"
+            f"- **Informe HTML:** Guardado en `{REPORTE_PATH}`\n"
         )
-        return [texto, Image(data=png_bytes, format="png")]
+        img_b64 = base64.b64encode(png_bytes).decode("utf-8")
+        return [texto, ImageContent(type="image", data=img_b64, mimeType="image/png")]
     except ErrorDeEntrada as e:
         return f"Error de validación:\n{e}"
     except Exception as e:
