@@ -111,19 +111,22 @@ class TestModulosDeHerramientas(unittest.TestCase):
 
     @staticmethod
     def _herramientas_declaradas(arbol: ast.AST) -> set[str] | None:
-        """Nombres en `HERRAMIENTAS = [...]` o `= (fn1, fn2, ...)`, o None si
-        el modulo no lo declara.
+        """Nombres del manifiesto de tools, o None si el modulo no declara uno.
 
-        Se aceptan las dos formas que usan los integrantes:
+        Misma regla que `server.py`: se acepta cualquier variable de nivel de
+        modulo que empiece por `HERRAMIENTAS` (cada area le pone su sufijo), y
+        dentro se aceptan las dos formas:
           - strings:  HERRAMIENTAS = ["limite", "dominio"]
-          - objetos:  HERRAMIENTAS = (calcular_limite, limite)
-        En el segundo caso los nombres salen de los `ast.Name` referenciados,
-        que es como `server.py` los resuelve.
+          - objetos:  HERRAMIENTAS_CALCULO2 = (calcular_integral, riemann)
         """
         for nodo in ast.walk(arbol):
             if not isinstance(nodo, ast.Assign):
                 continue
-            if not any(isinstance(t, ast.Name) and t.id == "HERRAMIENTAS" for t in nodo.targets):
+            nombres_obj = [
+                t.id for t in nodo.targets
+                if isinstance(t, ast.Name) and t.id.startswith("HERRAMIENTAS")
+            ]
+            if not nombres_obj:
                 continue
             nombres = {
                 n.id for n in ast.walk(nodo.value)
