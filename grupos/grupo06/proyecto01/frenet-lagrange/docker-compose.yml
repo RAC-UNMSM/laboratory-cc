@@ -1,0 +1,26 @@
+# Servidor MCP por STDIO. Un cliente MCP no usa "docker compose up": lanza el contenedor
+# y le habla por stdin/stdout. Este archivo sirve para construir la imagen y probarla:
+#
+#   docker compose build
+#   docker compose run --rm mcp-math                      ← sesión STDIO interactiva (JSON-RPC)
+#   docker compose run --rm --entrypoint python mcp-math cli.py frenet --demo 1 --html /data/resultados/helice.html
+#
+# Los resultados (JSON, HTML, PNG) quedan en ./resultados del equipo anfitrión.
+services:
+  mcp-math:
+    build: .
+    image: mcp-math-server:latest
+    stdin_open: true        # equivale a "docker run -i": mantiene stdin abierto (canal del protocolo)
+    tty: false              # sin TTY: el JSON-RPC debe viajar sin transformaciones
+    init: true              # reenvía señales y recoge procesos de cálculo huérfanos
+    environment:
+      MCP_MATH_RESULTADOS: /data/resultados
+      MCP_MATH_TIMEOUT: "120"
+      MCP_MATH_LOG: INFO
+    volumes:
+      - ./resultados:/data/resultados
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 2g

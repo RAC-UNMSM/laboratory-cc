@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "frenet-lagrange": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm",
+               "-v", "C:\\RUTA\\A\\mcp_math_server\\resultados:/data/resultados",
+               "mcp-math-server:latest"]
+    }
+  }
+}

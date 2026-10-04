@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "frenet-lagrange": {
+      "command": "python",
+      "args": ["C:\\RUTA\\A\\mcp_math_server\\server.py"],
+      "env": {
+        "MCP_MATH_RESULTADOS": "C:\\RUTA\\A\\mcp_math_server\\resultados",
+        "MCP_MATH_TIMEOUT": "120"
+      }
+    }
+  }
+}
