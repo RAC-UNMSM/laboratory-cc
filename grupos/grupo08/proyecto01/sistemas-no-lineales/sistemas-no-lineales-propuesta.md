@@ -211,30 +211,23 @@ La comparación se realizará sobre resultados calculados por el servidor y no m
 # 8. Arquitectura del proyecto
 
 ```text
-grupoXX/
-└── semanaNN/
-    └── sistemas-no-lineales-mcp/
-        ├── server.py
-        ├── validacion.py
-        │
-        ├── metodos/
-        │   ├── punto_fijo.py
-        │   ├── newton_sistemas.py
-        │   ├── cuasi_newton.py
-        │   ├── descenso.py
-        │   └── homotopia.py
-        │
-        ├── convergencia.py
-        ├── visualizacion.py
-        ├── reportes.py
-        ├── prompts.py
-        │
-        ├── tests/
-        ├── examples/
-        │
-        ├── requirements.txt
-        ├── Dockerfile
-        └── README.md
+grupos/
+└── grupo08/
+     └── proyecto01/
+          └── sistemas-no-lineales/
+               ├── server.py
+               ├── validacion.py
+               ├── resultado.py
+               ├── convergencia.py
+               ├── visualizacion.py          # Jhovany
+               ├── reportes.py               # Jhovany
+               ├── Dockerfile                # Jhovany
+               ├── requirements.txt
+               ├── metodos/
+               ├── tests/
+               │   ├── test_visualizacion.py
+               │   └── test_reportes.py
+               └── examples/                 # Jhovany: ejemplos de uso
 ```
 
 ### Función de los principales archivos
@@ -251,11 +244,11 @@ Implementan los métodos numéricos.
 `convergencia.py`
 Realiza cálculos y diagnósticos relacionados con error, residuo y comportamiento de convergencia.
 
-`visualizacion.py`
-Genera tablas y gráficos.
+`visualizacion.py` (Jhovany)
+Genera tablas y gráficos; sus pruebas se encuentran en `tests/test_visualizacion.py`.
 
-`reportes.py`
-Genera los informes HTML y LaTeX.
+`reportes.py` (Jhovany)
+Genera los informes HTML y LaTeX; sus pruebas se encuentran en `tests/test_reportes.py`.
 
 `prompts.py`
 Contiene los prompts reutilizables para la interpretación pedagógica.
@@ -263,10 +256,10 @@ Contiene los prompts reutilizables para la interpretación pedagógica.
 `tests/`
 Contiene las pruebas unitarias y de integración.
 
-`examples/`
-Contiene ejemplos de sistemas utilizados para demostraciones y validación.
+`examples/` (Jhovany)
+Contiene ejemplos de uso del proyecto.
 
-`Dockerfile`
+`Dockerfile` (Jhovany)
 Permite ejecutar el servidor dentro de un contenedor.
 
 El uso de `docker-compose.yml` se deja como opcional y solo se incorporará si el proyecto termina utilizando varios servicios que justifiquen su uso.
