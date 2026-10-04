@@ -1,3 +1,11 @@
+# Cálculo numérico y simbólico
 numpy>=1.24
 scipy>=1.10
-matplotlib>=3.7
+sympy>=1.12
+
+# Servidor MCP (transporte stdio). En mcp 2.x la clase se llama MCPServer;
+# el nombre FastMCP corresponde a mcp 1.x y ya no existe en esta versión.
+mcp>=2.0,<3.0
+
+# Visualización HTML interactiva
+plotly>=5.20

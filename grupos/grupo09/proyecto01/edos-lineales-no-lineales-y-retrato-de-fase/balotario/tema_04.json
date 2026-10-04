@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "tema": {
+    "id": "tema_04",
+    "titulo": "Sistemas Dinámicos Caóticos",
+    "orden": 4,
+    "origen": {
+      "archivo": "balotario.tex",
+      "seccion_latex": "Tema 4: Sistemas Dinámicos Caóticos",
+      "lineas": [2578, 2775]
+    },
+    "notas": "ATENCIÓN: en el .tex solo el problema 4.1 tiene solución desarrollada. Los problemas 4.2 a 4.5 están con enunciado únicamente, así que se registran con solucion_esperada.tipo = \"pendiente\" y solucion_en_tex = false. No se inventaron respuestas: lo que aparece en `datos_del_enunciado` son las cifras que el propio enunciado aporta.\n\nAdemás, la mayoría de este tema son MAPAS DISCRETOS (tienda, logístico) o demostraciones analíticas, no problemas de valor inicial continuos. El motor actual integra EDOs con solve_ivp y no itera mapas, de modo que verificable_con_solver = false en todos. Iterar mapas es trabajo nuevo, no una adaptación."
+  },
+  "problemas": [
+    {
+      "id": "4.1",
+      "orden": 1,
+      "titulo": "Mapa tienda: exponente de Lyapunov y horizonte de predicción",
+      "enunciado": "Considere el mapa tienda (Tent Map) $f: [0,1] \\to [0,1]$ definido por $f(x) = 2x$ si $0 \\le x \\le 1/2$ y $f(x) = 2(1-x)$ si $1/2 < x \\le 1$. Calcule analíticamente su exponente de Lyapunov $\\lambda$ y determine el tiempo característico en que dos condiciones iniciales separadas por $\\delta_0 = 10^{-10}$ divergen hasta una distancia de orden 1.",
+      "tipo": "mapa_discreto_unidimensional",
+      "dificultad": "intermedia",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Es un mapa discreto definido a trozos. El motor integra EDOs continuas con solve_ivp y no itera mapas.",
+      "ecuacion": {
+        "latex": "f(x) = \\begin{cases} 2x, & 0 \\le x \\le 1/2 \\\\ 2(1-x), & 1/2 < x \\le 1 \\end{cases}",
+        "forma": "mapa_discreto",
+        "dimension": 1,
+        "dominio": [0.0, 1.0],
+        "variables_estado": ["x"],
+        "definida_a_trozos": true,
+        "trozos": [
+          { "condicion": "0 <= x <= 1/2", "expresion": "2*x" },
+          { "condicion": "1/2 < x <= 1", "expresion": "2*(1 - x)" }
+        ],
+        "parametros": {},
+        "notas": "No se expresa como `campo` porque el esquema de `campo` describe el lado derecho de una EDO continua, no una iteración."
+      },
+      "solucion_esperada": {
+        "tipo": "analitico_discreto",
+        "solucion_en_tex": true,
+        "latex": "|f'(x)| = 2 \\; \\forall x \\neq 1/2 \\implies \\lambda = \\ln 2 \\approx 0.69315 > 0; \\qquad n^* = 34",
+        "valores": {
+          "exponente_lyapunov": 0.6931471805599453,
+          "exponente_lyapunov_expresion": "log(2)",
+          "entropia_kolmogorov_sinai": 0.6931471805599453,
+          "iteraciones_hasta_orden_uno": 34,
+          "delta_inicial": 1e-10
+        },
+        "puntos_fijos": [
+          { "punto": [0.0], "clasificacion_balotario": "inestable", "latex": "x_1^* = 0" },
+          { "punto": [0.6666666666666666], "clasificacion_balotario": "inestable",
+            "latex": "x_2^* = 2/3" }
+        ],
+        "datos_adicionales": {
+          "derivada_latex": "f'(x) = +2 \\text{ en } (0,1/2), \\; -2 \\text{ en } (1/2,1)",
+          "divergencia_latex": "\\delta_n = \\delta_0 2^n",
+          "horizonte_latex": "n^* \\propto \\ln(1/\\delta_0)",
+          "conclusion": "La tasa uniforme de expansión |f'| = 2 da un exponente de Lyapunov constante lambda = ln 2, que coincide con la entropía métrica de Kolmogorov-Sinai. La pérdida de predictibilidad es intrínseca: no viene del ruido externo sino de la amplificación exponencial, que restringe el horizonte determinista a un tiempo finito."
+        },
+        "notas": "Es el único problema del Tema 4 con solución desarrollada en el .tex. Los valores registrados son los que el .tex demuestra."
+      },
+      "verificacion": {
+        "no_verificable_con_el_motor_actual": true,
+        "nota": "Cuando `matematica/analisis_caos.py` se implemente, este caso es su primera prueba de aceptación: un sistema con exponente de Lyapunov conocido exactamente."
+      }
+    },
+    {
+      "id": "4.2",
+      "orden": 2,
+      "titulo": "Mapa logístico: primer umbral de duplicación de periodo",
+      "enunciado": "Para el mapa logístico $x_{n+1} = r x_n(1 - x_n)$ con $x \\in [0,1]$: determine analíticamente el valor crítico $r_1$ donde la órbita de periodo 1 pierde estabilidad y nace la órbita de periodo 2.",
+      "tipo": "mapa_discreto_unidimensional",
+      "dificultad": "intermedia",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Mapa discreto: el motor no itera mapas.",
+      "ecuacion": {
+        "latex": "x_{n+1} = r x_n (1 - x_n), \\qquad x \\in [0,1]",
+        "forma": "mapa_discreto",
+        "dimension": 1,
+        "dominio": [0.0, 1.0],
+        "variables_estado": ["x"],
+        "definida_a_trozos": false,
+        "trozos": [{ "condicion": "0 <= x <= 1", "expresion": "r*x*(1 - x)" }],
+        "parametros": { "r": null },
+        "parametro_de_barrido": "r"
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado. No se registra respuesta para no inventarla."
+      },
+      "verificacion": { "no_verificable_con_el_motor_actual": true }
+    },
+    {
+      "id": "4.3",
+      "orden": 3,
+      "titulo": "Cascada de Feigenbaum y umbral de acumulación caótica",
+      "enunciado": "La transición al caos en mapas unimodales sigue una cascada infinita de duplicaciones de periodo $2^n$ que ocurren en parámetros $r_n$. Si $r_1 = 3$ y $r_2 = 1 + \\sqrt{6} \\approx 3.44949$, estime el umbral crítico de acumulación caótica $r_\\infty$ usando la constante de Feigenbaum $\\delta \\approx 4.6692016$.",
+      "tipo": "analisis_asintotico_mapas",
+      "dificultad": "avanzada",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Estimación asintótica sobre un mapa discreto, no un PVI.",
+      "ecuacion": {
+        "latex": "r_\\infty \\text{ a partir de } r_1, r_2 \\text{ y } \\delta",
+        "forma": "demostracion",
+        "dimension": 1,
+        "variables_estado": [],
+        "parametros": {}
+      },
+      "datos_del_enunciado": {
+        "r_1": 3.0,
+        "r_2": 3.449489742783178,
+        "r_2_expresion": "1 + sqrt(6)",
+        "delta_feigenbaum": 4.6692016
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado. Los valores de `datos_del_enunciado` son los que el propio enunciado aporta, no una respuesta."
+      },
+      "verificacion": { "no_verificable_con_el_motor_actual": true }
+    },
+    {
+      "id": "4.4",
+      "orden": 4,
+      "titulo": "Lorenz: disipatividad y elipsoide atrapante",
+      "enunciado": "El sistema de Lorenz (1963) está dado por $\\dot{x} = \\sigma(y - x)$, $\\dot{y} = r x - y - x z$, $\\dot{z} = x y - b z$ con $\\sigma, r, b > 0$. (a) Demuestre que el flujo es estrictamente disipativo y calcule la tasa de contracción de volumen en el espacio de fases. (b) Demuestre que todas las trayectorias entran eventualmente y permanecen atrapadas en un elipsoide acotado de $\\mathbb{R}^3$.",
+      "tipo": "demostracion_sobre_edo",
+      "dificultad": "avanzada",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Pide una demostración analítica (disipatividad y existencia de conjunto atrapante), no el cálculo de una trayectoria. El sistema en sí sí es integrable por el motor: ver el propio bloque `ecuacion` de este problema, que ya trae el campo listo para `analizar_edo`.",
+      "ecuacion": {
+        "latex": "\\dot{x} = \\sigma(y-x), \\qquad \\dot{y} = rx - y - xz, \\qquad \\dot{z} = xy - bz",
+        "forma": "sistema_primer_orden",
+        "dimension": 3,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y", "z"],
+        "campo": ["sigma*(y - x)", "r*x - y - x*z", "x*y - b*z"],
+        "parametros": { "sigma": 10.0, "r": 28.0, "b": 2.6666666666666665 },
+        "notas": "Parámetros canónicos puestos como referencia; el enunciado trabaja con sigma, r, b > 0 genéricos. El campo es integrable por el motor aunque la pregunta sea analítica."
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado. La divergencia del campo es calculable de forma exacta con `matematica.expresiones.jacobiano_simbolico`, que da la traza del Jacobiano, pero no se registra como respuesta porque el .tex no la demuestra."
+      },
+      "verificacion": { "no_verificable_con_el_motor_actual": true }
+    },
+    {
+      "id": "4.5",
+      "orden": 5,
+      "titulo": "Espectro de Lyapunov de un flujo caótico 3D disipativo",
+      "enunciado": "Demuestre que para cualquier flujo suave tridimensional disipativo $\\dot{\\mathbf{x}} = \\mathbf{f}(\\mathbf{x})$ que posea un atractor caótico acotado que no contenga puntos de equilibrio, el espectro de exponentes de Lyapunov $(\\lambda_1, \\lambda_2, \\lambda_3)$ debe satisfacer rigurosamente $\\lambda_1 > 0$, $\\lambda_2 = 0$, $\\lambda_3 < 0$, con $\\lambda_1 + \\lambda_2 + \\lambda_3 < 0$.",
+      "tipo": "demostracion_teorica",
+      "dificultad": "avanzada",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Es un teorema general sobre flujos, no un problema con datos concretos.",
+      "ecuacion": {
+        "latex": "\\lambda_1 > 0, \\quad \\lambda_2 = 0, \\quad \\lambda_3 < 0, \\quad \\sum \\lambda_i < 0",
+        "forma": "demostracion",
+        "dimension": 3,
+        "variables_estado": [],
+        "parametros": {}
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado."
+      },
+      "verificacion": { "no_verificable_con_el_motor_actual": true }
+    }
+  ]
+}

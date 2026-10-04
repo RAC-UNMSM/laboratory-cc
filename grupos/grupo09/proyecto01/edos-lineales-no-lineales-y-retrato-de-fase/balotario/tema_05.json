@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "tema": {
+    "id": "tema_05",
+    "titulo": "Atractores Extraños y Geometría Fractal",
+    "orden": 5,
+    "origen": {
+      "archivo": "balotario.tex",
+      "seccion_latex": "Tema 5: Atractores Extraños y Geometría Fractal",
+      "lineas": [2776, 2830]
+    },
+    "notas": "ATENCIÓN: en el .tex NINGUNO de los cinco problemas de este tema tiene solución desarrollada; están solo con enunciado. Todos se registran con solucion_esperada.tipo = \"pendiente\" y solucion_en_tex = false, y lo que aparece en `datos_del_enunciado` son las cifras que el propio enunciado aporta.\n\nPor tipo de objeto: 5.1 y 5.2 son geometría fractal y dinámica simbólica, 5.3 es un mapa discreto 2D (Hénon), 5.4 pide una reducción por sección de Poincaré y 5.5 una dimensión de Lyapunov. Ninguno es un problema de valor inicial que el motor pueda resolver hoy; los sistemas de 5.4 (Rössler) sí son integrables, pero la pregunta no es la trayectoria."
+  },
+  "problemas": [
+    {
+      "id": "5.1",
+      "orden": 1,
+      "titulo": "Dimensión de caja del conjunto ternario de Cantor",
+      "enunciado": "El corte transversal de la mayoría de atractores extraños posee estructura de conjunto de Cantor. Calcule rigurosamente la dimensión de caja (Box-Counting Dimension) $D_0$ del conjunto ternario clásico de Cantor.",
+      "tipo": "geometria_fractal",
+      "dificultad": "intermedia",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Cálculo de una dimensión fractal de un conjunto geométrico; no hay EDO que integrar.",
+      "ecuacion": {
+        "latex": "D_0 = \\lim_{\\varepsilon \\to 0} \\frac{\\ln N(\\varepsilon)}{\\ln(1/\\varepsilon)}",
+        "forma": "demostracion",
+        "dimension": 0,
+        "variables_estado": [],
+        "parametros": {}
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado."
+      },
+      "verificacion": { "no_verificable_con_el_motor_actual": true }
+    },
+    {
+      "id": "5.2",
+      "orden": 2,
+      "titulo": "Herradura de Smale y dinámica simbólica",
+      "enunciado": "Describa el mecanismo geométrico de la herradura de Smale y explique por qué genera un atractor extraño con infinitas órbitas periódicas inestables y dinámica caótica simbólica.",
+      "tipo": "demostracion_teorica",
+      "dificultad": "avanzada",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Pregunta conceptual sobre un mecanismo geométrico; no tiene datos numéricos.",
+      "ecuacion": {
+        "latex": "\\text{Herradura de Smale: estiramiento, plegado y reinyección}",
+        "forma": "demostracion",
+        "dimension": 2,
+        "variables_estado": [],
+        "parametros": {}
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado."
+      },
+      "verificacion": { "no_verificable_con_el_motor_actual": true }
+    },
+    {
+      "id": "5.3",
+      "orden": 3,
+      "titulo": "Mapa de Hénon: contracción de áreas e inversa explícita",
+      "enunciado": "Considere el mapa bidimensional de Hénon (1976) $x_{n+1} = 1 - a x_n^2 + y_n$, $y_{n+1} = b x_n$. (a) Calcule el determinante de su matriz jacobiana y verifique la contracción de áreas en el plano para los parámetros canónicos $a = 1.4$ y $b = 0.3$. (b) Demuestre que el mapa es invertible y obtenga su mapeo inverso explícito $T^{-1}(x,y)$.",
+      "tipo": "mapa_discreto_bidimensional",
+      "dificultad": "avanzada",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Mapa discreto 2D: el motor integra EDOs continuas y no itera mapas.",
+      "ecuacion": {
+        "latex": "x_{n+1} = 1 - a x_n^2 + y_n, \\qquad y_{n+1} = b x_n",
+        "forma": "mapa_discreto",
+        "dimension": 2,
+        "variables_estado": ["x", "y"],
+        "definida_a_trozos": false,
+        "trozos": [
+          { "condicion": "siempre", "expresion": "1 - a*x**2 + y" },
+          { "condicion": "siempre", "expresion": "b*x" }
+        ],
+        "parametros": { "a": 1.4, "b": 0.3 }
+      },
+      "datos_del_enunciado": { "a": 1.4, "b": 0.3 },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado. Los parámetros canónicos vienen del propio enunciado."
+      },
+      "verificacion": { "no_verificable_con_el_motor_actual": true }
+    },
+    {
+      "id": "5.4",
+      "orden": 4,
+      "titulo": "Rössler: reducción a mapa unidimensional por sección de Poincaré",
+      "enunciado": "El sistema de Rössler (1976) viene dado por $\\dot{x} = -y - z$, $\\dot{y} = x + a y$, $\\dot{z} = b + z(x - c)$ con $a = b = 0.2$ y $c = 5.7$. Explique cómo el flujo tridimensional se reduce a un mapa unidimensional con cúspide a través de la sección de Poincaré transversal $y = 0$, $\\dot{y} > 0$.",
+      "tipo": "seccion_de_poincare",
+      "dificultad": "avanzada",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "El sistema sí es integrable por el motor, pero la pregunta pide la reducción por sección de Poincaré, que requiere detección de cruces: es lo que falta en `matematica/analisis_caos.py`.",
+      "ecuacion": {
+        "latex": "\\dot{x} = -y - z, \\qquad \\dot{y} = x + a y, \\qquad \\dot{z} = b + z(x - c)",
+        "forma": "sistema_primer_orden",
+        "dimension": 3,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y", "z"],
+        "campo": ["-y - z", "x + a*y", "b + z*(x - c)"],
+        "parametros": { "a": 0.2, "b": 0.2, "c": 5.7 },
+        "notas": "Este campo sí se puede pasar a `analizar_edo` para obtener la trayectoria y el atractor 3D; lo que no está implementado es la sección de Poincaré."
+      },
+      "datos_del_enunciado": {
+        "a": 0.2, "b": 0.2, "c": 5.7,
+        "seccion": "y = 0 con y' > 0"
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado. Los parámetros canónicos vienen del propio enunciado."
+      },
+      "verificacion": {
+        "no_verificable_con_el_motor_actual": true,
+        "nota": "Cuando se implementen las secciones de Poincaré en analisis_caos.py, este es su caso de referencia."
+      }
+    },
+    {
+      "id": "5.5",
+      "orden": 5,
+      "titulo": "Conjetura de Kaplan-Yorke: dimensión de Lyapunov del atractor de Lorenz",
+      "enunciado": "La Conjetura de Kaplan-Yorke (dimensión de Lyapunov $D_L$) relaciona el espectro de exponentes de Lyapunov ordenados $\\lambda_1 \\ge \\lambda_2 \\ge \\dots \\ge \\lambda_n$ con la dimensión de información del atractor mediante $D_L = k + \\frac{\\sum_{j=1}^k \\lambda_j}{|\\lambda_{k+1}|}$, donde $k$ es el entero más grande tal que $\\sum_{j=1}^k \\lambda_j \\ge 0$. Para el atractor de Lorenz con parámetros canónicos $\\sigma = 10$, $b = 8/3$, $r = 28$, los exponentes calculados numéricamente son $\\lambda_1 \\approx 0.9056$, $\\lambda_2 = 0$, $\\lambda_3 \\approx -14.5723$. (a) Compruebe analíticamente que $\\lambda_1 + \\lambda_2 + \\lambda_3$ coincide con la divergencia media del sistema de Lorenz. (b) Calcule la dimensión fractal de Lyapunov $D_L$ del atractor de Lorenz e interprete físicamente su valor fraccionario.",
+      "tipo": "dimension_de_lyapunov",
+      "dificultad": "avanzada",
+      "verificable_con_solver": false,
+      "motivo_no_verificable": "Requiere el espectro de exponentes de Lyapunov, que es justo lo que `matematica/analisis_caos.py` no implementa todavía. El enunciado aporta los exponentes ya calculados.",
+      "ecuacion": {
+        "latex": "D_L = k + \\frac{\\sum_{j=1}^k \\lambda_j}{|\\lambda_{k+1}|}",
+        "forma": "sistema_primer_orden",
+        "dimension": 3,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y", "z"],
+        "campo": ["sigma*(y - x)", "x*(r - z) - y", "x*y - b*z"],
+        "parametros": { "sigma": 10.0, "r": 28.0, "b": 2.6666666666666665 }
+      },
+      "datos_del_enunciado": {
+        "exponentes_lyapunov": [0.9056, 0.0, -14.5723],
+        "sigma": 10.0,
+        "r": 28.0,
+        "b": 2.6666666666666665,
+        "nota": "Los tres exponentes los da el enunciado como dato, no como resultado a calcular."
+      },
+      "solucion_esperada": {
+        "tipo": "pendiente",
+        "solucion_en_tex": false,
+        "nota": "El .tex trae solo el enunciado. La suma de los exponentes dados y la divergencia -(sigma+1+b) son comprobables de inmediato, pero no se registran como respuesta porque el .tex no las demuestra."
+      },
+      "verificacion": {
+        "no_verificable_con_el_motor_actual": true,
+        "nota": "Caso de aceptación final para analisis_caos.py: el espectro que estime debería reproducir los exponentes que este enunciado da como referencia."
+      }
+    }
+  ]
+}
