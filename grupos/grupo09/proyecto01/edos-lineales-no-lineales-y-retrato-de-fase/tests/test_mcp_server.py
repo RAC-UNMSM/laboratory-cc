@@ -3,7 +3,7 @@
 El handshake stdio real se prueba aparte lanzando el proceso; aquí se cubre lo
 que puede romperse en silencio:
 
-* que las herramientas y el recurso queden registrados con su esquema,
+* que las herramientas queden registradas con su esquema,
 * que **nada** escape a stdout, porque en stdio ese canal es el protocolo
   JSON-RPC y un solo `print` de una dependencia rompe la conexión entera.
 """
@@ -49,10 +49,6 @@ class RegistroDeHerramientasTests(unittest.TestCase):
         for herramienta in _ejecutar(mcp_server.servidor.list_tools()):
             with self.subTest(herramienta=herramienta.name):
                 self.assertTrue((herramienta.description or "").strip())
-
-    def test_el_recurso_del_balotario_esta_registrado(self):
-        recursos = {str(r.uri) for r in _ejecutar(mcp_server.servidor.list_resources())}
-        self.assertIn("balotario://temas", recursos)
 
     def test_las_instrucciones_advierten_sobre_la_verificacion(self):
         instrucciones = mcp_server.servidor.instructions or ""
@@ -119,10 +115,6 @@ class HerramientasTests(unittest.TestCase):
         resultado = mcp_server.listar_balotario(tema="tema_99")
         self.assertFalse(resultado["ok"])
         self.assertIn("tema_01", resultado["disponibles"])
-
-    def test_el_recurso_devuelve_json_valido(self):
-        temas = json.loads(mcp_server.recurso_balotario())
-        self.assertEqual(temas[0]["tema"]["id"], "tema_01")
 
     def test_toda_respuesta_de_herramienta_es_json_estricto(self):
         for etiqueta, resultado in (

@@ -14,19 +14,18 @@ Prueba con el inspector:
 
 Sobre stdout: en el transporte stdio, stdout es el canal del protocolo JSON-RPC.
 Cualquier `print` de una dependencia lo corrompería, así que el cuerpo de cada
-herramienta se ejecuta con stdout redirigido a stderr. `server.py` (la demo por
-terminal) conserva sus `print` y sigue funcionando aparte.
+herramienta se ejecuta con stdout redirigido a stderr.
 """
 
 import contextlib
 import functools
 import io
-import json
 import logging
 import sys
 
 from mcp.server.mcpserver import MCPServer
 
+import storage
 from orquestacion.capacidades import analizar_edo as _analizar_edo
 from orquestacion.capacidades import analizar_equilibrios_sistema as _analizar_equilibrios
 from orquestacion.capacidades import describir_capacidades
@@ -37,6 +36,10 @@ from orquestacion.contratos import ANALISIS_DISPONIBLES, METODOS
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
                     format="%(levelname)s %(name)s: %(message)s")
 registro = logging.getLogger("edos-grupo09")
+
+# Prepara el bucket de visualizaciones. Falla en silencio si no hay storage
+# (ejecución local por stdio): el HTML se sigue mandando inline.
+storage.ensure_bucket()
 
 servidor = MCPServer(
     name="edos-grupo09",
@@ -196,6 +199,15 @@ def analizar_edo(
         Si `ok` es true: `configuracion` (para reproducir el cálculo),
         `solucion` (malla, estado inicial y final), `verificacion` (el detalle de
         cada comprobación), `analisis` y `visualizacion` con el HTML.
+
+        Si `visualizacion` trae un campo `url`, es la visualización interactiva
+        que este servidor acaba de generar y publicar en el storage del
+        laboratorio (mismo dominio que este MCP), a máxima resolución.
+        Entrégala al usuario como enlace markdown, por ejemplo
+        `[Ver la visualización interactiva](<url>)`, en vez de solo
+        describirla: ningún cliente de chat ofrece ese enlace por su cuenta a
+        partir del resultado de la tool. Cuando además venga `html_omitido`,
+        el documento no entró inline y el enlace es la única forma de verlo.
         Si `ok` es false: `etapa` y `error`, y ninguna conclusión. Las etapas
         posibles son validacion_solicitud, compilacion, resolucion y verificacion.
 
@@ -323,13 +335,6 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
                     "cada caso de su `solucion_esperada`. Los que traen "
                     "`verificable_con_solver: false` no son resolubles por este "
                     "motor y dicen por qué en `motivo_no_verificable`."}
-
-
-@servidor.resource("balotario://temas", mime_type="application/json",
-                   description="Catálogo completo del balotario del grupo 09.")
-def recurso_balotario() -> str:
-    """El balotario como recurso, para que el cliente lo lea sin llamar una tool."""
-    return json.dumps(cargar_catalogo(), ensure_ascii=False, indent=2)
 
 
 def main():

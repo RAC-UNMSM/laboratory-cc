@@ -63,3 +63,7 @@ class CatalogoTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as carpeta:
             with self.assertRaisesRegex(ValueError, "No existe"):
                 cargar_catalogo(Path(carpeta) / "ausente")
+
+
+if __name__ == "__main__":
+    unittest.main()

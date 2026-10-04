@@ -162,16 +162,24 @@ REGISTRO = {
 
 
 def _visualizar(contexto, solicitud):
-    """Genera el HTML, bajando la resolución si hace falta para que quepa.
+    """Genera el HTML, lo publica si hay storage y lo manda inline si no.
 
     El HTML viaja inline por el transporte, así que no puede crecer sin límite.
     Antes de rendirse se reintenta con menos puntos por traza: una trayectoria
     dibujada con 1000 puntos en vez de 2000 se ve igual y pesa la mitad.
     No se escribe a disco a propósito: devolver una ruta local no sirve a un
     cliente MCP, que puede estar en otra máquina.
+
+    Sí se intenta subirlo al storage compartido del lab (`storage.subir_html`),
+    que no tiene el tope del transporte: si responde, se devuelve la URL de la
+    figura a máxima resolución y ya no hace falta mandar el documento inline.
+    Si no responde -- el caso normal en local, sin Docker -- se vuelve al
+    camino de siempre, submuestreando hasta que quepa.
     """
+    import storage
     from visualizacion.html import generar_html
 
+    enlace = None
     puntos = PUNTOS_POR_TRAZA
     for intento in range(3):
         resultado = generar_html(
@@ -184,11 +192,25 @@ def _visualizar(contexto, solicitud):
                   "puntos_por_traza": puntos}
         if resultado["fallidas"]:
             salida["fallidas"] = resultado["fallidas"]
+        if intento == 0:
+            # Se sube la versión de máxima resolución, que es la que vale la
+            # pena publicar, y una sola vez: los reintentos de abajo existen
+            # solo por el tope del transporte, que al storage no le aplica.
+            enlace = storage.subir_html(resultado["html"])
+        if enlace:
+            salida["url"] = enlace
         if resultado["bytes"] <= LIMITE_HTML_INLINE:
             salida["html"] = resultado["html"]
             if intento:
                 salida["nota"] = (f"Se redujo la resolución a {puntos} puntos por traza "
                                   f"para que el HTML cupiera en el transporte.")
+            return salida
+        if enlace:
+            salida["html_omitido"] = True
+            salida["motivo"] = (f"El HTML pesa {resultado['bytes']} bytes, por encima "
+                                f"del límite de {LIMITE_HTML_INLINE} para enviarlo "
+                                f"inline, pero está publicado en `url` a máxima "
+                                f"resolución.")
             return salida
         puntos //= 4
 

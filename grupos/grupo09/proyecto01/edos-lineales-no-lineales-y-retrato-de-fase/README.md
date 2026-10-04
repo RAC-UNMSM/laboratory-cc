@@ -110,8 +110,6 @@ mientras el barrido automático siga pendiente: una llamada por valor del
 parámetro. Su verificación es la que corresponde a esa pregunta: comprobar que
 cada punto anule de verdad el campo, F(x*) = 0.
 
-Recurso: `balotario://temas` entrega el catálogo completo en JSON.
-
 ### Cómo se escribe un sistema
 
 `analizar_edo` espera la forma explícita de primer orden **x' = F(t, x)**: una
