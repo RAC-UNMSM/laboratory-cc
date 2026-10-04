@@ -1,0 +1,40 @@
+{
+  "_comentario": [
+    "La misma conexión, pero con el agente dentro de su contenedor.",
+    "",
+    "Construya la imagen primero, desde la carpeta del proyecto:",
+    "    docker build -t edos-grupo09 .",
+    "",
+    "Por qué cada bandera de 'args':",
+    "",
+    "  run        el cliente MCP lanza un contenedor por conversación; no es un",
+    "             servicio que esté levantado esperando.",
+    "  -i         mantiene stdin abierto. Es el canal del protocolo: sin esto el",
+    "             servidor arranca y muere sin poder recibir nada.",
+    "  --rm       borra el contenedor al terminar. Una conversación no deja",
+    "             estado que valga la pena conservar; el informe sí, y por eso va",
+    "             al volumen.",
+    "  -v         monta la carpeta de informes del equipo dentro del contenedor.",
+    "             Sin esto el informe se genera y se pierde al cerrar.",
+    "",
+    "NO agregue '-t'. Un TTY traduce saltos de línea y corrompe el JSON-RPC, y el",
+    "síntoma es un servidor que parece colgado sin dar ningún error.",
+    "",
+    "Si el laboratorio tiene el storage levantado, añada a 'args', antes del",
+    "nombre de la imagen:",
+    "    \"--network\", \"lab_net\"",
+    "y entonces el informe se publica en una URL pública en vez de quedarse en la",
+    "carpeta local."
+  ],
+
+  "mcpServers": {
+    "edos-grupo09": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "C:\\RUTA\\AL\\PROYECTO\\edos-lineales-no-lineales-y-retrato-de-fase\\informes:/datos/informes",
+        "edos-grupo09:latest"
+      ]
+    }
+  }
+}

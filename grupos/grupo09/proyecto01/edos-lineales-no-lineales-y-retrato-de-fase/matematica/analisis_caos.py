@@ -20,10 +20,7 @@ con el instante en que dos integraciones se separan). Ese es el punto de partida
 natural para la estimación de Lyapunov.
 """
 
-
-class AnalisisNoImplementado(NotImplementedError):
-    """El análisis solicitado todavía no existe. El servidor lo reporta como tal."""
-
+from matematica import AnalisisNoImplementado
 
 #: Lo que este módulo ofrecerá cuando esté implementado.
 CAPACIDADES_PREVISTAS = ("sensibilidad", "lyapunov", "poincare")

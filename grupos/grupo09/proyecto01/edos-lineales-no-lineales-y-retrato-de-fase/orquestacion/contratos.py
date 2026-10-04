@@ -20,6 +20,8 @@ from pathlib import Path
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from matematica import MAX_DIMENSION
+
 #: Análisis que el agente sabe ejecutar hoy.
 ANALISIS_IMPLEMENTADOS = ("estabilidad",)
 
@@ -61,9 +63,6 @@ ALIAS_ANALISIS = {
 
 #: Métodos de integración aceptados por scipy.integrate.solve_ivp.
 METODOS = ("RK45", "RK23", "DOP853", "Radau", "BDF", "LSODA")
-
-#: Tope de variables de estado, heredado de la propuesta del grupo.
-MAX_DIMENSION = 3
 
 #: Cómo declara el cliente la naturaleza del sistema.
 #:
@@ -116,38 +115,27 @@ def serializable(objeto):
     return str(objeto)
 
 
-class SolicitudEDO(BaseModel):
-    """Un problema de valor inicial tal como lo pide un cliente.
+class _SolicitudBase(BaseModel):
+    """Lo que `SolicitudEDO` y `SolicitudEquilibrios` tienen en común.
 
-    Ejemplo mínimo: ecuaciones=["-2*y"], variables_estado=["y"], y0=[1.0],
-    intervalo=[0.0, 5.0].
+    Las dos describen el mismo sistema x' = F(t, x): mismas ecuaciones, mismas
+    variables, mismos parámetros y la misma ambigüedad continua/discreta. Antes
+    los dos modelos repetían campo por campo y validador por validador, así que
+    un arreglo en uno se olvidaba en el otro. Lo que cambia entre ellos -- que
+    uno exige condición inicial e intervalo y el otro no -- se declara abajo.
     """
 
     ecuaciones: list[str] = Field(
         ..., description="Lado derecho de x'=F(t,x). Una expresión por variable de estado.")
     variables_estado: list[str] = Field(
-        ..., description="Nombres de las variables de estado, en el mismo orden que las ecuaciones.")
-    y0: list[float] = Field(..., description="Condición inicial, un valor por variable.")
-    intervalo: list[float] = Field(
-        ..., description="Par [t_inicial, t_final] con t_final > t_inicial.")
+        ..., description="Nombres de las variables de estado, de 1 a 3.")
     variable_independiente: str = Field(
         "t", description="Nombre de la variable independiente (t, x, ...).")
     parametros: dict[str, float] = Field(
         default_factory=dict, description="Parámetros con nombre que usan las ecuaciones.")
-    analisis: list[str] = Field(
-        default_factory=lambda: ["estabilidad"],
-        description=f"Análisis solicitados. Disponibles: {', '.join(ANALISIS_DISPONIBLES)}.")
     equilibrios: list[list[float]] | None = Field(
-        None, description="Equilibrios a clasificar. Si se omite, se buscan numéricamente.")
-    solucion_exacta: str | None = Field(
-        None, description="Solución analítica conocida, para contrastar la numérica.")
-    metodo: str = Field("RK45", description=f"Integrador. Opciones: {', '.join(METODOS)}.")
-    rtol: float = Field(1e-8, gt=0, description="Tolerancia relativa del integrador.")
-    atol: float = Field(1e-10, gt=0, description="Tolerancia absoluta del integrador.")
-    puntos: int = Field(400, ge=2, le=200_000,
-                        description="Número de puntos de la malla de salida.")
-    visualizar: bool = Field(True, description="Generar la visualización HTML.")
-    titulo: str | None = Field(None, description="Título para la gráfica y el reporte.")
+        None, description="Equilibrios a clasificar. Si se omite, se resuelven "
+                          "F(x)=0 de forma exacta con sympy.")
     tipo_de_sistema: str = Field(
         "edo_continua",
         description="Cómo planteó el usuario el problema: 'edo_continua' para una "
@@ -164,6 +152,22 @@ class SolicitudEDO(BaseModel):
             raise ValueError(f"tipo_de_sistema debe ser uno de "
                              f"{', '.join(TIPOS_DE_SISTEMA)}; llegó {valor!r}.")
         return valor
+
+    @model_validator(mode="after")
+    def _coherencia_del_sistema(self):
+        n = len(self.variables_estado)
+        if n == 0:
+            raise ValueError("Debe declarar al menos una variable de estado.")
+        if n > MAX_DIMENSION:
+            raise ValueError(f"El proyecto admite sistemas de hasta {MAX_DIMENSION} variables.")
+        if len(self.ecuaciones) != n:
+            raise ValueError(f"Se esperaban {n} ecuaciones (una por variable de estado) "
+                             f"y llegaron {len(self.ecuaciones)}.")
+        if self.equilibrios is not None:
+            for equilibrio in self.equilibrios:
+                if len(equilibrio) != n:
+                    raise ValueError(f"Cada equilibrio debe tener {n} coordenadas.")
+        return self
 
     def notacion_sugiere_mapa(self):
         """Indicios de que esto es una recurrencia aunque se declare continua.
@@ -182,6 +186,30 @@ class SolicitudEDO(BaseModel):
             motivos.append(f"las variables de estado {sufijados} llevan sufijo de "
                            f"índice, propio de una sucesión")
         return motivos
+
+
+class SolicitudEDO(_SolicitudBase):
+    """Un problema de valor inicial tal como lo pide un cliente.
+
+    Ejemplo mínimo: ecuaciones=["-2*y"], variables_estado=["y"], y0=[1.0],
+    intervalo=[0.0, 5.0].
+    """
+
+    y0: list[float] = Field(..., description="Condición inicial, un valor por variable.")
+    intervalo: list[float] = Field(
+        ..., description="Par [t_inicial, t_final] con t_final > t_inicial.")
+    analisis: list[str] = Field(
+        default_factory=lambda: ["estabilidad"],
+        description=f"Análisis solicitados. Disponibles: {', '.join(ANALISIS_DISPONIBLES)}.")
+    solucion_exacta: str | None = Field(
+        None, description="Solución analítica conocida, para contrastar la numérica.")
+    metodo: str = Field("RK45", description=f"Integrador. Opciones: {', '.join(METODOS)}.")
+    rtol: float = Field(1e-8, gt=0, description="Tolerancia relativa del integrador.")
+    atol: float = Field(1e-10, gt=0, description="Tolerancia absoluta del integrador.")
+    puntos: int = Field(400, ge=2, le=200_000,
+                        description="Número de puntos de la malla de salida.")
+    visualizar: bool = Field(True, description="Generar la visualización HTML.")
+    titulo: str | None = Field(None, description="Título para la gráfica y el reporte.")
 
     @field_validator("metodo")
     @classmethod
@@ -211,15 +239,9 @@ class SolicitudEDO(BaseModel):
         return list(dict.fromkeys(resueltos))
 
     @model_validator(mode="after")
-    def _coherencia(self):
+    def _coherencia_del_problema_de_valor_inicial(self):
+        """Solo lo que distingue a un PVI; el resto lo valida `_SolicitudBase`."""
         n = len(self.variables_estado)
-        if n == 0:
-            raise ValueError("Debe declarar al menos una variable de estado.")
-        if n > MAX_DIMENSION:
-            raise ValueError(f"El proyecto admite sistemas de hasta {MAX_DIMENSION} variables.")
-        if len(self.ecuaciones) != n:
-            raise ValueError(f"Se esperaban {n} ecuaciones (una por variable de estado) "
-                             f"y llegaron {len(self.ecuaciones)}.")
         if len(self.y0) != n:
             raise ValueError(f"La condición inicial debe tener {n} valores, "
                              f"no {len(self.y0)}.")
@@ -227,10 +249,6 @@ class SolicitudEDO(BaseModel):
             raise ValueError("El intervalo debe tener la forma [t_inicial, t_final].")
         if self.intervalo[1] <= self.intervalo[0]:
             raise ValueError("Se requiere t_final > t_inicial.")
-        if self.equilibrios is not None:
-            for equilibrio in self.equilibrios:
-                if len(equilibrio) != n:
-                    raise ValueError(f"Cada equilibrio debe tener {n} coordenadas.")
         return self
 
     def configuracion(self):
@@ -267,58 +285,18 @@ def respuesta_error(etapa, mensaje, configuracion=None, detalles=None):
     })
 
 
-class SolicitudEquilibrios(BaseModel):
+class SolicitudEquilibrios(_SolicitudBase):
     """Una pregunta sobre equilibrios y estabilidad, sin trayectoria.
 
     Existe porque "clasifique los equilibrios de x' = mu - x^2" no es un
     problema de valor inicial: no hay condición inicial ni intervalo, y exigirlos
     obligaría a integrar una trayectoria que nadie pidió. Es la forma de los
     problemas del Tema 3 del balotario, que son familias paramétricas.
+
+    No declara ningún campo propio: hereda enteros los de `_SolicitudBase`,
+    que es exactamente lo que esta pregunta necesita. Lo único suyo es qué
+    adjunta al resultado para reproducirlo.
     """
-
-    ecuaciones: list[str] = Field(
-        ..., description="Lado derecho de x'=F(x). Una expresión por variable de estado.")
-    variables_estado: list[str] = Field(
-        ..., description="Nombres de las variables de estado, de 1 a 3.")
-    variable_independiente: str = Field(
-        "t", description="Nombre de la variable independiente.")
-    parametros: dict[str, float] = Field(
-        default_factory=dict,
-        description="Valores de los parámetros. Para estudiar una bifurcación, "
-                    "repita la llamada variando el parámetro de interés.")
-    equilibrios: list[list[float]] | None = Field(
-        None, description="Equilibrios a clasificar. Si se omite, se resuelven "
-                          "F(x)=0 de forma exacta con sympy.")
-    tipo_de_sistema: str = Field(
-        "edo_continua",
-        description="'edo_continua' o 'mapa_discreto' (fuera de alcance) o "
-                    "'no_estoy_seguro' para que el servidor devuelva la pregunta.")
-
-    @field_validator("tipo_de_sistema")
-    @classmethod
-    def _tipo_conocido(cls, valor):
-        if valor not in TIPOS_DE_SISTEMA:
-            raise ValueError(f"tipo_de_sistema debe ser uno de "
-                             f"{', '.join(TIPOS_DE_SISTEMA)}; llegó {valor!r}.")
-        return valor
-
-    @model_validator(mode="after")
-    def _coherencia(self):
-        n = len(self.variables_estado)
-        if n == 0:
-            raise ValueError("Debe declarar al menos una variable de estado.")
-        if n > MAX_DIMENSION:
-            raise ValueError(f"El proyecto admite sistemas de hasta {MAX_DIMENSION} variables.")
-        if len(self.ecuaciones) != n:
-            raise ValueError(f"Se esperaban {n} ecuaciones (una por variable de estado) "
-                             f"y llegaron {len(self.ecuaciones)}.")
-        if self.equilibrios is not None:
-            for equilibrio in self.equilibrios:
-                if len(equilibrio) != n:
-                    raise ValueError(f"Cada equilibrio debe tener {n} coordenadas.")
-        return self
-
-    notacion_sugiere_mapa = SolicitudEDO.notacion_sugiere_mapa
 
     def configuracion(self):
         """Configuración que se adjunta al resultado, para reproducirlo."""

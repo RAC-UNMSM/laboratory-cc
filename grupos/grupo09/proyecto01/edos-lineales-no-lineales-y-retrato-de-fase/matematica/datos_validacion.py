@@ -2,6 +2,8 @@
 
 import math
 
+from matematica import MAX_DIMENSION
+
 
 def validar_entrada(modelo, y0, intervalo, parametros=None):
     """Valida un modelo, sus condiciones iniciales, intervalo y parámetros."""
@@ -15,8 +17,8 @@ def validar_entrada(modelo, y0, intervalo, parametros=None):
         raise ValueError("y0 debe ser una secuencia de números.") from exc
     if not estado or not all(math.isfinite(valor) for valor in estado):
         raise ValueError("y0 debe tener al menos un valor numérico finito.")
-    if len(estado) > 3:
-        raise ValueError("El proyecto admite sistemas de hasta 3 variables.")
+    if len(estado) > MAX_DIMENSION:
+        raise ValueError(f"El proyecto admite sistemas de hasta {MAX_DIMENSION} variables.")
     if intervalo is None or len(intervalo) != 2:
         raise ValueError("El intervalo debe tener la forma (t_inicial, t_final).")
     try:

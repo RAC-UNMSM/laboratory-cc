@@ -3,6 +3,12 @@ numpy>=1.24
 scipy>=1.10
 sympy>=1.12
 
+# Validación de las solicitudes en la frontera (orquestacion/contratos.py).
+# Se declara aparte aunque `mcp` ya lo arrastre: este proyecto lo importa
+# directamente, y depender de la dependencia de otro paquete es apostar a que
+# nunca la cambie.
+pydantic>=2.12
+
 # Servidor MCP (transporte stdio). En mcp 2.x la clase se llama MCPServer;
 # el nombre FastMCP corresponde a mcp 1.x y ya no existe en esta versión.
 mcp>=2.0,<3.0

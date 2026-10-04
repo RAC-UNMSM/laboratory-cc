@@ -19,9 +19,11 @@ herramienta se ejecuta con stdout redirigido a stderr.
 
 import contextlib
 import functools
+import hashlib
 import io
 import logging
 import sys
+from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
@@ -30,7 +32,27 @@ from orquestacion.capacidades import analizar_edo as _analizar_edo
 from orquestacion.capacidades import analizar_equilibrios_sistema as _analizar_equilibrios
 from orquestacion.capacidades import describir_capacidades
 from orquestacion.catalogo import cargar_catalogo
-from orquestacion.contratos import ANALISIS_DISPONIBLES, METODOS
+from orquestacion.informe import MODO as MODO_INFORME
+from orquestacion.informe import SESION
+
+def _revision():
+    """Huella corta del código que está corriendo.
+
+    Existe porque un cliente MCP arranca el servidor una vez y lo deja vivo: tras
+    editar el código es fácil creer que se está probando lo nuevo cuando el
+    proceso sigue siendo el de antes, y el síntoma es un comportamiento viejo sin
+    ninguna pista de por qué. Con esto basta pedir `ping` y comparar.
+    """
+    raiz = Path(__file__).resolve().parent
+    resumen = hashlib.sha256()
+    for archivo in sorted(raiz.rglob("*.py")) + sorted(raiz.rglob("*.html")):
+        if "__pycache__" in archivo.parts or "tests" in archivo.parts:
+            continue
+        resumen.update(archivo.read_bytes())
+    return resumen.hexdigest()[:8]
+
+
+REVISION = _revision()
 
 # El log va a stderr: stdout está reservado para el protocolo.
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
@@ -49,7 +71,7 @@ servidor = MCPServer(
         "QUÉ ESTÁ IMPLEMENTADO: integración numérica con control de error, y el "
         "análisis de estabilidad (equilibrios exactos, Jacobiano, autovalores y "
         "clasificación).\n\n"
-        "QUÉ HERRAMIENTA USAR: `analizar_edo` cuando haya condición inicial y se "
+        "QUÉ HERRAMIENTA USAR: `resolver_graficar_y_analizar_edo` cuando haya condición inicial y se "
         "quiera la trayectoria. `analizar_equilibrios` cuando la pregunta sea sobre "
         "equilibrios, estabilidad o una bifurcación y NO haya condición inicial: así "
         "no hay que inventar una trayectoria que nadie pidió. Para una bifurcación, "
@@ -87,6 +109,46 @@ servidor = MCPServer(
         "VERIFICACIÓN: toda respuesta trae un bloque `verificacion`. Si `ok` es false, "
         "el servidor no entrega conclusiones y hay que explicar al usuario qué "
         "comprobación falló en lugar de interpretar números inválidos.\n\n"
+        "NO REHAGA EL CÁLCULO POR SU CUENTA. No vuelva a integrar el sistema con "
+        "scipy, ni dibuje la figura con matplotlib, ni escriba código para "
+        "reproducir lo que esta herramienta ya devolvió. El servidor ya integró "
+        "con control de error y pasó la solución por cinco verificaciones "
+        "independientes; una trayectoria que usted reintegre aparte NO pasó por "
+        "ese portón, así que presentarla al usuario deshace la única garantía que "
+        "este agente ofrece. Si lo que le falta es una imagen que el usuario pueda "
+        "ver, ya existe: es el informe, y basta con darle el enlace.\n\n"
+        "Lo que sí le toca a usted es redactar: interpretar los equilibrios, "
+        "explicar la dinámica y relacionar los números con la matemática del "
+        "problema. Los números salen de la respuesta, no de un cálculo suyo.\n\n"
+        "AL EMPEZAR UNA CONVERSACIÓN, LLAME A `nuevo_informe`. Este servidor sigue "
+        "vivo entre conversaciones: no se reinicia con cada chat. Si no lo llama, "
+        "las preguntas de este chat se acumulan en el mismo documento que las del "
+        "anterior y el usuario ve un informe que no empieza de cero. Una sola vez, "
+        "antes del primer análisis, y le devuelve ya el enlace que hay que "
+        "entregarle.\n\n"
+        "EL INFORME ENSEÑA LA ÚLTIMA PREGUNTA, no un historial: cada análisis "
+        "reemplaza al anterior en el mismo documento y en la misma dirección. El "
+        "usuario puede dejar la pestaña abierta toda la conversación. Si el laboratorio "
+        "lo configuró en modo acumulativo (lo dirá `informe` en su campo `modo`), las "
+        "secciones se apilan con la más reciente arriba.\n\n"
+        "EL INFORME ES LA ÚNICA FORMA EN QUE EL USUARIO VE SU TRABAJO. Ningún "
+        "cliente de chat dibuja el HTML que devuelve una herramienta: ese HTML es "
+        "texto que usted lee, no una figura que el usuario vea. Lo que sí puede "
+        "abrir es un enlace. Por eso cada análisis se agrega a un informe de la "
+        "conversación, y su dirección vuelve en `visualizacion.informe`.\n\n"
+        "  - ENTREGUE ESA DIRECCIÓN AL USUARIO la primera vez que aparezca, como "
+        "enlace markdown: `[Ver el informe](<direccion>)`. Dígale que puede dejar "
+        "la pestaña abierta: la página se recarga sola y los análisis siguientes "
+        "van apareciendo ahí.\n"
+        "  - Es una dirección fija para toda la conversación. No la repita en cada "
+        "respuesta; vuelva a darla solo si el usuario la pide o la pierde.\n"
+        "  - Es una URL: dese tal cual, como enlace markdown, para que se abra con "
+        "un clic. Una dirección 127.0.0.1 es del propio equipo del usuario y "
+        "funciona igual. Solo si llegara una ruta de archivo (el servidor no pudo "
+        "abrir su puerto) hay que decirle que abra ese archivo a mano.\n"
+        "  - `informe` como herramienta devuelve la dirección en cualquier momento, "
+        "y sirve para dársela ANTES del primer análisis si el usuario quiere mirar "
+        "cómo se va llenando.\n\n"
         "Use `ping` para obtener el inventario exacto de capacidades y pendientes."),
 )
 
@@ -115,16 +177,95 @@ def ping() -> dict:
     return {
         "ok": True,
         "servidor": "edos-grupo09",
+        "revision": REVISION,
         "transporte": "stdio",
+        "informe": {"modo": MODO_INFORME,
+                    "nota": ("Cada análisis reemplaza al anterior: el informe enseña "
+                             "solo la última pregunta."
+                             if MODO_INFORME != "acumula" else
+                             "Las secciones se acumulan, la más reciente arriba.")},
         "mensaje": "El agente de EDOs responde.",
         "capacidades": describir_capacidades(),
     }
 
 
 @servidor.tool(
-    description="Resuelve y analiza un problema de valor inicial de EDOs, verificando "
-                "el resultado antes de emitir conclusiones. Devuelve datos "
-                "estructurados y una visualización HTML.")
+    description="Abre un informe nuevo y vacío para esta conversación. Llámalo UNA vez, "
+                "al empezar un chat, antes del primer análisis: el servidor sigue vivo "
+                "entre conversaciones y si no, las preguntas de chats distintos se "
+                "acumulan en el mismo documento.")
+@sin_contaminar_stdout
+def nuevo_informe() -> dict:
+    """Cierra el informe en curso y empieza uno limpio.
+
+    Hace falta porque el cliente MCP levanta este servidor **una vez** y lo
+    mantiene vivo para todas las conversaciones: sin esto, el informe nunca
+    empieza de cero. El protocolo no le dice al servidor en qué conversación
+    está, así que quien lo sabe es usted.
+
+    No se pierde nada: el informe anterior queda en su archivo, con la fecha y
+    la hora en el nombre.
+
+    Returns:
+        `destino` con la dirección del informe nuevo, ya vacío y listo para que
+        el usuario lo abra desde el principio.
+    """
+    destino = SESION.empezar_de_nuevo()
+    return {"ok": bool(destino), "destino": destino, **SESION.estado(),
+            "nota": "Informe nuevo y vacío. Entréguele el enlace al usuario: puede "
+                    "dejarlo abierto y verá aparecer cada análisis."}
+
+
+@servidor.tool(
+    description="Devuelve el enlace a la página donde el usuario VE sus gráficas, ya "
+                "dibujadas por este servidor. Se actualiza sola con cada análisis. "
+                "Úsala para darle el enlace, incluso antes del primer análisis.")
+@sin_contaminar_stdout
+def informe() -> dict:
+    """Dónde está el informe de la sesión y qué lleva acumulado.
+
+    El informe existe porque el HTML que devuelve una herramienta no lo dibuja
+    ningún cliente de chat. Esta herramienta entrega la dirección que el usuario
+    sí puede abrir, y la publica vacía si todavía no hay ningún análisis, para
+    que pueda dejar la pestaña abierta desde el principio.
+
+    Returns:
+        `destino` con la URL o la ruta del archivo, `es_url` para distinguirlas,
+        `analisis_registrados` y los `titulos` ya incluidos.
+    """
+    destino = SESION.asegurar_publicado()
+    estado = SESION.estado()
+    if not destino:
+        return {**estado, "ok": False,
+                "nota": "No se pudo publicar el informe: no hay storage y tampoco se "
+                        "pudo escribir el archivo local."}
+    return {
+        **estado, "ok": True,
+        "nota": ("Entréguele esta dirección al usuario como enlace markdown. La "
+                 "página se recarga sola, así que puede dejarla abierta mientras "
+                 "siguen trabajando."
+                 if estado["es_url"] else
+                 "No se pudo servir por http, así que es una ruta de archivo: dígale "
+                 "al usuario que la abra a mano."),
+    }
+
+
+@servidor.tool(
+    name="resolver_graficar_y_analizar_edo",
+    description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, siempre que haya que "
+                "resolver numéricamente una EDO o un sistema de EDOs con condición "
+                "inicial, graficar x(t), dibujar un plano de fase o retrato de fase, "
+                "un campo de direcciones, una línea de fase o una trayectoria 3D, "
+                "encontrar o clasificar puntos de equilibrio, o estudiar estabilidad, "
+                "ciclos límite, atractores y sensibilidad a condiciones iniciales. "
+                "Hace todo eso de una sola llamada: integra con control de error "
+                "(RK45, DOP853, Radau, BDF, LSODA), resuelve F(x)=0 de forma exacta "
+                "con sympy, calcula Jacobiano y autovalores, verifica la solución con "
+                "cinco pruebas independientes y genera las figuras. "
+                "NO uses scipy, solve_ivp ni matplotlib para esto: lo que calcules por "
+                "tu cuenta no pasa por esas verificaciones y no debe mostrarse al "
+                "usuario como resultado. Reduce EDOs de orden n a sistemas de primer "
+                "orden antes de llamarla.")
 @sin_contaminar_stdout
 def analizar_edo(
     ecuaciones: list[str],
@@ -238,9 +379,13 @@ def analizar_edo(
 
 
 @servidor.tool(
-    description="Clasifica los equilibrios y su estabilidad SIN integrar ninguna "
-                "trayectoria. Úsalo cuando la pregunta sea sobre equilibrios, "
-                "estabilidad o bifurcaciones y no haya condición inicial.")
+    description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, para encontrar y clasificar "
+                "puntos de equilibrio y su estabilidad (nodo, silla, foco, centro, "
+                "estable o inestable) con Jacobiano y autovalores, SIN integrar ninguna "
+                "trayectoria. Es la indicada cuando la pregunta es sobre equilibrios, "
+                "estabilidad o bifurcaciones y NO hay condición inicial; si la hay, usa "
+                "`resolver_graficar_y_analizar_edo`, que también los clasifica. Para una bifurcación, "
+                "llámala varias veces variando el parámetro.")
 @sin_contaminar_stdout
 def analizar_equilibrios(
     ecuaciones: list[str],
@@ -252,7 +397,7 @@ def analizar_equilibrios(
 ) -> dict:
     """Resuelve F(x)=0 de forma exacta y clasifica cada equilibrio.
 
-    Use esta herramienta en lugar de `analizar_edo` cuando el enunciado pregunte
+    Use esta herramienta en lugar de `resolver_graficar_y_analizar_edo` cuando el enunciado pregunte
     por equilibrios, estabilidad o una bifurcación y **no** dé una condición
     inicial. Pedir aquí no obliga a inventar una trayectoria.
 
@@ -269,7 +414,7 @@ def analizar_equilibrios(
         parametros: Valores de los parámetros que usan las ecuaciones.
         equilibrios: Equilibrios a clasificar. Si se omite, se resuelven F(x)=0
             de forma exacta con sympy.
-        tipo_de_sistema: Igual que en `analizar_edo`; vea su documentación.
+        tipo_de_sistema: Igual que en `resolver_graficar_y_analizar_edo`; vea su documentación.
 
     Returns:
         Si `ok` es true: `analisis.estabilidad.equilibrios` con el punto, su
@@ -304,7 +449,7 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
 
     Returns:
         Los temas con sus problemas. Cada problema trae id, enunciado, tipo,
-        dificultad, el bloque `ecuacion` listo para pasar a `analizar_edo`, y sus
+        dificultad, el bloque `ecuacion` listo para pasar a `resolver_graficar_y_analizar_edo`, y sus
         condiciones iniciales. El campo `ci_derivada` indica si la condición
         inicial viene del enunciado original o se fijó para concretar un PVI.
     """
@@ -330,7 +475,7 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
             "nota": "Las ecuaciones vienen en forma de sistema de primer orden: "
                     "`campo`, `variables_estado` y `variable_independiente` se pasan "
                     "tal cual. Un problema CON `condiciones_iniciales` va a "
-                    "`analizar_edo`; uno SIN ellas (las familias paramétricas del "
+                    "`resolver_graficar_y_analizar_edo`; uno SIN ellas (las familias paramétricas del "
                     "Tema 3) va a `analizar_equilibrios`, usando el `parametros` de "
                     "cada caso de su `solucion_esperada`. Los que traen "
                     "`verificable_con_solver: false` no son resolubles por este "

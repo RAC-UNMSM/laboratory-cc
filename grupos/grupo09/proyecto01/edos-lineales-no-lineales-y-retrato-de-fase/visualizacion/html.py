@@ -9,6 +9,8 @@ trayectoria de Lorenz con 20 000 puntos produce megabytes de JSON que no
 aportan nada visible y que tendrían que viajar por el transporte stdio.
 """
 
+import html as _html
+
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -26,14 +28,45 @@ URL_PLOTLY_JS = (f"https://cdn.jsdelivr.net/npm/plotly.js@{get_plotlyjs_version(
 #: Puntos máximos por traza. Por encima, se submuestrea de forma uniforme.
 MAXIMO_PUNTOS_TRAZA = 2000
 
-#: Colores con suficiente contraste en fondo claro y oscuro.
-PALETA = ("#2563eb", "#dc2626", "#059669", "#d97706", "#7c3aed")
+#: Cada traza declara QUE ES, no de que color va: el color lo pone la pagina
+#: al dibujarla, leyendolo de su propio CSS. Asi la paleta vive en un solo
+#: sitio y la misma figura se ve bien en claro y en oscuro, que con un color
+#: fijo cocinado aqui seria imposible.
+#:
+#: Roles: "serie:<i>" una variable de estado - "campo" el campo de
+#: direcciones - "trayectoria" - "inicio" / "final" sus extremos -
+#: "equilibrio:<estado>" - "crece" / "decrece" las flechas de la linea de fase.
+def _rol(nombre):
+    return {"rol": nombre}
 
+
+def _estado(clasificacion):
+    """Estable, inestable o indefinido, a partir del texto de la clasificacion."""
+    texto = str(clasificacion or "")
+    if texto.startswith("estable"):
+        return "estable"
+    if texto.startswith("inestable"):
+        return "inestable"
+    return "indefinido"
+
+
+def _simbolo(clasificacion):
+    """Forma del marcador de un equilibrio.
+
+    El verde y el rojo que separan estable de inestable quedan en la banda de
+    advertencia para daltonismo deutan, asi que el color NO puede ir solo: un
+    disco lleno para lo estable, un aspa para lo inestable y un rombo hueco
+    para lo que no se puede concluir.
+    """
+    return {"estable": "circle", "inestable": "x",
+            "indefinido": "diamond-open"}[_estado(clasificacion)]
+
+
+#: Diseno neutro: sin `template`, para que la pagina mande en fondo, rejilla y
+#: tipografia. Lo que se fija aqui es geometria, no apariencia.
 _DISENO = {
-    "template": "plotly_white",
-    "margin": {"l": 60, "r": 20, "t": 60, "b": 50},
+    "margin": {"l": 62, "r": 24, "t": 54, "b": 48},
     "hovermode": "x unified",
-    "font": {"size": 13},
 }
 
 
@@ -70,7 +103,7 @@ def figura_series(tiempos, estados, variables, titulo="Solución numérica",
     for i, nombre in enumerate(variables):
         figura.add_trace(go.Scatter(
             x=tiempos_lista, y=_lista(estados[i]), mode="lines", name=nombre,
-            line={"color": PALETA[i % len(PALETA)], "width": 2}))
+            meta=_rol("serie:%d" % i), line={"width": 2}))
     figura.update_layout(title=titulo, xaxis_title=variable_independiente,
                          yaxis_title="Estado", **_DISENO)
     return figura
@@ -89,25 +122,26 @@ def figura_linea_fase(campo, estados, parametros, variables, equilibrios=()):
     figura = go.Figure()
     figura.add_trace(go.Scatter(
         x=_lista(malla), y=_lista(derivada), mode="lines", name="F(x)",
-        line={"color": PALETA[0], "width": 2}))
-    figura.add_hline(y=0, line={"color": "#64748b", "width": 1, "dash": "dot"})
+        meta=_rol("serie:0"), line={"width": 2}))
+    figura.add_hline(y=0, line={"width": 1, "dash": "dot"})
     figura.add_trace(go.Scatter(
         x=_lista(malla[derivada > 0]), y=[0.0] * int((derivada > 0).sum()),
-        mode="markers", name="F > 0: x crece",
-        marker={"symbol": "triangle-right", "size": 7, "color": "#059669"}))
+        mode="markers", name="F > 0: x crece", meta=_rol("crece"),
+        marker={"symbol": "triangle-right", "size": 9}))
     figura.add_trace(go.Scatter(
         x=_lista(malla[derivada < 0]), y=[0.0] * int((derivada < 0).sum()),
-        mode="markers", name="F < 0: x decrece",
-        marker={"symbol": "triangle-left", "size": 7, "color": "#dc2626"}))
+        mode="markers", name="F < 0: x decrece", meta=_rol("decrece"),
+        marker={"symbol": "triangle-left", "size": 9}))
     for equilibrio in equilibrios:
         x = float(np.atleast_1d(equilibrio["equilibrio"])[0])
-        estable = equilibrio.get("clasificacion", "").startswith("estable")
+        clasificacion = equilibrio.get("clasificacion", "")
         figura.add_trace(go.Scatter(
             x=[x], y=[0.0], mode="markers+text",
-            name=f"x={x:g} ({equilibrio.get('clasificacion', '?')})",
+            name=f"x={x:g} ({clasificacion or '?'})",
+            meta=_rol(f"equilibrio:{_estado(clasificacion)}"),
             text=[f"x={x:g}"], textposition="top center",
-            marker={"size": 14, "color": "#059669" if estable else "#dc2626",
-                    "line": {"width": 2, "color": "white"}}))
+            marker={"size": 15, "symbol": _simbolo(clasificacion),
+                    "line": {"width": 2}}))
     figura.update_layout(title="Línea de fase: hacia dónde evoluciona el estado",
                          xaxis_title=variables[0], yaxis_title="F(x)", **_DISENO)
     return figura
@@ -140,25 +174,28 @@ def figura_plano_fase(campo, tiempos, estados, parametros, variables, equilibrio
             segmentos_y += [py - dy / 2, py + dy / 2, None]
     figura.add_trace(go.Scatter(x=segmentos_x, y=segmentos_y, mode="lines",
                                 name="Campo de direcciones", hoverinfo="skip",
-                                line={"color": "#cbd5e1", "width": 1}))
+                                meta=_rol("campo"), line={"width": 1}))
     figura.add_trace(go.Scatter(x=_lista(x), y=_lista(y), mode="lines",
-                                name="Trayectoria",
-                                line={"color": PALETA[0], "width": 2}))
+                                name="Trayectoria", meta=_rol("trayectoria"),
+                                line={"width": 2}))
     figura.add_trace(go.Scatter(x=[float(x[0])], y=[float(y[0])], mode="markers",
-                                name="Inicio", marker={"size": 11, "color": "#059669"}))
+                                name="Inicio", meta=_rol("inicio"),
+                                marker={"size": 12, "line": {"width": 2}}))
     figura.add_trace(go.Scatter(x=[float(x[-1])], y=[float(y[-1])], mode="markers",
-                                name="Final", marker={"size": 11, "color": "#dc2626",
-                                                       "symbol": "square"}))
+                                name="Final", meta=_rol("final"),
+                                marker={"size": 12, "symbol": "square",
+                                        "line": {"width": 2}}))
     for equilibrio in equilibrios:
         punto = np.atleast_1d(np.asarray(equilibrio["equilibrio"], dtype=float))
         if punto.size < 2:
             continue
-        estable = equilibrio.get("clasificacion", "").startswith("estable")
+        clasificacion = equilibrio.get("clasificacion", "")
         figura.add_trace(go.Scatter(
             x=[punto[0]], y=[punto[1]], mode="markers",
-            name=f"Equilibrio {equilibrio.get('clasificacion', '?')}",
-            marker={"size": 14, "symbol": "x",
-                    "color": "#059669" if estable else "#dc2626"}))
+            name=f"Equilibrio {clasificacion or '?'}",
+            meta=_rol(f"equilibrio:{_estado(clasificacion)}"),
+            marker={"size": 15, "symbol": _simbolo(clasificacion),
+                    "line": {"width": 2}}))
     figura.update_layout(title="Retrato de fase", xaxis_title=variables[0],
                          yaxis_title=variables[1], **_DISENO)
     return figura
@@ -172,12 +209,13 @@ def figura_trayectoria_3d(tiempos, estados, variables,
     figura = go.Figure(go.Scatter3d(
         x=_lista(estados[0]), y=_lista(estados[1]), z=_lista(estados[2]),
         mode="lines",
-        line={"color": _lista(tiempos), "colorscale": "Viridis", "width": 3,
-              "colorbar": {"title": "t", "thickness": 14}},
-        name="Trayectoria"))
+        line={"color": _lista(tiempos), "colorscale": "Viridis", "width": 4,
+              "colorbar": {"title": "t", "thickness": 12, "outlinewidth": 0}},
+        meta=_rol("trayectoria3d"), name="Trayectoria"))
     figura.add_trace(go.Scatter3d(
         x=[float(estados[0, 0])], y=[float(estados[1, 0])], z=[float(estados[2, 0])],
-        mode="markers", name="Inicio", marker={"size": 5, "color": "#059669"}))
+        mode="markers", name="Inicio", meta=_rol("inicio"),
+        marker={"size": 6, "line": {"width": 2}}))
     figura.update_layout(title=titulo, **{k: v for k, v in _DISENO.items()
                                           if k != "hovermode"},
                          scene={"xaxis_title": variables[0],
@@ -213,17 +251,21 @@ def construir_figuras(campo, tiempos, estados, parametros, variables,
     return figuras
 
 
-def generar_html(campo, tiempos, estados, parametros, variables, equilibrios=(),
-                 titulo=None, variable_independiente="t", incluir_plotly="cdn",
-                 maximo_puntos=MAXIMO_PUNTOS_TRAZA):
-    """Documento HTML autocontenido con todas las figuras del análisis.
+def bloques_de_figuras(campo, tiempos, estados, parametros, variables,
+                       equilibrios=(), titulo=None, variable_independiente="t",
+                       maximo_puntos=MAXIMO_PUNTOS_TRAZA, incluir_plotly="cdn"):
+    """Los `<div>` de cada figura, sin el documento que los envuelve.
 
-    `incluir_plotly="cdn"` (por defecto) enlaza `URL_PLOTLY_JS`: el documento
-    pesa unos pocos KB en vez de varios MB, y el host es uno que un cliente
-    puede cargar al publicar este HTML como artifact. Con `"inline"` la
-    librería completa queda embebida, utilizable sin red.
+    Separado de `generar_html` porque el informe de sesión compone **varias**
+    tandas de figuras en una sola página, y la librería de plotly solo puede ir
+    una vez por documento: quien compone decide en qué bloque la incluye. Pasar
+    `incluir_plotly=False` devuelve los `<div>` sin ella.
+
+    Devuelve `bloques` (HTML), `generadas` (nombres) y `fallidas` (la figura que
+    no se pudo dibujar no tumba al resto del análisis).
     """
-    incluir_plotly = URL_PLOTLY_JS if incluir_plotly == "cdn" else incluir_plotly
+    if incluir_plotly == "cdn":
+        incluir_plotly = URL_PLOTLY_JS
     figuras = construir_figuras(campo, tiempos, estados, parametros, variables,
                                 equilibrios, titulo, variable_independiente,
                                 maximo_puntos)
@@ -235,12 +277,35 @@ def generar_html(campo, tiempos, estados, parametros, variables, equilibrios=(),
             continue
         bloques.append(pio.to_html(
             figura, full_html=False,
-            include_plotlyjs=(incluir_plotly if primera else False),
+            include_plotlyjs=(incluir_plotly if (primera and incluir_plotly) else False),
             config={"displaylogo": False, "responsive": True}))
         generadas.append(nombre)
         primera = False
+    return {"bloques": bloques, "generadas": generadas, "fallidas": fallidas}
 
-    encabezado = titulo or "Análisis de EDO"
+
+def generar_html(campo, tiempos, estados, parametros, variables, equilibrios=(),
+                 titulo=None, variable_independiente="t", incluir_plotly="cdn",
+                 maximo_puntos=MAXIMO_PUNTOS_TRAZA):
+    """Documento HTML autocontenido con todas las figuras del análisis.
+
+    `incluir_plotly="cdn"` (por defecto) enlaza `URL_PLOTLY_JS`: el documento
+    pesa unos pocos KB en vez de varios MB, y el host es uno que un cliente
+    puede cargar al publicar este HTML como artifact. Con `"inline"` la
+    librería completa queda embebida, utilizable sin red.
+    """
+    render = bloques_de_figuras(campo, tiempos, estados, parametros, variables,
+                                equilibrios, titulo, variable_independiente,
+                                maximo_puntos, incluir_plotly)
+    bloques, generadas, fallidas = render["bloques"], render["generadas"], render["fallidas"]
+
+    # El título y los nombres de variable llegan del cliente MCP, y este
+    # documento se publica en una URL pública del lab: sin escapar, un título
+    # con `</title><script>` se ejecuta en el navegador de quien lo abra.
+    encabezado = _html.escape(titulo or "Análisis de EDO")
+    variables_texto = ", ".join(_html.escape(str(v)) for v in variables)
+    parametros_texto = ", ".join(f"{_html.escape(str(k))}={v:g}"
+                                 for k, v in (parametros or {}).items())
     documento = (
         "<!doctype html>\n<html lang=\"es\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
@@ -253,8 +318,8 @@ def generar_html(campo, tiempos, estados, parametros, variables, equilibrios=(),
         "padding:8px;margin-bottom:20px;overflow-x:auto}\n"
         "</style>\n</head>\n<body>\n"
         f"<h1>{encabezado}</h1>\n"
-        f"<p class=\"meta\">Variables: {', '.join(variables)}"
-        f"{' &middot; Parámetros: ' + ', '.join(f'{k}={v:g}' for k, v in parametros.items()) if parametros else ''}"
+        f"<p class=\"meta\">Variables: {variables_texto}"
+        f"{' &middot; Parámetros: ' + parametros_texto if parametros_texto else ''}"
         f" &middot; {len(np.asarray(tiempos))} puntos</p>\n"
         + "\n".join(f"<div class=\"figura\">{bloque}</div>" for bloque in bloques)
         + "\n</body>\n</html>\n")

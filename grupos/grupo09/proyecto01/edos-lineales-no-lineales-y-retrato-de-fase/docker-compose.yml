@@ -1,0 +1,68 @@
+# Agente de EDOs del grupo 09.
+#
+# Ojo con la expectativa: esto NO es un servicio que se levanta y queda
+# escuchando. El transporte es stdio, así que `docker compose up` no sirve de
+# nada -- arrancaría el servidor hablándole a un stdin vacío. Quien lanza el
+# contenedor es el cliente MCP, una vez por conversación.
+#
+# Este archivo existe para dos cosas:
+#
+#   docker compose build                     construir la imagen
+#   docker compose run --rm edos             abrir una sesión stdio a mano
+#
+# Para esa sesión a mano: lo que se escriba es JSON-RPC. Un `initialize` válido
+# devuelve las cinco herramientas; cualquier otra cosa devuelve un error de
+# protocolo, que también es una respuesta útil.
+
+services:
+  edos:
+    build: .
+    image: edos-grupo09:latest
+
+    # Los dos ajustes que deciden si el protocolo funciona o no:
+    stdin_open: true    # equivale al `-i` de docker run; sin esto no hay canal
+    tty: false          # un TTY reescribiría los bytes del JSON-RPC
+
+    init: true          # recoge los procesos huérfanos de una integración larga
+
+    environment:
+      # Dónde escribir el informe cuando no haya storage. Tiene que apuntar al
+      # volumen: dentro de la imagen el código está en /app y es de solo lectura
+      # para el usuario `edos`.
+      EDOS_INFORMES: /datos/informes
+
+      # El storage del laboratorio. "seaweedfs" resuelve por DNS interno solo si
+      # el contenedor comparte la red del lab (ver `networks` abajo); fuera de
+      # ella no resuelve, `subir_html` devuelve None y el informe cae al volumen.
+      # Las dos rutas funcionan: la segunda da una ruta local en vez de una URL.
+      EDOS_STORAGE_URL: http://seaweedfs:8333
+      EDOS_STORAGE_BUCKET: grupo09-edos-html
+
+      # La ruta pública la asigna el profesor en el Caddyfile. Hay que
+      # confirmarla antes de desplegar: si no coincide, el informe se sube bien
+      # pero el enlace que recibe el usuario no abre nada.
+      EDOS_URL_PUBLICA: https://rac-unmsm.vekthos.org/html/grupo09-edos
+
+    volumes:
+      # Los informes tienen que sobrevivir al contenedor: el usuario abre el
+      # enlace después de que la conversación terminó.
+      - ./informes:/datos/informes
+
+    # Un sistema caótico con una malla fina ocupa memoria de verdad, y la
+    # verificación reintegra dos veces más. El tope evita que una petición
+    # desmedida se lleve por delante al resto del laboratorio.
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+    restart: "no"       # una sesión que termina, termina
+
+    # Descomentar para hablar con el storage del laboratorio. Sin esto el agente
+    # funciona igual, solo que el informe queda en ./informes en vez de publicado.
+    # networks:
+    #   - lab_net
+
+# networks:
+#   lab_net:
+#     external: true

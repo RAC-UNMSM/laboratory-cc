@@ -20,10 +20,7 @@ resuelve F=0 de forma exacta con sympy para un valor de parámetros dado, y
 es, en esencia, repetir ese par sobre una malla del parámetro.
 """
 
-
-class AnalisisNoImplementado(NotImplementedError):
-    """El análisis solicitado todavía no existe. El servidor lo reporta como tal."""
-
+from matematica import AnalisisNoImplementado
 
 #: Lo que este módulo ofrecerá cuando esté implementado.
 CAPACIDADES_PREVISTAS = ("ramas_equilibrio", "candidatos_bifurcacion", "maximos_locales")

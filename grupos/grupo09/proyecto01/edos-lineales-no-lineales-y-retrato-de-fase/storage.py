@@ -19,19 +19,28 @@ que antes, con el HTML inline. No hay nada que apagar para trabajar en local.
 """
 
 import functools
+import os
 import socket
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 
-SEAWEEDFS_S3_URL = "http://seaweedfs:8333"
-HTML_BUCKET = "grupo09-edos-html"
+# Los tres se pueden sobreescribir por entorno. Hace falta porque el mismo
+# código corre en dos sitios con direcciones distintas: como proceso local por
+# stdio (donde "seaweedfs" no resuelve y no pasa nada) y dentro de un contenedor
+# en la red del laboratorio. Cocinar la dirección obligaba a editar el fuente
+# para desplegar, que es justo lo que no debe hacer falta.
+SEAWEEDFS_S3_URL = os.environ.get("EDOS_STORAGE_URL", "http://seaweedfs:8333")
+HTML_BUCKET = os.environ.get("EDOS_STORAGE_BUCKET", "grupo09-edos-html")
+
 # Ruta pública en Caddy: solo lectura, sin login -- quien abre el enlace es el
 # navegador del usuario (o el cliente de chat), de forma anónima y sin la
 # cookie de sesión del lab. OJO: esta ruta la asigna el profesor en el
-# Caddyfile; hay que confirmarla antes de desplegar.
-PUBLIC_HTML_BASE_URL = "https://rac-unmsm.vekthos.org/html/grupo09-edos"
+# Caddyfile; hay que confirmarla antes de desplegar, y por eso es una variable
+# de entorno: corregirla no debería ser un commit.
+PUBLIC_HTML_BASE_URL = os.environ.get(
+    "EDOS_URL_PUBLICA", "https://rac-unmsm.vekthos.org/html/grupo09-edos")
 
 
 @functools.lru_cache(maxsize=1)
@@ -67,23 +76,34 @@ def ensure_bucket() -> None:
         pass
 
 
-def subir_html(html: str) -> str | None:
-    """Sube el documento HTML con una key random (no adivinable, no secuencial)
-    y devuelve la URL pública, o None si el storage no respondió.
+def subir_html(html: str, clave: str | None = None,
+               tipo: str = "text/html; charset=utf-8") -> str | None:
+    """Sube el documento HTML y devuelve la URL pública, o None si no respondió.
+
+    Sin `clave` se genera una al azar (no adivinable, no secuencial): es lo que
+    corresponde a una figura suelta, que no tiene por qué pisar a ninguna otra.
+
+    Con `clave` se escribe siempre en la misma dirección, de modo que volver a
+    subir **actualiza** el documento en vez de crear otro. Así el informe de la
+    sesión conserva su URL mientras la conversación avanza y el usuario puede
+    dejar la pestaña abierta.
+
+    `tipo` es el Content-Type con que se sirve: el informe sube su página como
+    HTML y, al lado, su JSON de datos, que debe llegar al navegador como JSON
+    para que `fetch(...).json()` lo acepte.
 
     Devolver None no es un error que haya que propagar: es el caso normal en
-    local. `_visualizar` lo trata como "no hay enlace" y manda el HTML inline
-    como hasta ahora.
+    local. Quien llama lo trata como "no hay enlace" y busca otra salida.
     """
     if not _hay_storage():
         return None
-    key = f"{uuid.uuid4().hex}.html"
+    key = clave or f"{uuid.uuid4().hex}.html"
     try:
         req = urllib.request.Request(
             f"{SEAWEEDFS_S3_URL}/{HTML_BUCKET}/{key}",
             data=html.encode("utf-8"),
             method="PUT",
-            headers={"Content-Type": "text/html; charset=utf-8"},
+            headers={"Content-Type": tipo},
         )
         urllib.request.urlopen(req, timeout=10)
     except (urllib.error.URLError, urllib.error.HTTPError, OSError):

@@ -9,9 +9,12 @@ supera, la función regresa con el error y sin conclusiones, que es lo que exige
 la propuesta del grupo.
 """
 
+import logging
+
 import numpy as np
 import sympy as sp
 
+import storage
 from matematica import analisis_bifurcaciones, analisis_caos
 from matematica.analisis_estabilidad import analizar_equilibrios
 from matematica.expresiones import ExpresionInvalida, compilar_campo, compilar_escalar
@@ -21,16 +24,17 @@ from matematica.validacion_solucion import verificar
 from orquestacion.contratos import (ALIAS_ANALISIS, SolicitudEDO, SolicitudEquilibrios,
                                     respuesta_aclaracion, respuesta_error, respuesta_ok,
                                     serializable, solucion_a_datos)
+from orquestacion.informe import SESION
+from visualizacion.html import MAXIMO_PUNTOS_TRAZA, construir_figuras, generar_html
+from visualizacion.plantilla import figura_a_json
+
+registro = logging.getLogger("edos-grupo09")
 
 #: Puntos máximos de trayectoria que se devuelven como datos.
 MAXIMO_PUNTOS_DATOS = 1200
 
 #: Tamaño máximo del HTML que viaja inline por el transporte.
 LIMITE_HTML_INLINE = 400_000
-
-#: Puntos por traza con los que se dibuja. Acota el peso del HTML con
-#: independencia de cuántos puntos tenga la malla de la solución.
-PUNTOS_POR_TRAZA = 2000
 
 #: Máximo de equilibrios que se reportan de una búsqueda simbólica.
 MAXIMO_EQUILIBRIOS = 12
@@ -84,40 +88,55 @@ def buscar_equilibrios(campo, parametros):
         if not any(np.allclose(punto, previo, atol=1e-12) for previo in equilibrios):
             equilibrios.append(punto)
 
+    # Las dos advertencias se acumulan: antes la segunda pisaba a la primera, y
+    # un sistema con soluciones complejas *y* más equilibrios de la cuenta
+    # reportaba solo el recorte, ocultando los descartes.
     nota = {"metodo": "simbolico", "encontrados": len(equilibrios)}
+    avisos = []
     if descartados:
         nota["descartados"] = descartados
-        nota["nota"] = (f"{descartados} solución(es) descartada(s) por ser compleja(s) "
-                        "o depender de variables libres.")
+        avisos.append(f"{descartados} solución(es) descartada(s) por ser compleja(s) "
+                      "o depender de variables libres.")
     if len(equilibrios) > MAXIMO_EQUILIBRIOS:
-        nota["nota"] = (f"Se encontraron {len(equilibrios)} equilibrios; se reportan "
-                        f"los primeros {MAXIMO_EQUILIBRIOS}.")
+        avisos.append(f"Se encontraron {len(equilibrios)} equilibrios; se reportan "
+                      f"los primeros {MAXIMO_EQUILIBRIOS}.")
         equilibrios = equilibrios[:MAXIMO_EQUILIBRIOS]
+    if avisos:
+        nota["nota"] = " ".join(avisos)
     return equilibrios, nota
+
+
+def _equilibrios_a_clasificar(campo, parametros, aportados):
+    """Los equilibrios y de dónde salieron: del cliente, o de resolver F(x)=0.
+
+    Las dos herramientas hacen la misma pregunta -- `analizar_edo` como parte
+    del análisis de estabilidad y `analizar_equilibrios` como la pregunta
+    entera -- así que la decisión vive una sola vez.
+    """
+    if aportados:
+        return list(aportados), {"metodo": "aportados_por_el_cliente"}
+    return buscar_equilibrios(campo, parametros)
+
+
+def _resumen_de_equilibrios(resultados):
+    """Forma en que un equilibrio clasificado viaja al cliente."""
+    return [{"punto": r["equilibrio"], "clasificacion": r["clasificacion"],
+             "autovalores": r["autovalores"], "jacobiano": r["jacobiano"]}
+            for r in resultados]
 
 
 def _capacidad_estabilidad(contexto):
     """Equilibrios, Jacobiano, autovalores y clasificación."""
     campo, parametros = contexto["campo"], contexto["parametros"]
-    equilibrios = contexto["equilibrios_pedidos"]
-    origen = {"metodo": "aportados_por_el_cliente"} if equilibrios else None
-    if not equilibrios:
-        equilibrios, origen = buscar_equilibrios(campo, parametros)
+    equilibrios, origen = _equilibrios_a_clasificar(
+        campo, parametros, contexto["equilibrios_pedidos"])
     if not equilibrios:
         return {"disponible": False, "origen": origen,
                 "nota": "No se identificaron equilibrios que clasificar."}
     resultados = analizar_equilibrios(campo, equilibrios, parametros)
     contexto["equilibrios_clasificados"] = resultados
-    return {
-        "disponible": True,
-        "origen": origen,
-        "equilibrios": [{
-            "punto": r["equilibrio"],
-            "clasificacion": r["clasificacion"],
-            "autovalores": r["autovalores"],
-            "jacobiano": r["jacobiano"],
-        } for r in resultados],
-    }
+    return {"disponible": True, "origen": origen,
+            "equilibrios": _resumen_de_equilibrios(resultados)}
 
 
 def _capacidad_pendiente(invocar, previstas):
@@ -176,11 +195,8 @@ def _visualizar(contexto, solicitud):
     Si no responde -- el caso normal en local, sin Docker -- se vuelve al
     camino de siempre, submuestreando hasta que quepa.
     """
-    import storage
-    from visualizacion.html import generar_html
-
     enlace = None
-    puntos = PUNTOS_POR_TRAZA
+    puntos = MAXIMO_PUNTOS_TRAZA
     for intento in range(3):
         resultado = generar_html(
             contexto["campo"], contexto["solucion"].t, contexto["solucion"].y,
@@ -212,13 +228,84 @@ def _visualizar(contexto, solicitud):
                                 f"inline, pero está publicado en `url` a máxima "
                                 f"resolución.")
             return salida
-        puntos //= 4
+        if intento < 2:
+            puntos //= 4
 
     salida["html_omitido"] = True
     salida["motivo"] = (f"El HTML pesa {resultado['bytes']} bytes incluso con la "
                         f"resolución mínima, por encima del límite de "
                         f"{LIMITE_HTML_INLINE} para enviarlo inline.")
     return salida
+
+
+def _solo_el_enlace(visualizacion, informe):
+    """Cambia el HTML inline por el enlace al informe.
+
+    Medido sobre un Van der Pol: la respuesta pesaba 114 KB, de los cuales 85 KB
+    (el 75 %) eran el documento HTML. Ningún cliente de chat lo dibuja -- es
+    texto que el modelo lee -- así que esos ~23 mil tokens no servían para que
+    el usuario viera nada, y encima competían con el enlace de 143 caracteres
+    que sí funciona. En la práctica el agente los ignoraba y se fabricaba su
+    propia figura por otro lado.
+
+    Se conserva lo que el modelo sí puede usar para redactar: qué figuras se
+    dibujaron y cuánto pesaba el documento.
+    """
+    salida = {clave: valor for clave, valor in visualizacion.items()
+              if clave not in ("html", "html_omitido", "motivo")}
+    salida["informe"] = informe
+    salida["nota"] = (
+        "El documento no viaja en esta respuesta: no hay cliente de chat que "
+        "dibuje el HTML de una herramienta. Entréguele al usuario el enlace de "
+        "`informe` como enlace markdown. Es el mismo para toda la conversación y "
+        "la página se actualiza sola, así que basta con darlo una vez.")
+    return salida
+
+
+def _registrar_en_informe(titulo, configuracion, contexto=None, solicitud=None,
+                          verificacion=None, analisis=None, notas=None,
+                          ok=True, etapa=None, error=None):
+    """Agrega este análisis al informe de la conversación y devuelve su enlace.
+
+    El informe es la única forma en que el usuario llega a *ver* su problema:
+    el HTML que viaja en la respuesta lo lee el modelo, no lo dibuja el cliente.
+    Por eso se registra tanto el análisis que salió bien como el que no: una
+    etapa no superada también es parte de lo que se conversó, y esconderla
+    dejaría el informe contando una historia más limpia que la real.
+
+    Nunca levanta: si el informe falla, el análisis sigue siendo válido.
+    """
+    # La plantilla recibe exactamente la misma forma que el cliente MCP: datos
+    # ya serializados. Sin esto le llegarían ndarrays y autovalores complejos
+    # crudos, y algo tan inocente como `autovalores or []` revienta sobre un
+    # array de numpy.
+    entrada = serializable({
+        "titulo": titulo, "configuracion": configuracion, "ok": ok,
+        "verificacion": verificacion, "analisis": analisis,
+        "notas": notas, "etapa": etapa, "error": error})
+    # Las figuras ya salen como JSON de plotly; volver a recorrerlas con
+    # `serializable` costaría una pasada sobre miles de puntos para nada.
+    if ok and contexto is not None and solicitud is not None:
+        try:
+            # Al informe va la *especificación* de cada figura, no un `<div>` ya
+            # renderizado: la plantilla la dibuja en el navegador cuando le toca,
+            # y la librería de plotly se carga una sola vez desde la plantilla.
+            figuras = construir_figuras(
+                contexto["campo"], contexto["solucion"].t, contexto["solucion"].y,
+                contexto["parametros"], solicitud.variables_estado,
+                contexto.get("equilibrios_clasificados", ()),
+                solicitud.titulo, solicitud.variable_independiente,
+                MAXIMO_PUNTOS_TRAZA)
+            entrada["figuras"] = [
+                {"nombre": nombre, "spec": figura_a_json(figura)}
+                for nombre, figura in figuras if not isinstance(figura, Exception)]
+        except Exception as exc:
+            registro.warning("No se pudieron preparar las figuras del informe: %s", exc)
+    try:
+        return SESION.registrar(entrada)
+    except Exception as exc:
+        registro.warning("No se pudo registrar en el informe: %s", exc)
+        return None
 
 
 def analizar_edo(solicitud):
@@ -280,6 +367,9 @@ def analizar_edo(solicitud):
     datos_solucion = solucion_a_datos(solucion, solicitud.variables_estado,
                                       MAXIMO_PUNTOS_DATOS)
     if not verificacion["ok"]:
+        _registrar_en_informe(solicitud.titulo or "Problema de valor inicial",
+                              configuracion, verificacion=verificacion, ok=False,
+                              etapa="verificacion", error=verificacion["resumen"])
         return respuesta_error(
             "verificacion", verificacion["resumen"], configuracion,
             {"verificacion": verificacion, "solucion": datos_solucion})
@@ -313,6 +403,14 @@ def analizar_edo(solicitud):
         notas.append(f"El sistema no es autónomo (depende de "
                      f"{solicitud.variable_independiente}): el análisis de equilibrios "
                      f"y bifurcaciones no aplica.")
+
+    informe = _registrar_en_informe(
+        solicitud.titulo or "Problema de valor inicial", configuracion,
+        contexto=contexto, solicitud=solicitud, verificacion=verificacion,
+        analisis=analisis, notas=notas)
+    if informe:
+        visualizacion = _solo_el_enlace(visualizacion, informe)
+        notas = [*notas, f"Informe de la sesión: {informe}"]
     return respuesta_ok(configuracion, datos_solucion, verificacion, analisis,
                         visualizacion, notas)
 
@@ -387,14 +485,11 @@ def analizar_equilibrios_sistema(solicitud):
             f"{solicitud.variable_independiente}, así que sus equilibrios no están "
             f"definidos.",
             configuracion,
-            {"sugerencia": "Para un sistema no autónomo use `analizar_edo`, que "
+            {"sugerencia": "Para un sistema no autónomo use `resolver_graficar_y_analizar_edo`, que "
                            "integra la trayectoria."})
 
-    puntos = solicitud.equilibrios or []
-    origen = {"metodo": "aportados_por_el_cliente"} if puntos else None
-    if not puntos:
-        puntos, origen = buscar_equilibrios(campo, solicitud.parametros)
-
+    puntos, origen = _equilibrios_a_clasificar(campo, solicitud.parametros,
+                                               solicitud.equilibrios)
     if not puntos:
         return respuesta_ok(configuracion, {"equilibrios": [], "cantidad": 0},
                             {"ok": True, "pruebas": [], "fallidas": [],
@@ -434,17 +529,20 @@ def analizar_equilibrios_sistema(solicitud):
         return respuesta_error("verificacion", verificacion["resumen"], configuracion,
                                {"verificacion": verificacion})
 
-    equilibrios = [{"punto": r["equilibrio"], "clasificacion": r["clasificacion"],
-                    "autovalores": r["autovalores"], "jacobiano": r["jacobiano"]}
-                   for r in resultados]
+    equilibrios = _resumen_de_equilibrios(resultados)
+    analisis = {"estabilidad": {"disponible": True, "origen": origen,
+                                "equilibrios": equilibrios}}
+    notas = ["Para estudiar una bifurcación, repita esta llamada variando el "
+             "parámetro: el barrido automático está pendiente de implementación."]
+    informe = _registrar_en_informe(
+        "Equilibrios y estabilidad", configuracion, verificacion=verificacion,
+        analisis=analisis, notas=notas)
+    if informe:
+        notas = [*notas, f"Informe de la sesión: {informe}"]
     return respuesta_ok(
         configuracion,
         {"equilibrios": [e["punto"] for e in equilibrios], "cantidad": len(equilibrios)},
-        verificacion,
-        {"estabilidad": {"disponible": True, "origen": origen,
-                         "equilibrios": equilibrios}},
-        notas=["Para estudiar una bifurcación, repita esta llamada variando el "
-               "parámetro: el barrido automático está pendiente de implementación."])
+        verificacion, analisis, notas=notas)
 
 
 def describir_capacidades():

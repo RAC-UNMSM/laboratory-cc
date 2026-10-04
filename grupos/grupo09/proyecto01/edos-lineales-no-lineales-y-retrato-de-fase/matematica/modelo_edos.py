@@ -4,8 +4,10 @@ La resolución **analítica** que pide la propuesta todavía no está: ver
 `resolver_analitico` al final del módulo, que es un stub declarado.
 """
 
+import numpy as np
 from scipy.integrate import solve_ivp
 
+from matematica import AnalisisNoImplementado
 from matematica.datos_validacion import validar_entrada
 
 
@@ -21,8 +23,6 @@ def resolver_edo(modelo, y0, intervalo, parametros=None, *, puntos=300,
         raise ValueError("puntos debe ser un entero mayor o igual a 2.")
     if rtol <= 0 or atol <= 0:
         raise ValueError("rtol y atol deben ser positivos.")
-    import numpy as np
-
     tiempos = np.linspace(t0, tf, puntos)
     try:
         solucion = solve_ivp(
@@ -37,11 +37,6 @@ def resolver_edo(modelo, y0, intervalo, parametros=None, *, puntos=300,
     if solucion.y.shape[0] != len(estado):
         raise ValueError("El modelo debe devolver una derivada por cada variable de estado.")
     return solucion
-
-
-class ResolucionAnaliticaNoImplementada(NotImplementedError):
-    """La resolución simbólica no existe todavía. El servidor lo reporta como tal."""
-
 
 #: Lo que ofrecerá la resolución analítica cuando esté implementada.
 CAPACIDADES_PREVISTAS_ANALITICAS = ("dsolve", "verificacion_por_sustitucion",
@@ -60,7 +55,7 @@ def resolver_analitico(expresiones, variable_independiente, variables_estado,
     Responsable según la propuesta: Yanac Minaya Junior Alberto
     (`modelo_edos.py`: "resolución analítica cuando sea posible").
     """
-    raise ResolucionAnaliticaNoImplementada(
+    raise AnalisisNoImplementado(
         "La resolución analítica (simbólica) no está implementada. Faltan: "
         f"{', '.join(CAPACIDADES_PREVISTAS_ANALITICAS)}. "
         "El agente sí integra numéricamente con control de error, y sí verifica "

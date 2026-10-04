@@ -128,7 +128,7 @@
       "tipo": "demostracion_sobre_edo",
       "dificultad": "avanzada",
       "verificable_con_solver": false,
-      "motivo_no_verificable": "Pide una demostración analítica (disipatividad y existencia de conjunto atrapante), no el cálculo de una trayectoria. El sistema en sí sí es integrable por el motor: ver el propio bloque `ecuacion` de este problema, que ya trae el campo listo para `analizar_edo`.",
+      "motivo_no_verificable": "Pide una demostración analítica (disipatividad y existencia de conjunto atrapante), no el cálculo de una trayectoria. El sistema en sí sí es integrable por el motor: ver el propio bloque `ecuacion` de este problema, que ya trae el campo listo para `resolver_graficar_y_analizar_edo`.",
       "ecuacion": {
         "latex": "\\dot{x} = \\sigma(y-x), \\qquad \\dot{y} = rx - y - xz, \\qquad \\dot{z} = xy - bz",
         "forma": "sistema_primer_orden",

@@ -41,7 +41,7 @@ claude mcp list
 
 Luego, dentro de Claude Code, basta pedir en lenguaje natural: *"resuelve
 y' = y(1 - y/10) con y(0)=1 en [0,10] y dime la estabilidad de sus
-equilibrios"*. Claude traducirá el pedido a una llamada de `analizar_edo`.
+equilibrios"*. Claude traducirá el pedido a una llamada de `resolver_graficar_y_analizar_edo`.
 
 ## Registrar en Claude Desktop (la app de escritorio)
 
@@ -98,9 +98,15 @@ diagnosticar un problema de protocolo.
 | Herramienta | Qué hace | Cuándo |
 | --- | --- | --- |
 | `ping` | Conexión e inventario de capacidades y pendientes | Antes de un análisis largo |
-| `analizar_edo` | validar → resolver → verificar → analizar → visualizar | Hay condición inicial y se quiere la trayectoria |
+| `resolver_graficar_y_analizar_edo` | validar → resolver → verificar → analizar → visualizar | Hay condición inicial y se quiere la trayectoria |
 | `analizar_equilibrios` | Resuelve F(x)=0 exacto y clasifica, **sin integrar** | La pregunta es de equilibrios, estabilidad o bifurcación y no hay condición inicial |
 | `listar_balotario` | Los problemas del balotario con su ecuación lista | Para usarlo como vara de nivel |
+
+El nombre largo de `resolver_graficar_y_analizar_edo` es a propósito. En Claude
+Desktop las herramientas del conector llegan diferidas: el modelo elige mirando
+solo el nombre y lee la descripción después. Con el nombre anterior,
+`analizar_edo`, un enunciado que dice "Resuelve… Grafica…" se resolvía con
+Python en vez de con el agente.
 
 `analizar_equilibrios` existe porque "clasifique los equilibrios de x' = μ − x²"
 no es un problema de valor inicial: no hay condición inicial que dar. Exigirla
@@ -112,7 +118,7 @@ cada punto anule de verdad el campo, F(x*) = 0.
 
 ### Cómo se escribe un sistema
 
-`analizar_edo` espera la forma explícita de primer orden **x' = F(t, x)**: una
+`resolver_graficar_y_analizar_edo` espera la forma explícita de primer orden **x' = F(t, x)**: una
 expresión por variable de estado. Una EDO de orden n se reduce antes a un
 sistema de n ecuaciones.
 
@@ -222,7 +228,7 @@ integrador, así que la prueba lo descuenta antes de denunciar nada.
 ## Organización
 
 ```
-mcp_server.py               Servidor MCP (stdio): ping, analizar_edo, listar_balotario
+mcp_server.py               Servidor MCP (stdio): ping, resolver_graficar_y_analizar_edo, listar_balotario
 orquestacion/
   capacidades.py            Núcleo: el flujo completo y el registro de análisis
   contratos.py              SolicitudEDO, forma de la respuesta, conversión a JSON
@@ -237,22 +243,106 @@ matematica/
   analisis_bifurcaciones.py STUB: no implementado
 visualizacion/
   html.py                   Figuras interactivas con plotly
+  plantilla.py              Plantilla del informe que abre el usuario
+orquestacion/
+  informe.py                Acumula la conversación y publica el informe
 balotario/
   balotario.tex             Problemario original del grupo (25 problemas, 5 temas)
   tema_01.json .. tema_05.json   Los 25 problemas convertidos
-tests/                      116 pruebas
+tests/                      132 pruebas
 ```
 
-Un `analizar_edo` recorre: `contratos` valida la solicitud → `expresiones`
+Un `resolver_graficar_y_analizar_edo` recorre: `contratos` valida la solicitud → `expresiones`
 compila el campo → `modelo_edos` integra → `validacion_solucion` verifica →
 `analisis_estabilidad` analiza → `html` dibuja. `capacidades` es quien ordena
 ese recorrido y el único módulo que los conoce a todos.
 
 El HTML viaja inline por el transporte, nunca a disco: una ruta local no le
 sirve a un cliente que puede estar en otra máquina. Su peso queda acotado
-dibujando como máximo 2000 puntos por traza, con independencia de cuántos
-tenga la malla; si aun así no cupiera, se baja la resolución antes de
-rendirse.
+dibujando como máximo `MAXIMO_PUNTOS_TRAZA` puntos por traza (definido una sola
+vez, en `visualizacion/html.py`), con independencia de cuántos tenga la malla;
+si aun así no cupiera, se baja la resolución antes de rendirse.
+
+Ese documento se publica además en una URL pública del laboratorio, así que
+todo lo que el cliente controla -- título, nombres de variable y de parámetro --
+se escapa antes de entrar al HTML: un título con `</title><script>` llegaría si
+no al navegador de cualquiera que abra el enlace.
+
+### El informe de la sesión
+
+Un resultado de herramienta MCP es **datos para el modelo**, no algo que la
+interfaz dibuje: ningún cliente de chat renderiza el HTML que devuelve una
+tool. Mandar la figura dentro de la respuesta no sirve para que el usuario la
+vea, y encima gasta contexto. Lo que sí funciona es un enlace.
+
+`orquestacion/informe.py` mantiene un documento por conversación. Cada análisis
+agrega una sección -- el planteamiento, las figuras, los equilibrios con su
+clasificación, la tabla de verificación y lo que quedó pendiente -- y el
+documento entero se reescribe sobre la **misma** dirección. El usuario abre el
+enlace una vez, deja la pestaña abierta, y la página se recarga sola mientras
+la conversación avanza.
+
+**Una sesión no es un proceso.** El cliente MCP levanta este servidor una vez y
+lo mantiene vivo para todas las conversaciones, y el protocolo no le dice al
+servidor en qué chat está. Sin resolverlo, el informe acumulaba las preguntas de
+chats distintos y no empezaba de cero nunca. Dos mecanismos, en este orden:
+
+1. La herramienta **`nuevo_informe`**, que el agente llama al empezar una
+   conversación. Es el camino bueno: explícito y exacto.
+2. **Relevo por inactividad** (`EDOS_INACTIVIDAD_MIN`, 120 por defecto) como red
+   de seguridad para cuando el agente no lo haga.
+
+Ninguno pierde nada: el informe anterior queda en su archivo, con su fecha y su
+hora en el nombre.
+
+El destino depende de dónde corra el servidor:
+
+| Entorno | Dónde queda | Qué recibe el usuario |
+| --- | --- | --- |
+| Contenedor en la red del lab | SeaweedFS, clave estable `informe-<sesion>.html` | URL pública |
+| Local por stdio | `informes/` junto al proyecto | `http://127.0.0.1:<puerto>/informe-...` |
+
+La ruta local sí le sirve al usuario en ese caso, porque el servidor corre en
+su propia máquina: es exactamente la situación en la que stdio tiene sentido.
+La herramienta `informe` devuelve la dirección en cualquier momento, incluso
+antes del primer análisis, para que pueda mirar cómo se llena.
+
+Un análisis que **no** supera una etapa también entra al informe, con su etapa
+y su error. Esconderlo dejaría el documento contando una historia más limpia
+que la real.
+
+### Cómo se conecta
+
+El transporte es **stdio**: el cliente MCP lanza el proceso y le habla por
+stdin/stdout. No es un servicio que quede escuchando, así que no hay puerto ni
+`docker compose up` que valga.
+
+| Forma | Archivo de ejemplo |
+| --- | --- |
+| Proceso local | `conexion/claude_desktop_config.json` |
+| Dentro del contenedor | `conexion/claude_desktop_config_docker.json` |
+
+```bash
+claude mcp add edos-grupo09 -- python mcp_server.py    # Claude Code
+docker build -t edos-grupo09 .                          # imagen
+docker compose run --rm edos                            # sesión stdio a mano
+```
+
+El cliente pide la lista de herramientas **una sola vez, al conectar**: después
+de cambiar el servidor hay que reiniciar el cliente, o se sigue viendo lo de
+antes.
+
+Tres variables de entorno, todas opcionales. Sin ellas el agente funciona igual
+y el informe queda en `informes/`:
+
+| Variable | Para qué |
+| --- | --- |
+| `EDOS_INFORMES` | Dónde escribir el informe sin storage. En el contenedor apunta al volumen |
+| `EDOS_SIN_SERVIDOR_LOCAL` | Apaga el servidor http del informe; entonces se entrega la ruta del archivo |
+| `EDOS_INACTIVIDAD_MIN` | Minutos de silencio tras los cuales se abre un informe nuevo (120) |
+| `EDOS_INFORME_MODO` | `ultimo` (por defecto) o `acumula` |
+| `EDOS_STORAGE_URL` / `EDOS_STORAGE_BUCKET` | El SeaweedFS del laboratorio |
+| `EDOS_URL_PUBLICA` | La ruta pública que asigna el Caddyfile del curso |
 
 ### Seguridad de la frontera
 
@@ -275,6 +365,8 @@ python -m unittest discover -s tests -v
 | `test_capacidades.py` | El flujo completo, el portón y la serialización JSON. |
 | `test_mcp_server.py` | Registro de herramientas y limpieza de stdout. |
 | `test_catalogo.py` | Consistencia del catálogo contra el `.tex`. |
+| `test_visualizacion.py` | Que el documento HTML escape lo que controla el cliente. |
+| `test_informe.py` | Acumulación de la sesión, dirección estable y plotly una sola vez. |
 
 El balotario funciona como vara de medir: `test_balotario.py` pasa cada
 ejercicio por el solver y lo compara con la solución que el `.tex` demuestra.

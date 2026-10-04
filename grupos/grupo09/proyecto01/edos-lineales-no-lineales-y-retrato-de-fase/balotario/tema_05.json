@@ -105,7 +105,7 @@
         "variables_estado": ["x", "y", "z"],
         "campo": ["-y - z", "x + a*y", "b + z*(x - c)"],
         "parametros": { "a": 0.2, "b": 0.2, "c": 5.7 },
-        "notas": "Este campo sí se puede pasar a `analizar_edo` para obtener la trayectoria y el atractor 3D; lo que no está implementado es la sección de Poincaré."
+        "notas": "Este campo sí se puede pasar a `resolver_graficar_y_analizar_edo` para obtener la trayectoria y el atractor 3D; lo que no está implementado es la sección de Poincaré."
       },
       "datos_del_enunciado": {
         "a": 0.2, "b": 0.2, "c": 5.7,

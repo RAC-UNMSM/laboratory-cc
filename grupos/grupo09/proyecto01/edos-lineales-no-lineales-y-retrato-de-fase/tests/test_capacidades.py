@@ -10,11 +10,14 @@ El foco está en dos cosas que ninguna otra prueba cubre:
 
 import json
 import unittest
+from unittest import mock
 
 from orquestacion.capacidades import (analizar_edo, analizar_equilibrios_sistema,
                                       buscar_equilibrios, describir_capacidades,
                                       es_autonomo)
 from matematica.expresiones import compilar_campo
+from orquestacion import capacidades
+from visualizacion.html import generar_html
 
 LINEAL = {"ecuaciones": ["-2*y"], "variables_estado": ["y"], "y0": [1.0],
           "intervalo": [0.0, 5.0]}
@@ -274,13 +277,27 @@ class SerializacionTests(unittest.TestCase):
         json.dumps(resultado, allow_nan=False)
         self.assertFalse(resultado["ok"])
 
-    def test_visualizacion_produce_html(self):
-        resultado = analizar_edo({**LOGISTICO, "visualizar": True})
-        visualizacion = resultado["visualizacion"]
+    def test_visualizacion_dice_que_dibujo_y_donde_verlo(self):
+        """La respuesta lleva el enlace al informe, no el documento.
+
+        El HTML de una herramienta no lo dibuja ningún cliente de chat, así que
+        mandarlo inline gastaba el 75 % de la respuesta en algo que el modelo no
+        puede usar. Lo que sí necesita para redactar es qué se dibujó; lo que el
+        usuario necesita para verlo es el enlace.
+        """
+        visualizacion = analizar_edo({**LOGISTICO, "visualizar": True})["visualizacion"]
         self.assertIn("series", visualizacion["figuras"])
         self.assertIn("linea_fase", visualizacion["figuras"])
-        self.assertTrue(visualizacion["html"].startswith("<!doctype html>"))
-        self.assertIn("plotly", visualizacion["html"])
+        self.assertIn("informe", visualizacion)
+        self.assertNotIn("html", visualizacion)
+
+    def test_el_documento_sigue_generandose_entero(self):
+        """Que no viaje en la respuesta no significa que no exista."""
+        documento = generar_html(
+            compilar_campo(["-y"], "t", ["y"]), [0.0, 0.5, 1.0],
+            [[1.0, 0.6, 0.37]], {}, ["y"])["html"]
+        self.assertTrue(documento.startswith("<!doctype html>"))
+        self.assertIn("plotly", documento)
 
 
 class EquilibriosYAutonomiaTests(unittest.TestCase):
@@ -402,6 +419,25 @@ class EquilibriosSinTrayectoriaTests(unittest.TestCase):
              "variables_estado": ["x", "y"], "parametros": {"mu": 1.0}})
         self.assertTrue(resultado["ok"], resultado.get("error"))
         json.dumps(resultado, allow_nan=False, ensure_ascii=False)
+
+
+class TestAvisosDeBusquedaDeEquilibrios(unittest.TestCase):
+    """Las advertencias de `buscar_equilibrios` se suman; no se pisan.
+
+    x' = x**4 - 1 tiene cuatro raíces: dos reales (±1) y dos imaginarias, que se
+    descartan. Si además se recortan por exceder el máximo, el resultado tiene
+    dos cosas que advertir a la vez. Antes la segunda sobrescribía a la primera
+    y el cliente no se enteraba de los descartes.
+    """
+
+    def test_descartes_y_recorte_se_reportan_juntos(self):
+        campo = compilar_campo(["x**4 - 1"], "t", ["x"])
+        with mock.patch.object(capacidades, "MAXIMO_EQUILIBRIOS", 1):
+            equilibrios, nota = capacidades.buscar_equilibrios(campo, {})
+        self.assertEqual(len(equilibrios), 1)
+        self.assertEqual(nota["descartados"], 2)
+        self.assertIn("descartada", nota["nota"])
+        self.assertIn("se reportan", nota["nota"])
 
 
 if __name__ == "__main__":
