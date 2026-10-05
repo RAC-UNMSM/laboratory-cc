@@ -1,17 +1,24 @@
 # Agente de EDOs y sistemas dinámicos — Grupo 09
 
-Servidor MCP local que resuelve y analiza ecuaciones diferenciales ordinarias
-de 1 a 3 variables. Claude interpreta el pedido del usuario y llama a las
-herramientas; el servidor calcula, **verifica** y devuelve resultados
-estructurados; Claude redacta la explicación final a partir de ellos.
+Servidor MCP local que resuelve problemas de ecuaciones diferenciales
+ordinarias (1 a 3 variables) y de mapas unidimensionales **con el desarrollo
+matemático del balotario del grupo**. Claude interpreta el pedido del usuario y
+llama a las herramientas; el servidor clasifica el problema, elige el método
+que le corresponde, lo **ejecuta** con cálculo simbólico (sympy) y numérico
+(scipy), lo **verifica** y lo dibuja; Claude presenta ese desarrollo sin
+agregarle operaciones que el servidor no hizo.
 
-Hay una sola entrada, `mcp_server.py`, que acepta EDOs arbitrarias y devuelve
-JSON más HTML interactivo. El proyecto nació como demo por terminal con tres
-modelos fijos (`server.py`, `cli.py`, `modelos_referencia.py`, gráficas PNG);
-todo eso se eliminó al convertirse en agente MCP, porque un menú de tres
-modelos cableados no tiene sentido cuando el cliente puede mandar cualquier
-sistema. Los ejemplos canónicos viven ahora en el balotario (25 problemas) y
-en la documentación de la propia herramienta.
+El recorrido de cada pregunta es:
+
+```
+PROBLEMA → INTERPRETACIÓN → CLASIFICACIÓN → SELECCIÓN DEL MÉTODO → DESARROLLO
+→ CÁLCULO SIMBÓLICO / NUMÉRICO → ANÁLISIS → VALIDACIÓN → VISUALIZACIÓN → PRESENTACIÓN
+```
+
+El balotario (`balotario/balotario.tex`, 25 problemas en 5 temas) es la
+especificación: define qué familias se resuelven, con qué procedimiento, y sus
+ejercicios son la suite de aceptación. Lo que el balotario todavía no resuelve
+queda **FUERA DE ALCANCE POR AHORA** y el agente lo dice en vez de improvisar.
 
 ## Instalación
 
@@ -39,9 +46,10 @@ Comprobar que quedó registrado y responde:
 claude mcp list
 ```
 
-Luego, dentro de Claude Code, basta pedir en lenguaje natural: *"resuelve
-y' = y(1 - y/10) con y(0)=1 en [0,10] y dime la estabilidad de sus
-equilibrios"*. Claude traducirá el pedido a una llamada de `resolver_graficar_y_analizar_edo`.
+Luego, dentro de Claude Code, basta pedir en lenguaje natural: *"resuelve la
+ecuación de Bernoulli y' + y = y³ con y(0) = 1"* o *"clasifica el equilibrio
+del oscilador ẍ + γẋ + 4x = 0 según γ ≥ 0"*. Claude traducirá el pedido a una
+llamada de `resolver_graficar_y_analizar_edo` o de `analizar_equilibrios`.
 
 ## Registrar en Claude Desktop (la app de escritorio)
 
@@ -97,10 +105,11 @@ diagnosticar un problema de protocolo.
 
 | Herramienta | Qué hace | Cuándo |
 | --- | --- | --- |
-| `ping` | Conexión e inventario de capacidades y pendientes | Antes de un análisis largo |
-| `resolver_graficar_y_analizar_edo` | validar → resolver → verificar → analizar → visualizar | Hay condición inicial y se quiere la trayectoria |
-| `analizar_equilibrios` | Resuelve F(x)=0 exacto y clasifica, **sin integrar** | La pregunta es de equilibrios, estabilidad o bifurcación y no hay condición inicial |
-| `listar_balotario` | Los problemas del balotario con su ecuación lista | Para usarlo como vara de nivel |
+| `ping` | Conexión, revisión del código e inventario de familias y de lo fuera de alcance | Antes de un análisis largo |
+| `nuevo_informe` / `informe` | Abre un informe vacío / devuelve su enlace | Al empezar un chat / cuando el usuario lo pida |
+| `resolver_graficar_y_analizar_edo` | El recorrido completo: desarrollo, trayectoria si hay condición inicial, verificación y figuras | Resolver, hallar la solución general, graficar o analizar |
+| `analizar_equilibrios` | Equilibrios, estabilidad o una bifurcación, con su desarrollo, **sin integrar** | La pregunta es de equilibrios o de un parámetro y no hay condición inicial |
+| `listar_balotario` | Los problemas del balotario con su ecuación lista y su alcance | Para usarlo como vara de nivel |
 
 El nombre largo de `resolver_graficar_y_analizar_edo` es a propósito. En Claude
 Desktop las herramientas del conector llegan diferidas: el modelo elige mirando
@@ -108,82 +117,129 @@ solo el nombre y lee la descripción después. Con el nombre anterior,
 `analizar_edo`, un enunciado que dice "Resuelve… Grafica…" se resolvía con
 Python en vez de con el agente.
 
+**La condición inicial es opcional.** "Halle la solución general de
+x²y'' − 2xy' + 2y = x³ ln x" no la tiene, y exigirla obligaba a inventar un
+PVI. Sin condición inicial el servidor hace el desarrollo y no integra nada;
+con ella, además integra la trayectoria y la contrasta con la solución
+analítica.
+
 `analizar_equilibrios` existe porque "clasifique los equilibrios de x' = μ − x²"
-no es un problema de valor inicial: no hay condición inicial que dar. Exigirla
-obligaría a integrar una trayectoria que nadie pidió. Es la forma de los cinco
-problemas del Tema 3, y es la pieza con la que se estudia una bifurcación
-mientras el barrido automático siga pendiente: una llamada por valor del
-parámetro. Su verificación es la que corresponde a esa pregunta: comprobar que
-cada punto anule de verdad el campo, F(x*) = 0.
+no es un problema de valor inicial. Con el parámetro declarado en `parametro`,
+**una sola llamada** estudia la bifurcación entera: ramas de equilibrio, su
+estabilidad por tramos, los valores críticos y el tipo de bifurcación. Con el
+parámetro fijado en `parametros`, clasifica los equilibrios de ese régimen
+(línea de fase en 1D, linealización en 2D).
 
-### Cómo se escribe un sistema
+### Cómo se escribe un problema
 
-`resolver_graficar_y_analizar_edo` espera la forma explícita de primer orden **x' = F(t, x)**: una
+Las ecuaciones van en forma explícita de primer orden **x' = F(t, x)**: una
 expresión por variable de estado. Una EDO de orden n se reduce antes a un
-sistema de n ecuaciones.
+sistema de n ecuaciones; el servidor reconoce esa forma (y' = yp, yp' = …) y la
+trata como la EDO de orden n que es.
 
 ```python
-# Logístico: y' = r·y·(1 - y/K)
-ecuaciones=["r*y*(1 - y/K)"], variables_estado=["y"], y0=[1.0],
-intervalo=[0, 10], parametros={"r": 1.0, "K": 10.0}
+# 1.1 — separable con intervalo maximal
+ecuaciones=["3*x*y**2"], variables_estado=["y"], variable_independiente="x",
+y0=[1], intervalo=[0, 0.7],
+enunciado="Resuelva dy/dx = 3xy^2, y(0) = 1 y determine el intervalo máximo de existencia"
 
-# Péndulo no lineal: θ'' + ω₀²·sin θ = 0  →  θ' = v, v' = -ω₀²·sin θ
-ecuaciones=["v", "-w0**2*sin(theta)"], variables_estado=["theta", "v"],
-y0=[1.0472, 0.0], intervalo=[0, 20], parametros={"w0": 1.0}
+# 1.3 — Cauchy-Euler, solución general (sin condición inicial)
+ecuaciones=["yp", "(2*x*yp - 2*y + x**3*log(x))/x**2"], variables_estado=["y", "yp"],
+variable_independiente="x"
 
-# Separable escrito como dy/dx, con su solución exacta para contrastar
-ecuaciones=["3*x*y**2"], variables_estado=["y"], y0=[1.0],
-intervalo=[0, 0.7], variable_independiente="x",
-solucion_exacta="2/(2 - 3*x**2)"
+# 1.5 — péndulo con ω₀ simbólico
+ecuaciones=["thetapunto", "-w0**2*sin(theta)"], variables_estado=["theta", "thetapunto"],
+parametro="w0", rango_parametro=[0, None], parametros={"w0": 1.0},
+y0=[1.0472, 0.0], intervalo=[0, 20]
+
+# 2.2 — clasificación según un parámetro (analizar_equilibrios)
+ecuaciones=["y", "-4*x - gamma*y"], variables_estado=["x", "y"],
+parametro="gamma", rango_parametro=[0, None]
+
+# 4.1 — mapa tienda (mapa definido a trozos)
+ecuaciones=["x"], variables_estado=["x"], tipo_de_sistema="mapa_discreto",
+trozos=[{"expresion": "2*x", "desde": 0, "hasta": 0.5},
+        {"expresion": "2*(1 - x)", "desde": 0.5, "hasta": 1}],
+separacion_inicial=1e-10
 ```
+
+Campos que deciden el desarrollo, todos opcionales:
+
+| Campo | Para qué |
+| --- | --- |
+| `enunciado` | De él se leen el método que nombra ("Bernoulli", "Hopf"…) y lo que pide ("intervalo máximo", "trayectorias", "separatriz", "periodo"…), que decide qué secciones tiene el desarrollo |
+| `metodo_analitico` | El método pedido. Si la ecuación no tiene esa forma, se dice y se aplica el que corresponde |
+| `pedidos` | Lo que pide el enunciado, explícito (`intervalo_maximo`, `separatriz`, `ciclo_limite`…) |
+| `parametro`, `rango_parametro` | Parámetro que queda simbólico (γ, μ, ω₀) y su dominio |
+| `region` | Cotas de las variables (el cuadrante biológico del 2.3) |
+| `solucion_particular` | La y₁ conocida de una Riccati (si falta, se busca una polinómica) |
+| `trozos`, `separacion_inicial` | Mapa a trozos y δ₀ del horizonte de predictibilidad |
 
 Se usa `**` para la potencia (nunca `^`). Funciones disponibles: `sin`, `cos`,
 `tan`, `exp`, `log`/`ln`, `sqrt`, `sinh`, `cosh`, `tanh`, las inversas, `Abs`,
-`sign`, `floor`, `ceiling`, y las constantes `pi` y `E`. Todo nombre que no sea
-variable de estado ni función debe declararse en `parametros`.
+`sign`, `Min`, `Max`, `floor`, `ceiling`, y las constantes `pi` y `E`. Todo
+nombre que no sea variable de estado ni función debe declararse en
+`parametros` o en `parametro`.
 
-## Qué sabe hacer y qué contesta cuando no sabe
+## Qué resuelve: las familias del balotario
 
-El agente no finge. Cada operación que la propuesta pide está en una de tres
-situaciones, y el servidor las distingue explícitamente:
+Cada familia se reconoce por su forma (`identificar_*`) y ejecuta el
+procedimiento del balotario (`desarrollar_*`), generalizado: el mismo método
+funciona con otros coeficientes, parámetros y condiciones iniciales. No hay
+soluciones particulares del balotario escritas en el código.
 
-| Operación | Estado | Qué pasa si se la piden |
-| --- | --- | --- |
-| Integración numérica | **implementada** | La resuelve |
-| Estabilidad: equilibrios, Jacobiano, autovalores | **implementada** | La resuelve |
-| Retratos de fase 1D / 2D / 3D | **implementada** | Los dibuja |
-| Verificación (5 comprobaciones) | **implementada** | Siempre se ejecuta |
-| Lyapunov, Poincaré, cuantificar el caos | pendiente | `analisis=['caos']` → `estado: pendiente_de_implementacion` con el detalle de qué falta |
-| Barridos y diagramas de bifurcación | pendiente | `analisis=['bifurcaciones']` → idem |
-| Resolución analítica (simbólica) | pendiente | `analisis=['solucion_analitica']` → idem |
-| Mapas iterados `x_{n+1} = f(x_n)` | **fuera de alcance** | Declarado en `limites`; el motor integra EDOs continuas |
+| Tema | Familia | Problemas | Procedimiento que se calcula |
+| --- | --- | --- | --- |
+| 1 | Separable | 1.1 | g(x)h(y), primitivas, despeje, constante, intervalo maximal por dominio de continuidad y límites |
+| 1 | Lineal de 1.er orden | 1.2 (pasos 5–6) | Forma estándar, μ = e^{∫P}, (μy)' = μQ |
+| 1 | Bernoulli | 1.2 | v = y^{1−n}, división entre yⁿ, ecuación lineal en v, regreso con ramas ± |
+| 1 | Riccati | 1.4 | Verificación de y₁, y = y₁ + 1/u, ecuación lineal en u |
+| 1 | Cauchy-Euler | 1.3 | Ecuación indicial, sistema fundamental, wronskiano, variación de parámetros |
+| 1–2 | Conservativo / hamiltoniano | 1.5, 2.4 | Integral primera, equilibrios por energía, separatriz, lazo homoclínico, periodo con K(k) |
+| 2 | Sistema lineal plano | 2.1, 2.2 | Autovalores, autovectores, τ/Δ/D, solución general, trayectorias, variedades; regímenes según un parámetro y plano traza-determinante |
+| 2 | No lineal plano | 2.3 | Equilibrios por casos de factores, jacobiano, clasificación, nulclinas, variedades de las sillas y cuencas |
+| 2 | Ciclo límite | 2.5 | Forma polar, región anular, hipótesis de Poincaré–Bendixson comprobadas una por una |
+| 3 | Bifurcación en 1D | 3.1–3.3 | Ramas x*(μ), estabilidad por tramos, condiciones de Sotomayor, biestabilidad e histéresis |
+| 3 | Línea de fase | 3.1–3.3 | Los equilibrios de un régimen con el parámetro fijado: f(x*) = 0, f'(x*) y signo de f |
+| 3 | Hopf | 3.4 | λ(μ) = α ± iω, condición espectral, transversalidad, forma polar, primer coeficiente de Lyapunov |
+| 3 | Homoclínica | 3.5 | Hamiltoniano no perturbado, lazo, integral de Melnikov, disparo numérico, divergencia del periodo |
+| 4 | Mapa unidimensional | 4.1 | Derivada a trozos, puntos fijos y multiplicadores, exponente de Lyapunov, horizonte n* |
 
-Pedir algo pendiente **no es un error**: la solicitud se acepta, los demás
-análisis se ejecutan con normalidad y el bloque correspondiente informa que
-está pendiente. Un análisis que no se reconoce de ninguna forma sí se rechaza,
-y el mensaje enumera lo implementado y lo pendiente por separado.
+Un problema que no pertenece a ninguna familia se trata numéricamente, y el
+desarrollo lo dice: planteamiento, equilibrios y su linealización si el
+sistema es autónomo, e integración con control de error.
 
-Los nombres se resuelven por alias, para que pedirlo de forma natural llegue a
-la capacidad correcta en un solo paso: `lyapunov`, `poincare` y `sensibilidad`
-van a `caos`; `hopf`, `barrido` y `silla_nodo` a `bifurcaciones`; `simbolica` y
-`analitica` a `solucion_analitica`; `equilibrios` y `autovalores` a
-`estabilidad`. Tolera mayúsculas, guiones y espacios.
+### FUERA DE ALCANCE POR AHORA
+
+Los problemas 4.2 a 4.5 y todo el Tema 5 están en el balotario solo con su
+enunciado. El agente los reconoce (por el enunciado o por la forma) y responde
+que están fuera de alcance, sin sustituirlos por otra cosa:
+
+| Problema | Tema |
+| --- | --- |
+| 4.2 | Duplicación de periodo del mapa logístico (y en general mapas con parámetro) |
+| 4.3 | Cascada de Feigenbaum |
+| 4.4 | Disipatividad y elipsoide atrapante de Lorenz |
+| 4.5 | Espectro de Lyapunov de un flujo |
+| 5.1 – 5.5 | Dimensión de caja, herradura de Smale, mapa de Hénon, secciones de Poincaré, Kaplan-Yorke |
+
+Si el sistema es integrable (Lorenz, Rössler) se ofrece solo su tratamiento
+numérico, dicho como tal.
 
 ### Mapas discretos: el agente pregunta en vez de adivinar
 
 `x_{n+1} = r·x_n(1−x_n)` y `ẋ = r·x(1−x)` se escriben con el mismo lado
 derecho, así que el servidor **no puede** distinguirlos mirando las ecuaciones.
-Y la diferencia no es cosmética: con r=3.8 el mapa es caótico, mientras que la
-EDO continua converge monótonamente a un equilibrio. Integrar un mapa como si
-fuera una EDO devuelve números válidos **para la ecuación equivocada**.
+Y la diferencia no es cosmética: con r = 3.8 el mapa es caótico (λ ≈ 0.43),
+mientras que la EDO continua converge monótonamente a un equilibrio.
 
 Quien sí lo sabe es el usuario. Por eso la distinción es un campo del contrato,
 `tipo_de_sistema`, y no una suposición:
 
 | Valor | Qué hace el servidor |
 | --- | --- |
-| `edo_continua` (por defecto) | Resuelve con normalidad |
-| `mapa_discreto` | Rechaza con `etapa: fuera_de_alcance` y explica la diferencia de dinámica |
+| `edo_continua` (por defecto) | Lo trata como ecuación diferencial |
+| `mapa_discreto` | Un mapa de una variable sin parámetro simbólico: procedimiento del 4.1. Uno de dos variables o con parámetro: fuera de alcance |
 | `no_estoy_seguro` | Devuelve `etapa: aclaracion_necesaria` con la pregunta para el usuario y las dos opciones con sus consecuencias, **sin calcular nada** |
 
 Además hay una heurística de notación: si la variable independiente es un
@@ -193,16 +249,25 @@ continua — nadie escribe `dx/dn`. La heurística es deliberadamente estrecha
 para no estorbar: `x1, x2` y `x, y` son nombres normales de componentes de un
 sistema continuo y no disparan nada.
 
-Los problemas 4.1 a 4.3 y 5.3 del balotario son mapas.
-
 ## La verificación es un portón, no un adorno
 
-Toda respuesta trae un bloque `verificacion`. Si no se supera, el resultado
-llega con `ok: false`, la `etapa` que falló y **sin conclusiones**: no hay
-análisis que interpretar. Las etapas posibles son `validacion_solicitud`,
-`compilacion`, `resolucion` y `verificacion`.
+Toda respuesta trae un bloque `verificacion`. Si una comprobación concluyente no
+se supera, el resultado llega con `ok: false`, la `etapa` que falló y **sin
+conclusiones** ni desarrollo que interpretar. Las etapas posibles son
+`validacion_solicitud`, `compilacion`, `interpretacion`, `resolucion` y
+`verificacion`.
 
-Las comprobaciones no confían en el integrador que produjo la solución:
+Hay dos clases de comprobaciones y las dos entran al mismo veredicto:
+
+**Simbólicas, del desarrollo.** Cada familia comprueba lo que calculó: que la
+solución general y la particular satisfagan la ecuación (y' − f ≡ 0, X' − AX ≡ 0)
+y la condición inicial; que derivar la solución implícita devuelva la ecuación;
+que la y₁ de una Riccati sea solución; que dH/dt ≡ 0; que las ramas de
+equilibrio anulen el campo; que la condición espectral y la de transversalidad
+de Hopf se cumplan.
+
+**Numéricas, independientes del cálculo simbólico.** No confían en lo que
+contrastan:
 
 | Comprobación | Contra qué contrasta |
 | --- | --- |
@@ -210,16 +275,18 @@ Las comprobaciones no confían en el integrador que produjo la solución:
 | `residuo` | El propio campo, sustituyendo la trayectoria en la EDO. |
 | `convergencia` | Una reintegración con tolerancias 100 veces más finas. |
 | `metodo_alternativo` | Una reintegración con otro integrador (DOP853 o Radau). |
-| `solucion_exacta` | La solución analítica, cuando el cliente la aporta. |
+| `solucion_exacta` | La solución analítica del desarrollo (o la que aporte el cliente). |
+| `integral_primera` | La energía/hamiltoniano del desarrollo a lo largo de la trayectoria. |
+| `*_contra_autovalores_numericos` | La clasificación exacta frente a los autovalores de numpy. |
+| `ramas_contra_muestreo_numerico` | Las ramas de una bifurcación frente al signo de f en una malla. |
+| `linea_de_fase_coherente` | La estabilidad por f'(x*) frente al signo de f a cada lado. |
+| `melnikov_vs_disparo`, `radio_del_ciclo_numerico`, `lyapunov_numerico`… | Las predicciones analíticas de Tema 3 y 4.1 frente a integraciones o iteraciones. |
 
 **Sistemas caóticos.** Dos integraciones correctas de un sistema sensible
-*tienen* que separarse a tiempo largo. Exigir coincidencia punto a punto en
-todo el intervalo marcaría como inválido el atractor de Lorenz, que es uno de
-los casos de demostración del proyecto. Por eso el veredicto se decide en el
-tramo inicial, y cuando dos integraciones coinciden al principio y divergen
-después se reporta `sensibilidad_detectada` junto al instante de separación:
-es un hallazgo legítimo, no un fallo. A tiempo largo la comparación válida es
-la estadística (medias y desviaciones), que también se reporta.
+*tienen* que separarse a tiempo largo. Por eso el veredicto de convergencia se
+decide en el tramo inicial, y cuando dos integraciones coinciden al principio y
+divergen después se reporta `sensibilidad_detectada`: es un hallazgo legítimo,
+no un fallo. A tiempo largo la comparación válida es la estadística.
 
 El residuo estima su propio error: la derivada por diferencias finitas tiene un
 error de truncamiento O(h²)·x''' que no dice nada sobre la calidad del
@@ -228,72 +295,83 @@ integrador, así que la prueba lo descuenta antes de denunciar nada.
 ## Organización
 
 ```
-mcp_server.py               Servidor MCP (stdio): ping, resolver_graficar_y_analizar_edo, listar_balotario
+mcp_server.py                  Servidor MCP (stdio): las seis herramientas
 orquestacion/
-  capacidades.py            Núcleo: el flujo completo y el registro de análisis
-  contratos.py              SolicitudEDO, forma de la respuesta, conversión a JSON
-  catalogo.py               Carga y valida balotario/tema_*.json
+  capacidades.py               El recorrido completo, etapa por etapa (no calcula: ordena)
+  interpretacion.py            Solicitud → Problema; lee del enunciado el método y lo pedido
+  contratos.py                 Qué puede pedir un cliente y la forma de la respuesta
+  catalogo.py                  Carga y valida balotario/tema_*.json
+  informe.py, servidor_local.py   El informe de la sesión y su servidor http local
 matematica/
-  expresiones.py            Compila texto a funciones con sympy (frontera de seguridad)
-  datos_validacion.py       Valida modelo, y0, intervalo y parámetros
-  modelo_edos.py            Integración con solve_ivp
-  analisis_estabilidad.py   Jacobiano numérico, autovalores y clasificación
-  validacion_solucion.py    El portón de verificación
-  analisis_caos.py          STUB: no implementado
-  analisis_bifurcaciones.py STUB: no implementado
+  problema.py                  El problema interpretado (campo exacto, parámetro, CI, región…)
+  clasificacion.py             Familias, selección del método, alcance (lo fuera de alcance)
+  desarrollo.py                Representación estructurada del desarrollo (secciones, resultados…)
+  primer_orden.py              Separable, lineal, Bernoulli, Riccati (Tema 1)
+  segundo_orden.py             Cauchy-Euler (1.3)
+  conservativos.py             Integral primera, separatriz, periodo elíptico (1.5, 2.4)
+  sistemas_planos.py           Lineal plano, no lineal plano, ciclo límite (Tema 2)
+  analisis_estabilidad.py      Equilibrios exactos, linealización, clasificación, regímenes
+  analisis_bifurcaciones.py    Bifurcación 1D, línea de fase, Hopf, homoclínica (Tema 3)
+  analisis_caos.py             Mapas unidimensionales: Lyapunov y horizonte (4.1)
+  muestreo.py                  Curvas, órbitas y campos muestreados para figuras y evidencia
+  expresiones.py               Texto → sympy (frontera de seguridad)
+  modelo_edos.py               Integración con solve_ivp y planteamiento del tratamiento numérico
+  validacion_solucion.py       El portón numérico
 visualizacion/
-  html.py                   Figuras interactivas con plotly
-  plantilla.py              Plantilla del informe que abre el usuario
-orquestacion/
-  informe.py                Acumula la conversación y publica el informe
+  html.py                      Figuras plotly (numéricas y del desarrollo), por roles
+  plantilla.py, plantillas/informe.html   El informe que abre el usuario
 balotario/
-  balotario.tex             Problemario original del grupo (25 problemas, 5 temas)
-  tema_01.json .. tema_05.json   Los 25 problemas convertidos
-tests/                      132 pruebas
+  balotario.tex                Problemario original del grupo (25 problemas, 5 temas)
+  tema_01.json .. tema_05.json Los 25 problemas convertidos
+tests/                         280 pruebas
 ```
 
-Un `resolver_graficar_y_analizar_edo` recorre: `contratos` valida la solicitud → `expresiones`
-compila el campo → `modelo_edos` integra → `validacion_solucion` verifica →
-`analisis_estabilidad` analiza → `html` dibuja. `capacidades` es quien ordena
-ese recorrido y el único módulo que los conoce a todos.
+`capacidades` es quien ordena el recorrido y el único módulo que conoce a
+todos; cada etapa vive en su capa. Ninguna familia sabe de MCP ni de plotly:
+producen un `Desarrollo` (fórmulas en LaTeX salidas de objetos sympy,
+resultados con nombre, validaciones y especificaciones de gráficas con roles),
+y `visualizacion` lo convierte en figuras.
 
-El HTML viaja inline por el transporte, nunca a disco: una ruta local no le
-sirve a un cliente que puede estar en otra máquina. Su peso queda acotado
-dibujando como máximo `MAXIMO_PUNTOS_TRAZA` puntos por traza (definido una sola
-vez, en `visualizacion/html.py`), con independencia de cuántos tenga la malla;
-si aun así no cupiera, se baja la resolución antes de rendirse.
+### Clasificación de los módulos originales y qué se hizo con cada uno
 
-Ese documento se publica además en una URL pública del laboratorio, así que
-todo lo que el cliente controla -- título, nombres de variable y de parámetro --
-se escapa antes de entrar al HTML: un título con `</title><script>` llegaría si
-no al navegador de cualquiera que abra el enlace.
+El prototipo tenía en `matematica/` ocho módulos. Se revisó el código de cada
+uno (no su nombre) y se clasificó así:
+
+| Módulo original | Clase | Qué se hizo |
+| --- | --- | --- |
+| `expresiones.py` | A. Funcional y reutilizable | Se conserva como frontera de seguridad; se agregó el parseo simbólico con números exactos (0.5 → 1/2) que necesita el desarrollo |
+| `validacion_solucion.py` | A. Funcional y reutilizable | Se conserva como portón numérico; se agregaron `integral_primera` y un criterio mixto absoluto/relativo para `solucion_exacta` |
+| `modelo_edos.py` | B. Funcional pero incompleto | Se conserva la integración; el stub `resolver_analitico` se reemplazó por las familias, y el tratamiento numérico ahora hace su planteamiento |
+| `analisis_estabilidad.py` | C. Provisional | Jacobiano por diferencias finitas y solo "estable / inestable / no concluyente". Se reescribió: todo exacto, clasificación fina por τ, Δ, D, equilibrios por casos de factores y regímenes según un parámetro |
+| `analisis_bifurcaciones.py` | C. Provisional (stub) | Se implementó el Tema 3 completo |
+| `analisis_caos.py` | C (stub) y F | Se implementó solo el 4.1; el resto del Tema 4 y el Tema 5 quedan fuera de alcance, declarados en `clasificacion.py` |
+| `datos_validacion.py` | D. Redundante | Una función que solo usaba el integrador y repetía la validación de `contratos`: se fusionó en `modelo_edos.py` |
+| `buscar_equilibrios`, `es_autonomo` (en `orquestacion/capacidades.py`) | E. Mal ubicados | Era matemática dentro de la orquestación: se movieron a `analisis_estabilidad.py` |
 
 ### El informe de la sesión
 
 Un resultado de herramienta MCP es **datos para el modelo**, no algo que la
 interfaz dibuje: ningún cliente de chat renderiza el HTML que devuelve una
-tool. Mandar la figura dentro de la respuesta no sirve para que el usuario la
-vea, y encima gasta contexto. Lo que sí funciona es un enlace.
+tool. Lo que sí funciona es un enlace.
 
 `orquestacion/informe.py` mantiene un documento por conversación. Cada análisis
-agrega una sección -- el planteamiento, las figuras, los equilibrios con su
-clasificación, la tabla de verificación y lo que quedó pendiente -- y el
-documento entero se reescribe sobre la **misma** dirección. El usuario abre el
-enlace una vez, deja la pestaña abierta, y la página se recarga sola mientras
-la conversación avanza.
+muestra **primero las gráficas** (las del desarrollo antes que las numéricas),
+después el enunciado y el desarrollo completo con las fórmulas compuestas por
+KaTeX, las conclusiones y la tabla de verificación. Lo fuera de alcance se avisa
+arriba. El documento se reescribe sobre la **misma** dirección: el usuario abre
+el enlace una vez y la página se actualiza sola.
 
 **Una sesión no es un proceso.** El cliente MCP levanta este servidor una vez y
 lo mantiene vivo para todas las conversaciones, y el protocolo no le dice al
-servidor en qué chat está. Sin resolverlo, el informe acumulaba las preguntas de
-chats distintos y no empezaba de cero nunca. Dos mecanismos, en este orden:
+servidor en qué chat está. Dos mecanismos, en este orden:
 
 1. La herramienta **`nuevo_informe`**, que el agente llama al empezar una
    conversación. Es el camino bueno: explícito y exacto.
 2. **Relevo por inactividad** (`EDOS_INACTIVIDAD_MIN`, 120 por defecto) como red
    de seguridad para cuando el agente no lo haga.
 
-Ninguno pierde nada: el informe anterior queda en su archivo, con su fecha y su
-hora en el nombre.
+En local solo se conserva el último informe: al escribir uno nuevo se borran
+los anteriores de `informes/`, para que la carpeta no crezca sin límite.
 
 El destino depende de dónde corra el servidor:
 
@@ -301,11 +379,6 @@ El destino depende de dónde corra el servidor:
 | --- | --- | --- |
 | Contenedor en la red del lab | SeaweedFS, clave estable `informe-<sesion>.html` | URL pública |
 | Local por stdio | `informes/` junto al proyecto | `http://127.0.0.1:<puerto>/informe-...` |
-
-La ruta local sí le sirve al usuario en ese caso, porque el servidor corre en
-su propia máquina: es exactamente la situación en la que stdio tiene sentido.
-La herramienta `informe` devuelve la dirección en cualquier momento, incluso
-antes del primer análisis, para que pueda mirar cómo se llena.
 
 Un análisis que **no** supera una etapa también entra al informe, con su etapa
 y su error. Esconderlo dejaría el documento contando una historia más limpia
@@ -330,10 +403,11 @@ docker compose run --rm edos                            # sesión stdio a mano
 
 El cliente pide la lista de herramientas **una sola vez, al conectar**: después
 de cambiar el servidor hay que reiniciar el cliente, o se sigue viendo lo de
-antes.
+antes. `ping` devuelve `revision`, una huella del código que está corriendo,
+para comprobarlo.
 
-Tres variables de entorno, todas opcionales. Sin ellas el agente funciona igual
-y el informe queda en `informes/`:
+Variables de entorno, todas opcionales. Sin ellas el agente funciona igual y el
+informe queda en `informes/`:
 
 | Variable | Para qué |
 | --- | --- |
@@ -360,84 +434,81 @@ python -m unittest discover -s tests -v
 
 | Archivo | Cubre |
 | --- | --- |
-| `test_expresiones.py` | Compilación válida y rechazo de entrada hostil. |
-| `test_balotario.py` | Cada problema del Tema 1 contra su solución esperada. |
-| `test_capacidades.py` | El flujo completo, el portón y la serialización JSON. |
-| `test_mcp_server.py` | Registro de herramientas y limpieza de stdout. |
-| `test_catalogo.py` | Consistencia del catálogo contra el `.tex`. |
-| `test_visualizacion.py` | Que el documento HTML escape lo que controla el cliente. |
-| `test_informe.py` | Acumulación de la sesión, dirección estable y plotly una sola vez. |
+| `test_tema1.py` | Separable, lineal, Bernoulli, Riccati, Cauchy-Euler y péndulo: el ejercicio del balotario y equivalentes con otros datos, con sus resultados intermedios. |
+| `test_tema2.py` | Sistemas lineales (silla, foco, centro, regímenes según γ), no lineales, hamiltonianos y ciclos límite. |
+| `test_tema3.py` | Silla-nodo, transcrítica, horquillas con histéresis, Hopf super y subcrítica, homoclínica y línea de fase. |
+| `test_tema4.py` | El 4.1 y mapas equivalentes; lo fuera de alcance (4.2–4.5, Tema 5). |
+| `test_clasificacion.py` | Lectura del enunciado, selección y rechazo del método, alcance. |
+| `test_balotario.py` | Integridad del catálogo y que el agente reproduce cada problema del balotario (y corrige 2.5 y 3.5). |
+| `test_capacidades.py` | El recorrido completo, el portón, la degradación honesta y la serialización JSON. |
+| `test_mcp_server.py` | Registro y esquema de las herramientas, llamada por el protocolo y limpieza de stdout. |
+| `test_informe.py` | El informe: desarrollo con fórmulas, gráficas primero, dirección estable, sesión. |
+| `test_visualizacion.py` | Escapado del HTML y roles de todas las figuras, numéricas y del desarrollo. |
+| `test_expresiones.py`, `test_catalogo.py` | Entrada hostil; procedencia del catálogo contra el `.tex`. |
 
-El balotario funciona como vara de medir: `test_balotario.py` pasa cada
-ejercicio por el solver y lo compara con la solución que el `.tex` demuestra.
-Los problemas marcados con `ci_derivada: true` tienen una condición inicial
-que no está en el enunciado original: el `.tex` da la solución general, y para
-concretar un PVI hubo que fijar las constantes. Cada caso explica en `notas`
-de dónde sale.
+Las pruebas de familia no comparan solo la respuesta final: comprueban la
+clasificación, el método elegido, las transformaciones (v = y^{1−n}, y = y₁ + 1/u),
+los resultados intermedios (factor integrante, ecuación indicial, wronskiano,
+autovalores, condiciones de Sotomayor, integral de Melnikov), la solución, las
+condiciones iniciales, el análisis cualitativo, la consistencia analítico-numérica,
+las gráficas y las validaciones.
 
 ### Qué cubre el balotario convertido
 
-Los 25 problemas de los 5 temas están en `balotario/tema_0N.json`. No todos son
-problemas de valor inicial, así que cada uno declara `verificable_con_solver`:
+Los 25 problemas de los 5 temas están en `balotario/tema_0N.json`:
 
-| Tema | Problemas | Verificables hoy | Tipo de objeto |
+| Tema | Problemas | Los resuelve el agente | Tipo de objeto |
 | --- | --- | --- | --- |
-| 1. EDOs lineales y no lineales | 5 | 5 | PVI de 1ª y 2ª orden |
+| 1. EDOs lineales y no lineales | 5 | 5 | EDO de 1.er y 2.º orden |
 | 2. Retratos de fase | 5 | 5 | Sistemas autónomos 2D |
 | 3. Bifurcaciones | 5 | 5 | Familias paramétricas |
-| 4. Sistemas caóticos | 5 | 0 | Mapas discretos y demostraciones |
+| 4. Sistemas caóticos | 5 | 1 (4.1) | Mapas discretos y demostraciones |
 | 5. Atractores extraños | 5 | 0 | Fractales, mapas 2D, Poincaré |
 
-**10 de 25 se verifican con el motor actual.** Los 15 restantes no por dos
-razones distintas, que conviene no confundir:
+Los 9 restantes (4.2 a 4.5 y 5.1 a 5.5) **no tienen solución en el `.tex`**:
+solo enunciado. Se registran con `solucion_esperada.tipo: "pendiente"`; no se
+inventaron respuestas. `listar_balotario` informa el alcance de cada problema.
 
-- **9 problemas no tienen solución en el `.tex`** (4.2 a 4.5 y 5.1 a 5.5): solo
-  enunciado. Se registran con `solucion_esperada.tipo: "pendiente"` y
-  `solucion_en_tex: false`. No se inventaron respuestas; lo que aparece en
-  `datos_del_enunciado` son las cifras que el propio enunciado aporta.
-- **Los temas 4 y 5 son mayormente mapas discretos** (tienda, logístico, Hénon)
-  y demostraciones analíticas. El motor integra EDOs continuas con `solve_ivp` y
-  no itera mapas: cada problema dice por qué en `motivo_no_verificable`.
+**Dos problemas del balotario tienen errores**, documentados en el campo
+`revision_matematica` de su JSON (el `.tex` no se modificó):
 
-Según el tipo de respuesta, el test verifica de forma distinta:
+- **2.5.** El anillo K = {1/2 ≤ r ≤ 2} contiene el equilibrio (1, 0) — en
+  polares θ̇ = 1 − cos θ se anula en θ = 0 y ṙ = 0 en r = 1 —, así que
+  Poincaré–Bendixson no aplica y el sistema **no tiene órbitas periódicas**:
+  toda trayectoria con r > 0 tiende a (1, 0). Las pruebas numéricas anteriores
+  no lo veían porque el radio converge a 1 en los dos casos.
+- **3.5.** La segunda integral de Melnikov es I₂ = 36/35, no 6/7: M(μ) se anula
+  en μ = −6/7, no en −5/7. Además, como la perturbación no es pequeña, el valor
+  real de la conexión (disparo numérico) es μ* ≈ −0.8645, y el ciclo límite
+  existe para −1 < μ < μ* (nace en el Hopf supercrítico de μ = −1), no "al
+  cruzar μc".
 
-| `solucion_esperada.tipo` | Cómo se comprueba |
-| --- | --- |
-| `analitica_explicita` | Comparación punto a punto con la solución cerrada. |
-| `invariantes` | Conservación de energía/hamiltoniano a lo largo del flujo. |
-| `clasificacion_equilibrios` | Equilibrios exactos con sympy + autovalores. |
-| `bifurcacion` | Un caso por régimen del parámetro, con sus equilibrios. |
-| `ciclo_limite` | Convergencia asintótica del radio, desde dentro y desde fuera. |
-| `analitico_discreto` | Consistencia interna de los valores registrados. |
-| `pendiente` | Solo que esté declarado como tal, con su motivo. |
-
-El Tema 3 es, de hecho, la especificación de
-`matematica/analisis_bifurcaciones.py`: cuando se implemente, esos casos ya son
-su suite de aceptación.
+Además se corrigió en el JSON un valor transcrito mal (3.3B, μ = 0.5: el
+equilibrio es ±√((1+√3)/2) = ±1.16877089, no ±1.16877082).
 
 ## Estado y pendientes
 
-Implementado: compilación de EDOs arbitrarias, integración, el portón de
-verificación completo, equilibrios exactos con sympy, Jacobiano, autovalores y
-clasificación, visualización HTML 1D/2D/3D, y el servidor MCP sobre stdio.
+Implementado: las 14 familias de la tabla, con su desarrollo, validaciones
+simbólicas y numéricas y figuras; el tratamiento numérico verificado para lo
+que no tiene familia; la detección de lo fuera de alcance; el informe con el
+desarrollo compuesto; el servidor MCP sobre stdio y su contenedor.
 
-Pendiente:
+Pendiente, a la espera de que el balotario lo desarrolle:
 
-- `matematica/analisis_caos.py`: sensibilidad, máximo exponente de Lyapunov con
-  renormalización y secciones de Poincaré. Hoy es un stub que informa que no
-  está implementado en lugar de devolver números. Punto de partida disponible:
-  la verificación ya detecta y fecha la sensibilidad a condiciones iniciales.
-- `matematica/analisis_bifurcaciones.py`: barridos paramétricos, ramas de
-  equilibrio y detección de silla-nodo, horquilla y Hopf. Mismo criterio de
-  stub. Punto de partida: `capacidades.buscar_equilibrios` ya resuelve F=0 de
-  forma exacta para unos parámetros dados.
-- Iteración de mapas discretos, que desbloquearía el Tema 4 completo y el 5.3.
-  Es un motor distinto del integrador de EDOs, no una adaptación.
-- Los 9 problemas del balotario sin solución en el `.tex` (4.2 a 4.5, 5.1 a
-  5.5) siguen pendientes de resolver por el equipo.
-- Empaquetado: el `Dockerfile` que figura en la propuesta se eliminó porque
-  estaba vacío (0 bytes) y el alcance actual es solo transporte stdio. Cuando
-  haga falta HTTP o contenedor, se escribe desde cero.
+- Los problemas 4.2 a 4.5 (duplicación de periodo, Feigenbaum, disipatividad,
+  espectro de Lyapunov de flujos) y todo el Tema 5. Cuando el `.tex` tenga su
+  solución, cada uno será una familia nueva en `clasificacion.FAMILIAS` y sus
+  ejercicios, su prueba de aceptación.
+
+Límites conocidos de lo implementado:
+
+- La línea de fase con infinitos equilibrios (sen x) estudia los de una ventana
+  y no informa las cuencas que tocan su borde.
+- En un sistema no lineal, un centro de la linealización se informa como no
+  concluyente: decidirlo exige un argumento no lineal, que solo existe hoy para
+  los sistemas conservativos.
+- Los trayectos de un foco lineal no tienen ecuación cartesiana cerrada en el
+  desarrollo (son espirales logarítmicas); se describen con la solución general.
 
 ### Si alguna vez hay que exponerlo por red
 
@@ -448,11 +519,11 @@ una línea, pero **no basta con eso**. Faltaría:
 
 - **Autenticación.** El servidor no tiene ninguna: `MCPServer` soporta
   `auth_server_provider`, `token_verifier` y `auth`, y hoy no se usan.
-- **Un tope de tiempo por llamada.** No existe. Las cotas actuales (dimensión
-  ≤ 3, puntos ≤ 200 000) mantienen el peor caso medido en ~9 s para un sistema
-  rígido, que en local es irrelevante pero expuesto es un vector de agotamiento.
-- **Herramientas asíncronas.** Son síncronas: una integración larga bloquea el
-  bucle de eventos, de modo que un cliente puede dejar sin servicio a los demás.
+- **Un tope de tiempo por llamada.** No existe. El caso más lento medido es el
+  3.5 (unos 8 s, por el disparo numérico); en local es irrelevante, pero
+  expuesto es un vector de agotamiento.
+- **Herramientas asíncronas.** Son síncronas: un cálculo largo bloquea el bucle
+  de eventos, de modo que un cliente puede dejar sin servicio a los demás.
 - **HTTPS y un host alcanzable**, si el destino es un conector remoto.
 
 ### Sobre borrar `balotario.tex`
@@ -460,7 +531,7 @@ una línea, pero **no basta con eso**. Faltaría:
 El `.tex` sigue en el proyecto a propósito. Los JSON conservan los enunciados,
 los resultados finales y las fórmulas clave, pero **no las demostraciones paso
 a paso**: el `.tex` tiene unas 2 800 líneas de desarrollo algebraico que el
-catálogo no reproduce. Además, `test_catalogo.py` comprueba contra él que
-ningún ejercicio sea inventado; si falta, ese test se salta con un mensaje
-explícito en vez de fallar, y la procedencia (`tema.origen`) queda registrada en
-cada JSON pero ya no se puede verificar contra nada.
+catálogo no reproduce, y es la referencia del procedimiento que implementa cada
+familia. Además, `test_catalogo.py` comprueba contra él que ningún ejercicio
+sea inventado; si falta, ese test se salta con un mensaje explícito en vez de
+fallar.

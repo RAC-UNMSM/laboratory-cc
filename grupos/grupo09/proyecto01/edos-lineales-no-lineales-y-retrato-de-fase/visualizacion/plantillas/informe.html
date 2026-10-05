@@ -33,6 +33,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/plotly.js@3.6.0/dist/plotly.min.js" charset="utf-8"></script>
 
+<!-- KaTeX compone las fórmulas del desarrollo. Sin red, cada fórmula se
+     muestra como su LaTeX en monoespaciada: se lee igual, solo que sin componer. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" charset="utf-8"></script>
+
 <style>
 /* ===================== TOKENS ===================== */
 :root{
@@ -342,6 +347,59 @@ figure.lamina figcaption{
   display:flex; flex-wrap:wrap; gap:6px 18px; justify-content:space-between;
 }
 
+/* ===================== DESARROLLO MATEMÁTICO ===================== */
+.enunciado{
+  margin:0 0 22px; padding:14px 18px; background:var(--hoja);
+  border-left:3px solid var(--filete); font:16px/1.6 var(--serif); color:var(--tinta);
+}
+.enunciado .marca-enunciado{
+  display:block; font:600 10px/1 var(--sans); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin-bottom:8px;
+}
+.fichas{display:flex; flex-wrap:wrap; gap:6px 8px; margin:0 0 18px}
+.ficha-chip{
+  font:600 11px/1 var(--sans); letter-spacing:.06em; padding:6px 9px; border-radius:2px;
+  border:1px solid var(--regla); color:var(--tinta-media); background:var(--hoja);
+}
+.ficha-chip b{color:var(--tinta); font-weight:700}
+.desarrollo section{margin:0 0 26px}
+.desarrollo h3{
+  font:600 17px/1.35 var(--serif); margin:0 0 10px; color:var(--tinta);
+  padding-bottom:5px; border-bottom:1px solid var(--regla);
+}
+.desarrollo h3 .num{font:600 12px var(--mono); color:var(--tinta-tenue); margin-right:8px}
+.formula{
+  margin:6px 0; padding:4px 2px; overflow-x:auto; overflow-y:hidden;
+  font:14px/1.6 var(--mono); color:var(--tinta);
+}
+.formula .katex-display{margin:.35em 0}
+.formula.destacada{
+  margin:10px 0; padding:6px 14px; background:var(--hoja);
+  border:1px solid var(--filete); border-left:3px solid var(--serie-1); border-radius:2px;
+}
+.rotulo{margin:16px 0 4px; font:600 14px/1.5 var(--serif); color:var(--tinta)}
+.desarrollo p.prosa{margin:6px 0 8px; font:15px/1.6 var(--serif); color:var(--tinta-media)}
+.desarrollo .tabla{margin:8px 0 12px}
+.conclusiones{margin:0; padding-left:22px; font:15.5px/1.6 var(--serif); color:var(--tinta)}
+.conclusiones li{margin-bottom:8px}
+.alcance{
+  margin:0 0 20px; padding:14px 18px; background:var(--hoja);
+  border-left:3px solid var(--inestable);
+}
+.alcance strong{display:block; font:600 11px/1 var(--sans); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--inestable); margin-bottom:6px}
+.alcance p{margin:4px 0 0; font:15px/1.55 var(--serif)}
+.laminas{display:grid; grid-template-columns:1fr; gap:0 18px}
+@media (min-width:980px){
+  .laminas.varias{grid-template-columns:1fr 1fr}
+  .laminas.varias figure.lamina.ancha{grid-column:1 / -1}
+}
+.tipo-prueba{
+  display:inline-block; margin-left:6px; font:600 9px/1 var(--sans); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--tinta-tenue); border:1px solid var(--regla);
+  padding:2px 4px; border-radius:2px; vertical-align:middle;
+}
+
 /* ===================== IMPRESIÓN ===================== */
 @media print{
   body{background:#fff; background-image:none; color:#000; font-size:11pt}
@@ -430,20 +488,53 @@ figure.lamina figcaption{
     if (rol.indexOf("serie:") === 0) {
       return p.series[parseInt(rol.slice(6), 10) % p.series.length];
     }
-    if (rol.indexOf("equilibrio:") === 0) {
-      var estado = rol.slice(11);
+    if (rol.indexOf("equilibrio:") === 0 || rol.indexOf("rama:") === 0) {
+      var estado = rol.slice(rol.indexOf(":") + 1);
       return estado === "estable" ? p.estable
            : estado === "inestable" ? p.inestable : p.indefinido;
     }
     switch (rol) {
       case "campo":        return p.campo;
+      case "nivel":        return p.campo;
       case "trayectoria":  return p.series[0];
+      case "trayectoria3d": return p.series[0];
+      case "orbita":       return p.tintaTenue;
       case "inicio":       return p.estable;
       case "final":        return p.inestable;
       case "crece":        return p.estable;
       case "decrece":      return p.inestable;
+      case "analitica":    return p.series[0];
+      case "numerica":     return p.series[1];
+      case "familia":      return p.tintaTenue;
+      case "particular":   return p.series[2];
+      case "condicion_inicial": return p.series[3];
+      case "asintota":     return p.inestable;
+      case "separatriz":   return p.inestable;
+      case "variedad_estable":   return p.series[0];
+      case "variedad_inestable": return p.series[1];
+      case "nulclina_x":   return p.series[2];
+      case "nulclina_y":   return p.series[3];
+      case "direccion":    return p.series[4];
+      case "ciclo":        return p.estable;
+      case "lazo":         return p.series[4];
+      case "frontera":     return p.series[3];
+      case "critico":      return p.series[4];
+      case "region":       return p.series[2];
+      case "mapa":         return p.series[0];
+      case "diagonal":     return p.tintaTenue;
+      case "telarana":     return p.series[1];
+      case "referencia":   return p.tintaTenue;
       default:             return null;
     }
+  }
+
+  // "#3449b8" → "rgba(52,73,184,0.14)": las regiones se sombrean con el
+  // color de su rol, pero transparentes para no tapar las curvas.
+  function translucido(color, alfa) {
+    var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color || "");
+    if (!m) return color;
+    return "rgba(" + parseInt(m[1], 16) + "," + parseInt(m[2], 16) + "," +
+           parseInt(m[3], 16) + "," + alfa + ")";
   }
 
   var EJE = function (p) {
@@ -460,6 +551,17 @@ figure.lamina figcaption{
     var datos = (spec.data || []).map(function (traza) {
       var t = Object.assign({}, traza);
       var color = colorDeRol((t.meta || {}).rol, p);
+      if (color && t.type === "contour") {
+        // Curvas de nivel de un solo tono: lo que importa es la forma, no la escala.
+        t.colorscale = [[0, color], [1, color]];
+        t.showscale = false;
+        return t;
+      }
+      if (color && t.fill === "toself") {
+        t.fillcolor = translucido(color, 0.14);
+        t.line = Object.assign({}, t.line, { color: "rgba(0,0,0,0)" });
+        return t;
+      }
       if (color) {
         if (t.line && !t.line.colorscale) t.line = Object.assign({}, t.line, { color: color });
         if (t.marker) {
@@ -626,7 +728,7 @@ figure.lamina figcaption{
       var td = el("td");
       var marca = el("span", "distintivo " + clase);
       marca.appendChild(el("span", "glifo", glifo));
-      marca.appendChild(document.createTextNode(clas));
+      marca.appendChild(document.createTextNode(eq.tipo || clas));
       td.appendChild(marca);
       tr.appendChild(td);
 
@@ -656,7 +758,7 @@ figure.lamina figcaption{
   }
 
   var CLAVES_MEDIDA = ["desvio", "residuo_relativo", "desvio_ventana",
-                       "error_maximo", "residuo"];
+                       "error_maximo", "residuo", "medida"];
 
   function bloqueVerificacion(verificacion) {
     var pruebas = (verificacion || {}).pruebas || [];
@@ -670,11 +772,15 @@ figure.lamina figcaption{
     pruebas.forEach(function (p) {
       var tr = el("tr");
       var tdMarca = el("td");
-      tdMarca.appendChild(el("span", "marca " + (p.ok ? "ok" : "mal"), p.ok ? "✓" : "✕"));
+      // ◇: la comprobación no pudo decidir; no cuenta en contra ni a favor.
+      var concluyente = p.concluyente !== false;
+      tdMarca.appendChild(el("span", "marca " + (!concluyente ? "" : (p.ok ? "ok" : "mal")),
+                             !concluyente ? "◇" : (p.ok ? "✓" : "✕")));
       tr.appendChild(tdMarca);
 
       var td = el("td");
       td.appendChild(el("span", "nombre", p.nombre || "?"));
+      if (p.tipo) td.appendChild(el("span", "tipo-prueba", p.tipo === "simbolica" ? "simbólica" : "numérica"));
       if (p.descripcion) td.appendChild(el("span", "glosa", p.descripcion));
       tr.appendChild(td);
 
@@ -695,22 +801,6 @@ figure.lamina figcaption{
     return tabla;
   }
 
-  function listaDePendientes(analisis) {
-    var pendientes = Object.keys(analisis || {}).filter(function (k) {
-      var d = analisis[k];
-      return d && d.estado === "pendiente_de_implementacion";
-    });
-    if (!pendientes.length) return null;
-    var ul = el("ul", "apuntes");
-    pendientes.forEach(function (k) {
-      var li = el("li");
-      li.appendChild(el("strong", null, k));
-      li.appendChild(document.createTextNode(" — " + (analisis[k].motivo || "")));
-      ul.appendChild(li);
-    });
-    return ul;
-  }
-
   function listaDeNotas(notas) {
     if (!notas || !notas.length) return null;
     var ul = el("ul", "apuntes");
@@ -728,8 +818,137 @@ figure.lamina figcaption{
     series: "Series temporales",
     linea_fase: "Línea de fase",
     plano_fase: "Retrato de fase",
-    trayectoria_3d: "Trayectoria en el espacio de fases"
+    trayectoria_3d: "Trayectoria en el espacio de fases",
+    solucion: "Solución",
+    retrato_fase: "Retrato de fase",
+    retrato_antes: "Antes de la bifurcación",
+    retrato_despues: "Después de la bifurcación",
+    diagrama_bifurcacion: "Diagrama de bifurcación",
+    traza_determinante: "Plano traza-determinante",
+    telarana: "Diagrama de telaraña",
+    convergencia_lyapunov: "Convergencia del exponente de Lyapunov",
+    separacion: "Separación"
   };
+
+  function nombreDeFigura(nombre) {
+    if (NOMBRE_DE_FIGURA[nombre]) return NOMBRE_DE_FIGURA[nombre];
+    var m = /^retrato_fase_(\d+)$/.exec(nombre || "");
+    return m ? "Retrato de fase · régimen " + m[1] : (nombre || "Figura");
+  }
+
+  // ---------- fórmulas ----------
+  // Las fórmulas las escribe el servidor (salen de sympy), pero se componen con
+  // KaTeX sin `trust`: no hay forma de que una fórmula inserte marcado. Sin
+  // KaTeX (sin red) queda el LaTeX como texto, que se sigue leyendo.
+  function componer(nodo, fuente, enBloque) {
+    if (window.katex) {
+      try {
+        window.katex.render(String(fuente), nodo, { displayMode: !!enBloque, throwOnError: false,
+                                                     strict: "ignore", trust: false });
+        return nodo;
+      } catch (e) { /* cae al texto plano */ }
+    }
+    nodo.textContent = String(fuente);
+    return nodo;
+  }
+
+  // Texto con LaTeX en línea entre $...$ (títulos de sección).
+  function textoConFormulas(contenedor, texto) {
+    String(texto || "").split(/(\$[^$]+\$)/).forEach(function (trozo) {
+      if (!trozo) return;
+      if (trozo.charAt(0) === "$" && trozo.length > 1 && trozo.charAt(trozo.length - 1) === "$") {
+        contenedor.appendChild(componer(el("span"), trozo.slice(1, -1), false));
+      } else {
+        contenedor.appendChild(document.createTextNode(trozo));
+      }
+    });
+    return contenedor;
+  }
+
+  function bloqueDeDesarrollo(bloque) {
+    if (bloque.tipo === "formula") {
+      return componer(el("div", "formula" + (bloque.destacada ? " destacada" : "")), bloque.latex, true);
+    }
+    if (bloque.tipo === "rotulo") {
+      return componer(el("div", "rotulo"), bloque.latex, false);
+    }
+    if (bloque.tipo === "tabla") {
+      var tabla = el("table", "tabla");
+      tabla.appendChild(cabeceraTabla((bloque.columnas || []).map(function (c) { return { texto: c }; })));
+      var tbody = el("tbody");
+      (bloque.filas || []).forEach(function (fila) {
+        var tr = el("tr");
+        fila.forEach(function (celda) {
+          var td = el("td", "cifra");
+          if (celda && celda.latex) componer(td, celda.latex, false);
+          else td.textContent = celda && celda.texto !== undefined ? celda.texto : "";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      tabla.appendChild(tbody);
+      return tabla;
+    }
+    return el("p", "prosa", bloque.texto || "");
+  }
+
+  function bloqueFichas(desarrollo) {
+    var fichas = el("div", "fichas");
+    function chip(etiqueta, valor) {
+      if (!valor) return;
+      var c = el("span", "ficha-chip");
+      c.appendChild(document.createTextNode(etiqueta + " "));
+      c.appendChild(el("b", null, valor));
+      fichas.appendChild(c);
+    }
+    chip("Familia", desarrollo.nombre);
+    chip("Método", desarrollo.metodo);
+    chip("Tratamiento", (desarrollo.tratamiento || []).join(" · "));
+    if ((desarrollo.balotario || []).length) chip("Balotario", desarrollo.balotario.join(", "));
+    chip("", desarrollo.tema);
+    return fichas;
+  }
+
+  function bloqueDesarrollo(desarrollo) {
+    if (!desarrollo || !(desarrollo.secciones || []).length) return null;
+    var caja = el("div", "desarrollo");
+    caja.appendChild(bloqueFichas(desarrollo));
+    desarrollo.secciones.forEach(function (seccion, i) {
+      var s = el("section");
+      s.dataset.clave = seccion.clave || "";
+      var h = el("h3");
+      h.appendChild(el("span", "num", String(i + 1).padStart(2, "0")));
+      textoConFormulas(h, seccion.titulo);
+      s.appendChild(h);
+      (seccion.bloques || []).forEach(function (b) { s.appendChild(bloqueDeDesarrollo(b)); });
+      caja.appendChild(s);
+    });
+    return caja;
+  }
+
+  function listaDeConclusiones(desarrollo) {
+    var conclusiones = (desarrollo || {}).conclusiones || [];
+    if (!conclusiones.length) return null;
+    var ul = el("ul", "conclusiones");
+    conclusiones.forEach(function (c) { ul.appendChild(el("li", null, c)); });
+    return ul;
+  }
+
+  // Lo que el balotario todavía no desarrolla se dice arriba, no al pie.
+  function avisoDeAlcance(entrada) {
+    var avisos = ((entrada.desarrollo || {}).advertencias || []).filter(function (a) {
+      return a.indexOf("FUERA DE ALCANCE") === 0;
+    });
+    var analisis = entrada.analisis || {};
+    Object.keys(analisis).forEach(function (k) {
+      if (analisis[k] && analisis[k].estado === "fuera_de_alcance") avisos.push(analisis[k].motivo || k);
+    });
+    if (!avisos.length) return null;
+    var caja = el("div", "alcance");
+    caja.appendChild(el("strong", null, "Fuera de alcance por ahora"));
+    avisos.forEach(function (a) { caja.appendChild(el("p", null, a)); });
+    return caja;
+  }
 
   // ---------- una sección ----------
   function construirAnalisis(entrada, indice) {
@@ -754,33 +973,57 @@ figure.lamina figcaption{
     if (n) linea.appendChild(el("span", null, n + (n === 1 ? " variable" : " variables")));
     art.appendChild(linea);
 
-    var sistema = bloqueSistema(cfg);
-    if (sistema) art.appendChild(sistema);
+    // El enunciado, si vino: es lo que se está respondiendo.
+    if (entrada.enunciado) {
+      var enunciado = el("div", "enunciado");
+      enunciado.appendChild(el("span", "marca-enunciado", "Enunciado"));
+      textoConFormulas(enunciado, entrada.enunciado);
+      art.appendChild(enunciado);
+    }
+
+    var alcance = avisoDeAlcance(entrada);
+    if (alcance) art.appendChild(alcance);
 
     if (!entrada.ok) {
+      var sistema = bloqueSistema(cfg);
+      if (sistema) art.appendChild(sistema);
       var fallo = el("div", "fallo");
       fallo.appendChild(el("span", "encabezado",
                            "Etapa no superada · " + (entrada.etapa || "desconocida")));
       fallo.appendChild(el("p", "detalle", entrada.error || ""));
       art.appendChild(fallo);
+      conRubrica(art, "Verificación", bloqueVerificacion(entrada.verificacion));
       conRubrica(art, "Planteamiento", bloqueFicha(cfg));
       return art;
     }
 
-    conRubrica(art, "Planteamiento", bloqueFicha(cfg));
+    // Primero las gráficas: son lo que el usuario viene a ver. Las del
+    // desarrollo (las que responden la pregunta) llegan antes que las numéricas.
+    var figuras = entrada.figuras || [];
+    if (figuras.length) {
+      var laminas = el("div", "laminas" + (figuras.length > 1 ? " varias" : ""));
+      figuras.forEach(function (figura, i) {
+        var ancha = i === 0 && figuras.length % 2 === 1;
+        var lamina = el("figure", "lamina" + (ancha ? " ancha" : ""));
+        lamina.dataset.figura = JSON.stringify(figura.spec || {});
+        lamina.appendChild(el("figcaption", null, nombreDeFigura(figura.nombre)));
+        laminas.appendChild(lamina);
+      });
+      art.appendChild(laminas);
+    }
 
-    (entrada.figuras || []).forEach(function (figura) {
-      var lamina = el("figure", "lamina");
-      lamina.dataset.figura = JSON.stringify(figura.spec || {});
-      lamina.appendChild(el("figcaption", null,
-        NOMBRE_DE_FIGURA[figura.nombre] || figura.nombre || "Figura"));
-      art.appendChild(lamina);
-    });
-
-    conRubrica(art, "Equilibrios y estabilidad", bloqueEquilibrios(entrada.analisis));
+    conRubrica(art, "Conclusiones", listaDeConclusiones(entrada.desarrollo));
+    var desarrollo = bloqueDesarrollo(entrada.desarrollo);
+    if (desarrollo) {
+      conRubrica(art, "Desarrollo matemático", desarrollo);
+    } else {
+      var sistemaSolo = bloqueSistema(cfg);
+      if (sistemaSolo) art.appendChild(sistemaSolo);
+    }
     conRubrica(art, "Verificación", bloqueVerificacion(entrada.verificacion));
-    conRubrica(art, "Pedido pero no implementado", listaDePendientes(entrada.analisis));
+    conRubrica(art, "Equilibrios con los parámetros dados", bloqueEquilibrios(entrada.analisis));
     conRubrica(art, "Notas", listaDeNotas(entrada.notas));
+    conRubrica(art, "Configuración del cálculo", bloqueFicha(cfg));
     return art;
   }
 
@@ -839,9 +1082,9 @@ figure.lamina figcaption{
         var p = el("p");
         p.appendChild(el("strong", null, "El informe todavía está vacío. "));
         p.appendChild(document.createTextNode(
-          "Pídele al agente que resuelva o analice una ecuación: cada problema " +
-          "aparecerá aquí con su planteamiento, sus figuras y su verificación, " +
-          "sin que tengas que recargar."));
+          "Pídele al agente que resuelva o analice un problema: aparecerá aquí con " +
+          "sus gráficas, su desarrollo matemático y su verificación, sin que tengas " +
+          "que recargar."));
         caja.appendChild(p);
         contenedor.appendChild(caja);
       }
@@ -905,7 +1148,10 @@ figure.lamina figcaption{
         .then(function (datos) {
           if (!datos) return;
           latir();
-          if ((datos.entradas || []).length !== (ESTADO.entradas || []).length) {
+          // En modo "ultimo" siempre hay una sola entrada: el largo no cambia
+          // al llegar una pregunta nueva, pero el momento de escritura sí.
+          if ((datos.entradas || []).length !== (ESTADO.entradas || []).length ||
+              datos.momento !== ESTADO.momento) {
             ESTADO = datos;
             pintar();
           }

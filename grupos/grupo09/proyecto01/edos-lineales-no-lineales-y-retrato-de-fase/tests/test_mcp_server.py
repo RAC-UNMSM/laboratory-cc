@@ -135,13 +135,29 @@ class RegistroDeHerramientasTests(unittest.TestCase):
         self.assertNotIn("intervalo", requeridos)
 
     def test_analizar_edo_declara_sus_parametros_obligatorios(self):
+        """La condición inicial es opcional: 'halle la solución general' no la tiene."""
         herramienta = next(h for h in _ejecutar(mcp_server.servidor.list_tools())
                            if h.name == "resolver_graficar_y_analizar_edo")
         esquema = herramienta.input_schema
-        self.assertEqual(set(esquema["required"]),
-                         {"ecuaciones", "variables_estado", "y0", "intervalo"})
-        self.assertIn("parametros", esquema["properties"])
-        self.assertIn("solucion_exacta", esquema["properties"])
+        self.assertEqual(set(esquema["required"]), {"ecuaciones", "variables_estado"})
+        for campo in ("y0", "intervalo", "parametros", "solucion_exacta", "enunciado", "metodo_analitico",
+                      "pedidos", "parametro", "rango_parametro", "region", "solucion_particular",
+                      "trozos", "separacion_inicial"):
+            self.assertIn(campo, esquema["properties"], f"falta {campo}")
+
+    def test_analizar_equilibrios_recibe_el_problema_completo(self):
+        herramienta = next(h for h in _ejecutar(mcp_server.servidor.list_tools())
+                           if h.name == "analizar_equilibrios")
+        for campo in ("enunciado", "metodo_analitico", "pedidos", "parametro", "rango_parametro", "region"):
+            self.assertIn(campo, herramienta.input_schema["properties"], f"falta {campo}")
+
+    def test_las_instrucciones_explican_el_desarrollo_y_el_alcance(self):
+        """El modelo debe presentar lo que el servidor calculó, y decir lo que todavía no hace."""
+        texto = mcp_server.servidor.instructions
+        self.assertIn("desarrollo.secciones", texto)
+        self.assertIn("FUERA DE ALCANCE POR AHORA", texto)
+        self.assertIn("enunciado", texto)
+        self.assertNotIn("pendiente de implementación", texto.lower())
 
     def test_las_herramientas_se_describen_para_el_cliente(self):
         for herramienta in _ejecutar(mcp_server.servidor.list_tools()):
@@ -192,6 +208,39 @@ class HerramientasTests(unittest.TestCase):
         self.assertTrue(resultado["ok"])
         self.assertEqual(resultado["transporte"], "stdio")
         self.assertIn("estabilidad", resultado["capacidades"]["analisis"])
+        familias = {f["familia"] for f in resultado["capacidades"]["desarrollo_matematico"]["familias"]}
+        self.assertTrue({"separable", "bernoulli", "riccati", "cauchy_euler", "hopf", "mapa_1d"} <= familias)
+
+    def test_la_llamada_por_el_protocolo_valida_y_resuelve(self):
+        """Lo que llega por JSON-RPC (trozos como diccionarios, sin condición inicial) funciona."""
+        respuesta = _ejecutar(mcp_server.servidor.call_tool("resolver_graficar_y_analizar_edo", {
+            "ecuaciones": ["x"], "variables_estado": ["x"], "tipo_de_sistema": "mapa_discreto",
+            "trozos": [{"expresion": "2*x", "desde": 0, "hasta": 0.5},
+                       {"expresion": "2*(1 - x)", "desde": 0.5, "hasta": 1}],
+            "separacion_inicial": 1e-10, "visualizar": False}))
+        resultado = json.loads(respuesta.content[0].text)
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["familia"], "mapa_1d")
+        self.assertEqual(resultado["solucion"]["resultados"]["horizonte"], 34)
+
+    def test_la_solucion_general_se_pide_sin_condicion_inicial(self):
+        resultado = mcp_server.analizar_edo(
+            ecuaciones=["yp", "(2*x*yp - 2*y + x**3*log(x))/x**2"], variables_estado=["y", "yp"],
+            variable_independiente="x", visualizar=False,
+            enunciado="Halle la solución general de x^2 y'' - 2x y' + 2y = x^3 ln x")
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["familia"], "cauchy_euler")
+
+    def test_listar_balotario_dice_el_alcance_de_cada_problema(self):
+        resultado = mcp_server.listar_balotario()
+        problemas = {p["id"]: p for t in resultado["temas"] for p in t["problemas"]}
+        self.assertEqual(problemas["1.2"]["alcance"], "dentro")
+        self.assertIn("bernoulli", problemas["1.2"]["familias"])
+        self.assertEqual(problemas["4.1"]["familias"], ["mapa_1d"])
+        for identificador in ("4.2", "4.3", "4.4", "4.5", "5.1", "5.2", "5.3", "5.4", "5.5"):
+            self.assertEqual(problemas[identificador]["alcance"], "fuera_de_alcance")
+        self.assertIn("Poincaré-Bendixson no aplica", problemas["2.5"]["revision_matematica"])
+        self.assertIn("36/35", problemas["3.5"]["revision_matematica"])
 
     def test_listar_balotario_devuelve_ecuaciones_listas_para_el_solver(self):
         resultado = mcp_server.listar_balotario(tema="tema_01")

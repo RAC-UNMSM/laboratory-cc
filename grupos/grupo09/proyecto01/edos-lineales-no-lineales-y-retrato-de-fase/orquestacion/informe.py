@@ -48,8 +48,8 @@ decidirlo aquí. Dos mecanismos, en este orden:
    lo haga. Si entre dos análisis pasan más de `MINUTOS_DE_INACTIVIDAD`, el
    siguiente abre un informe nuevo por su cuenta.
 
-Ninguno pierde nada: el informe anterior queda en su archivo, con su fecha y su
-hora en el nombre.
+En local solo se conserva el último informe: al escribir uno nuevo se borran
+los anteriores de `informes/`, para que la carpeta no crezca sin límite.
 """
 
 import logging
@@ -82,10 +82,9 @@ CARPETA_LOCAL = Path(os.environ.get(
 #:            estamos -- no hay historial que pueda mezclarse entre
 #:            conversaciones.
 #: "acumula"  cada pregunta agrega una sección, lo último arriba. Sirve cuando
-#:            las respuestas se comparan entre sí: mientras el barrido
-#:            paramétrico siga pendiente, estudiar una bifurcación es llamar
-#:            varias veces variando el parámetro, y la bifurcación se ve
-#:            precisamente al poner esas llamadas una al lado de otra.
+#:            las respuestas se comparan entre sí, por ejemplo el mismo
+#:            sistema con valores distintos de un parámetro, puestos uno al
+#:            lado de otro.
 MODO = os.environ.get("EDOS_INFORME_MODO", "ultimo").strip().lower()
 ACUMULA = MODO == "acumula"
 
@@ -152,8 +151,7 @@ class InformeDeSesion:
         """Cierra el informe actual y abre uno vacío. Devuelve su dirección.
 
         Es lo que hace la herramienta `nuevo_informe` al empezar una
-        conversación. El informe anterior no se toca: queda en su archivo, y su
-        nombre lleva la fecha y la hora en que se abrió.
+        conversación. En local, el archivo del informe anterior se borra.
         """
         with self._candado:
             anterior = self.id
@@ -202,6 +200,7 @@ class InformeDeSesion:
         except OSError as exc:
             registro.warning("No se pudo escribir el informe local: %s", exc)
             return self._destino
+        self._borrar_anteriores()
 
         # Un enlace http se abre con un clic; una ruta de archivo hay que
         # copiarla y pegarla, porque el navegador no navega a file:// desde
@@ -210,6 +209,23 @@ class InformeDeSesion:
         base = servidor_local.url_base(CARPETA_LOCAL)
         self._destino = (f"{base}/{self._nombre('html')}" if base else str(ruta))
         return self._destino
+
+    def _borrar_anteriores(self):
+        """Deja en la carpeta local solo el informe actual.
+
+        Cada proceso y cada `nuevo_informe` abren un archivo con nombre nuevo;
+        sin esto la carpeta crece sin límite con informes que nadie vuelve a
+        abrir. Un archivo que no se deja borrar (abierto en Windows) se salta:
+        se intentará de nuevo en la próxima escritura.
+        """
+        vigentes = {self._nombre("html"), self._nombre("json")}
+        for patron in ("informe-*.html", "informe-*.json"):
+            for archivo in CARPETA_LOCAL.glob(patron):
+                if archivo.name not in vigentes:
+                    try:
+                        archivo.unlink()
+                    except OSError:
+                        pass
 
     def _nombre(self, extension):
         return f"informe-{self.id}.{extension}"

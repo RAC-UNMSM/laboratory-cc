@@ -10,6 +10,7 @@ aportan nada visible y que tendrían que viajar por el transporte stdio.
 """
 
 import html as _html
+import math
 
 import numpy as np
 import plotly.graph_objects as go
@@ -248,6 +249,116 @@ def construir_figuras(campo, tiempos, estados, parametros, variables,
                                                   maximo=maximo)))
     except Exception as exc:                 # una figura no debe tumbar el análisis
         figuras.append(("error_retrato", exc))
+    return figuras
+
+
+# ---------------------------------------------------------------------------
+# Figuras del desarrollo matemático
+# ---------------------------------------------------------------------------
+#
+# Las familias de `matematica` describen sus gráficas como datos con sentido
+# (una rama estable, una separatriz, una nulclina), sin saber nada de plotly.
+# Aquí cada capa se vuelve una traza que declara su rol; el color lo pone la
+# plantilla, como en las figuras numéricas.
+
+#: Trazo discontinuo para lo que no es un estado observable (ramas inestables,
+#: fronteras de una región, curvas de referencia).
+_TRAZO = {"rama:inestable": "dash", "frontera": "dot", "referencia": "dash", "asintota": "dash",
+          "direccion": "dot", "lazo": "dashdot", "diagonal": "dot"}
+
+#: Grosor por rol: lo que el problema pregunta va más grueso que el contexto.
+_GROSOR = {"campo": 1, "orbita": 1.2, "nivel": 1, "familia": 1.4, "telarana": 1.3,
+           "separatriz": 3, "ciclo": 3, "lazo": 2.6, "analitica": 2.8, "rama:estable": 3,
+           "rama:inestable": 2.6, "variedad_estable": 2.4, "variedad_inestable": 2.4}
+
+#: Forma de los marcadores. El color no va solo (estable/inestable caen en la
+#: banda de advertencia para daltonismo deutan): la forma también cambia.
+_MARCADOR = {"critico": "star", "condicion_inicial": "circle-open", "numerica": "circle",
+             "crece": "triangle-up", "decrece": "triangle-down"}
+
+
+def _redondear(valores, cifras=6):
+    """Menos cifras, menos bytes: el ojo no distingue la séptima cifra de un trazo."""
+    salida = []
+    for v in valores:
+        if v is None or (isinstance(v, float) and not math.isfinite(v)):
+            salida.append(None)
+        else:
+            salida.append(float(f"{float(v):.{cifras}g}"))
+    return salida
+
+
+def _traza(capa, rango_y):
+    rol = capa.get("rol", "")
+    tipo = capa.get("tipo", "linea")
+    nombre = capa.get("nombre", rol)
+    meta = _rol(rol)
+    if tipo == "linea":
+        modo = "lines+markers" if capa.get("marcadores") else "lines"
+        return go.Scatter(x=_redondear(capa["x"]), y=_redondear(capa["y"]), mode=modo, name=nombre,
+                          meta=meta, connectgaps=False, hoverinfo="skip" if rol in ("campo", "nivel") else None,
+                          line={"width": _GROSOR.get(rol, 2), "dash": _TRAZO.get(rol, "solid")})
+    if tipo == "puntos":
+        simbolo = capa.get("simbolo") or _MARCADOR.get(rol)
+        if simbolo is None and rol.startswith("equilibrio:"):
+            simbolo = _simbolo(rol.split(":", 1)[1])
+        tamano = 9 if rol in ("crece", "decrece", "numerica") else 13
+        texto = capa.get("etiquetas")
+        return go.Scatter(x=_redondear(capa["x"]), y=_redondear(capa["y"]),
+                          mode="markers+text" if texto else "markers", name=nombre, meta=meta,
+                          text=texto, textposition="top right",
+                          marker={"size": tamano, "symbol": simbolo or "circle", "line": {"width": 2}})
+    if tipo == "contorno":
+        return go.Contour(x=_redondear(capa["x"]), y=_redondear(capa["y"]),
+                          z=[_redondear(fila) for fila in capa["z"]], name=nombre, meta=meta,
+                          contours={"coloring": "lines"}, ncontours=26, showscale=False,
+                          line={"width": 1}, hoverinfo="skip")
+    if tipo == "vertical":
+        bajo, alto = rango_y or (-1.0, 1.0)
+        return go.Scatter(x=[capa["x"], capa["x"]], y=[bajo, alto], mode="lines", name=nombre,
+                          meta=meta, line={"width": 1.6, "dash": _TRAZO.get(rol, "dash")})
+    if tipo == "banda":
+        bajo, alto = rango_y or (-1.0, 1.0)
+        x0, x1 = capa["x0"], capa["x1"]
+        return go.Scatter(x=[x0, x1, x1, x0, x0], y=[bajo, bajo, alto, alto, bajo], mode="lines",
+                          fill="toself", name=nombre, meta=meta, line={"width": 0}, hoverinfo="skip")
+    raise ValueError(f"Tipo de capa desconocido: {tipo!r}")
+
+
+def figura_de_especificacion(especificacion):
+    """Una figura de plotly a partir de la especificación que produce una familia."""
+    rango = especificacion.get("rango") or {}
+    rango_y = rango.get("y")
+    if rango_y is None:
+        valores = [v for c in especificacion["capas"] if c.get("tipo") in ("linea", "puntos")
+                   for v in c.get("y", []) if v is not None and math.isfinite(v)]
+        rango_y = [min(valores), max(valores)] if valores else None
+    figura = go.Figure()
+    for capa in especificacion["capas"]:
+        figura.add_trace(_traza(capa, rango_y))
+    ejes = especificacion.get("ejes", {})
+    diseno = dict(_DISENO, hovermode="closest")
+    figura.update_layout(title=especificacion.get("titulo", ""), xaxis_title=ejes.get("x", ""),
+                         yaxis_title=ejes.get("y", ""), **diseno)
+    if rango.get("x"):
+        figura.update_xaxes(range=list(rango["x"]))
+    if rango.get("y") and especificacion.get("escala_y") != "log":
+        figura.update_yaxes(range=list(rango["y"]))
+    if especificacion.get("escala_y") == "log":
+        figura.update_yaxes(type="log")
+    if especificacion.get("cuadrada"):
+        figura.update_yaxes(scaleanchor="x", scaleratio=1)
+    return figura
+
+
+def figuras_del_desarrollo(graficas):
+    """[(clave, figura)] de las gráficas de un desarrollo. Una que falla no tumba al resto."""
+    figuras = []
+    for especificacion in graficas or []:
+        try:
+            figuras.append((especificacion.get("clave", "figura"), figura_de_especificacion(especificacion)))
+        except Exception as exc:
+            figuras.append((especificacion.get("clave", "figura"), exc))
     return figuras
 
 

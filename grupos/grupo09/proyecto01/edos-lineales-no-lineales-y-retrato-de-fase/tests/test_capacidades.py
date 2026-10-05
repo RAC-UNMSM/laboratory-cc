@@ -1,22 +1,26 @@
-"""Pruebas del flujo del agente: validar → resolver → verificar → analizar → visualizar.
+"""Pruebas del recorrido del agente: interpretar → clasificar → desarrollar → calcular → verificar → dibujar.
 
-El foco está en dos cosas que ninguna otra prueba cubre:
+El foco está en lo que ninguna prueba de familia cubre:
 
 * que el resultado sea **serializable en JSON estricto**, porque viaja por el
   transporte MCP;
-* que el **portón de verificación** se cierre, es decir que un resultado
-  inválido nunca llegue acompañado de conclusiones.
+* que el **portón de verificación** se cierre: un resultado inválido nunca
+  llega acompañado de conclusiones;
+* que lo que no se puede hacer se diga (fuera de alcance, aclaración
+  necesaria) en vez de sustituirlo en silencio por otra cosa.
 """
 
 import json
 import unittest
 from unittest import mock
 
-from orquestacion.capacidades import (analizar_edo, analizar_equilibrios_sistema,
-                                      buscar_equilibrios, describir_capacidades,
-                                      es_autonomo)
+import sympy as sp
+
+from matematica import analisis_estabilidad
+from matematica.analisis_estabilidad import buscar_equilibrios, es_autonomo
 from matematica.expresiones import compilar_campo
 from orquestacion import capacidades
+from orquestacion.capacidades import analizar_edo, analizar_equilibrios_sistema, describir_capacidades
 from visualizacion.html import generar_html
 
 LINEAL = {"ecuaciones": ["-2*y"], "variables_estado": ["y"], "y0": [1.0],
@@ -41,13 +45,20 @@ class FlujoCompletoTests(unittest.TestCase):
         self.assertAlmostEqual(resultado["solucion"]["estado_final"]["y"],
                                4.5399929762e-05, places=8)
 
-    def test_solucion_exacta_que_depende_de_los_parametros(self):
-        """La solución cerrada del logístico usa r y K: hay que pasárselos.
+    def test_la_respuesta_trae_el_desarrollo_y_como_presentarlo(self):
+        resultado = analizar_edo(_sin_visualizar(LINEAL))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        desarrollo = resultado["desarrollo"]
+        self.assertEqual(desarrollo["familia"], "lineal")
+        self.assertEqual(desarrollo["secciones"][0]["clave"], "clasificacion")
+        for seccion in desarrollo["secciones"]:
+            self.assertTrue(seccion["titulo"].strip())
+            self.assertTrue(seccion["bloques"])
+        self.assertIn("desarrollo.secciones", resultado["presentacion"])
+        self.assertEqual(resultado["clasificacion"]["familia"], "lineal")
 
-        Los casos del Tema 1 tienen soluciones exactas sin parámetros, así que
-        este hueco no se veía hasta probar el logístico, cuya solución es
-        K/(1 + (K/y0 - 1)e^{-rt}).
-        """
+    def test_solucion_exacta_que_depende_de_los_parametros(self):
+        """La solución cerrada del logístico usa r y K: hay que pasárselos."""
         resultado = analizar_edo(_sin_visualizar(
             LOGISTICO, solucion_exacta="K/(1 + (K/1 - 1)*exp(-r*t))"))
         self.assertTrue(resultado["ok"], resultado.get("error"))
@@ -60,16 +71,14 @@ class FlujoCompletoTests(unittest.TestCase):
         resultado = analizar_edo(_sin_visualizar(LOGISTICO))
         self.assertTrue(resultado["ok"], resultado.get("error"))
         equilibrios = resultado["analisis"]["estabilidad"]["equilibrios"]
-        puntos = sorted(e["punto"][0] for e in equilibrios)
-        self.assertEqual(puntos, [0.0, 10.0])
         clasificacion = {e["punto"][0]: e["clasificacion"] for e in equilibrios}
-        self.assertEqual(clasificacion[0.0], "inestable")
-        self.assertEqual(clasificacion[10.0], "estable")
+        self.assertEqual(clasificacion, {0.0: "inestable", 10.0: "estable"})
 
     def test_lorenz_halla_sus_tres_equilibrios_y_pasa_la_verificacion(self):
         """Los equilibrios de Lorenz son el origen y (±sqrt(b(r-1)), ·, r-1)."""
         resultado = analizar_edo(_sin_visualizar(LORENZ))
         self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["familia"], "numerico")
         equilibrios = resultado["analisis"]["estabilidad"]["equilibrios"]
         self.assertEqual(len(equilibrios), 3)
         for equilibrio in equilibrios:
@@ -92,20 +101,29 @@ class FlujoCompletoTests(unittest.TestCase):
             "intervalo": [0.0, 0.7], "variable_independiente": "x",
             "solucion_exacta": "2/(2 - 3*x**2)"}))
         self.assertTrue(resultado["ok"], resultado.get("error"))
-        self.assertFalse(resultado["analisis"]["estabilidad"]["disponible"])
-        self.assertTrue(any("no es autónomo" in nota for nota in resultado["notas"]))
+        bloque = resultado["analisis"]["estabilidad"]
+        self.assertFalse(bloque["disponible"])
+        self.assertIn("no es autónomo", bloque["nota"])
 
-    def test_los_analisis_pendientes_se_reportan_como_tales(self):
+    def test_los_analisis_adicionales_dicen_que_hay_y_que_no(self):
         resultado = analizar_edo(_sin_visualizar(
             LOGISTICO, analisis=["caos", "bifurcaciones", "solucion_analitica"]))
         self.assertTrue(resultado["ok"])
-        for nombre in ("caos", "bifurcaciones", "solucion_analitica"):
-            with self.subTest(analisis=nombre):
-                bloque = resultado["analisis"][nombre]
-                self.assertFalse(bloque["implementado"])
-                self.assertEqual(bloque["estado"], "pendiente_de_implementacion")
-                self.assertIn("no está implementad", bloque["motivo"])
-                self.assertTrue(bloque["capacidades_previstas"])
+        analisis = resultado["analisis"]
+        self.assertTrue(analisis["solucion_analitica"]["disponible"])
+        self.assertEqual(analisis["caos"]["estado"], "fuera_de_alcance")
+        self.assertFalse(analisis["bifurcaciones"]["disponible"])
+        self.assertIn("parametro", analisis["bifurcaciones"]["nota"])
+
+    def test_sin_condicion_inicial_no_se_integra_nada(self):
+        resultado = analizar_edo({"ecuaciones": ["-y/x + x**2"], "variables_estado": ["y"],
+                                  "variable_independiente": "x", "visualizar": False})
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["solucion"]["tipo"], "desarrollo")
+        self.assertIn("solucion_general", resultado["solucion"]["resultados"])
+        nombres = {p["nombre"] for p in resultado["verificacion"]["pruebas"]}
+        self.assertNotIn("residuo", nombres)
+        self.assertIn("solucion_general_satisface_la_edo", nombres)
 
 
 class DegradacionHonestaTests(unittest.TestCase):
@@ -131,38 +149,26 @@ class DegradacionHonestaTests(unittest.TestCase):
     def test_los_alias_toleran_mayusculas_guiones_y_espacios(self):
         analisis = self._analisis(["Estabilidad", "exponente-de-lyapunov"])
         self.assertTrue(analisis["estabilidad"]["disponible"])
-        self.assertEqual(analisis["caos"]["estado"], "pendiente_de_implementacion")
-
-    def test_pedir_lyapunov_explica_que_esta_pendiente_en_un_solo_paso(self):
-        bloque = self._analisis(["lyapunov"])["caos"]
-        self.assertEqual(bloque["estado"], "pendiente_de_implementacion")
-        self.assertIn("lyapunov", bloque["capacidades_previstas"])
-
-    def test_pedir_resolucion_simbolica_no_devuelve_numeros_como_si_lo_fueran(self):
-        bloque = self._analisis(["solucion_analitica"])["solucion_analitica"]
-        self.assertFalse(bloque["implementado"])
-        self.assertIn("no está implementada", bloque["motivo"])
-        # El mensaje debe ofrecer la alternativa real, no solo negar.
-        self.assertIn("solucion_exacta", bloque["motivo"])
-        self.assertIn("dsolve", bloque["capacidades_previstas"])
+        self.assertEqual(analisis["caos"]["estado"], "fuera_de_alcance")
 
     def test_un_analisis_de_verdad_desconocido_se_rechaza_con_el_inventario(self):
         resultado = analizar_edo(_sin_visualizar(
             LOGISTICO, analisis=["transformada_de_fourier"]))
         self.assertFalse(resultado["ok"])
         self.assertEqual(resultado["etapa"], "validacion_solicitud")
-        self.assertIn("Implementados: estabilidad", resultado["error"])
-        self.assertIn("pendientes de implementación", resultado["error"])
+        self.assertIn("Disponibles: estabilidad", resultado["error"])
 
-    def test_un_mapa_declarado_como_tal_se_rechaza_con_la_diferencia_explicada(self):
+    def test_un_mapa_declarado_como_tal_se_itera_como_mapa(self):
+        """El logístico con r = 3.8 es caótico como mapa: λ > 0 (procedimiento del 4.1)."""
         resultado = analizar_edo(dict(
             ecuaciones=["r*x*(1-x)"], variables_estado=["x"], y0=[0.5],
             intervalo=[0, 30], parametros={"r": 3.8}, visualizar=False,
             tipo_de_sistema="mapa_discreto"))
-        self.assertFalse(resultado["ok"])
-        self.assertEqual(resultado["etapa"], "fuera_de_alcance")
-        self.assertNotIn("analisis", resultado)
-        self.assertIn("caótico", resultado["detalles"]["sugerencia"])
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["familia"], "mapa_1d")
+        lyapunov = resultado["solucion"]["resultados"]["lyapunov"]
+        self.assertGreater(lyapunov["valor"], 0.3)
+        self.assertIn("latex", lyapunov)
 
     def test_la_duda_declarada_devuelve_la_pregunta_no_un_numero(self):
         """'no_estoy_seguro' es una respuesta válida: el agente pregunta."""
@@ -206,29 +212,31 @@ class DegradacionHonestaTests(unittest.TestCase):
         self.assertEqual(resultado["etapa"], "validacion_solicitud")
         self.assertIn("tipo_de_sistema", resultado["error"])
 
-    def test_el_inventario_declara_el_limite_de_los_mapas_discretos(self):
-        """El motor no itera mapas; eso tiene que estar dicho, no supuesto."""
+    def test_el_inventario_declara_los_limites(self):
         limites = describir_capacidades()["limites"]
-        self.assertIn("sin_mapas_discretos", limites)
-        self.assertIn("x_{n+1}", limites["sin_mapas_discretos"])
+        self.assertIn("x_{n+1}", limites["mapas_discretos"])
         self.assertIn("solo_primer_orden", limites)
+        self.assertEqual(limites["dimension_maxima"], 3)
 
-    def test_el_inventario_separa_resolucion_numerica_de_analitica(self):
-        resolucion = describir_capacidades()["resolucion"]
-        self.assertTrue(resolucion["numerica"]["implementado"])
-        self.assertFalse(resolucion["analitica"]["implementado"])
-        self.assertEqual(resolucion["analitica"]["estado"],
-                         "pendiente_de_implementacion")
+    def test_el_inventario_separa_lo_implementado_de_lo_fuera_de_alcance(self):
+        capacidades_ = describir_capacidades()
+        self.assertTrue(capacidades_["resolucion"]["analitica"]["implementado"])
+        self.assertTrue(capacidades_["resolucion"]["numerica"]["implementado"])
+        self.assertTrue(capacidades_["analisis"]["bifurcaciones"]["implementado"])
+        self.assertEqual(capacidades_["analisis"]["caos"]["implementado"], "parcial")
+        problemas = sorted(f["problema"] for f in capacidades_["fuera_de_alcance"])
+        self.assertEqual(problemas, ["4.2", "4.3", "4.4", "4.5", "5.1", "5.2", "5.3", "5.4", "5.5"])
 
 
 class PortonVerificacionTests(unittest.TestCase):
     """Un resultado que no se verifica nunca viaja con conclusiones."""
 
-    def _rechaza_en(self, etapa, solicitud):
-        resultado = analizar_edo(solicitud)
+    def _rechaza_en(self, etapa, solicitud, herramienta=analizar_edo):
+        resultado = herramienta(solicitud)
         self.assertFalse(resultado["ok"])
         self.assertEqual(resultado["etapa"], etapa)
         self.assertNotIn("analisis", resultado)
+        self.assertNotIn("desarrollo", resultado)
         self.assertIn("No se emiten conclusiones", resultado["advertencia"])
         return resultado
 
@@ -236,6 +244,11 @@ class PortonVerificacionTests(unittest.TestCase):
         self._rechaza_en("validacion_solicitud",
                          {"ecuaciones": ["y", "y"], "variables_estado": ["y"],
                           "y0": [1.0], "intervalo": [0.0, 1.0]})
+
+    def test_condicion_inicial_sin_intervalo(self):
+        resultado = self._rechaza_en("validacion_solicitud",
+                                     {"ecuaciones": ["-y"], "variables_estado": ["y"], "y0": [1.0]})
+        self.assertIn("intervalo", resultado["error"])
 
     def test_dimension_por_encima_del_limite(self):
         self._rechaza_en("validacion_solicitud",
@@ -248,16 +261,31 @@ class PortonVerificacionTests(unittest.TestCase):
                          {"ecuaciones": ["__import__('os')"], "variables_estado": ["y"],
                           "y0": [1.0], "intervalo": [0.0, 1.0]})
 
-    def test_singularidad_dentro_del_intervalo(self):
+    def test_explosion_sin_solucion_analitica_que_la_anticipe(self):
+        """y' = x² + y² no tiene familia analítica: el integrador choca con la explosión."""
         resultado = self._rechaza_en("resolucion", {
-            "ecuaciones": ["3*x*y**2"], "variables_estado": ["y"], "y0": [1.0],
-            "intervalo": [0.0, 1.2], "variable_independiente": "x"})
+            "ecuaciones": ["x**2 + y**2"], "variables_estado": ["y"], "y0": [1.0],
+            "intervalo": [0.0, 2.0], "variable_independiente": "x", "visualizar": False})
         self.assertIn("singularidad", resultado["detalles"]["sugerencia"])
 
     def test_solucion_exacta_que_no_coincide(self):
         resultado = self._rechaza_en("verificacion",
                                      _sin_visualizar(LINEAL, solucion_exacta="exp(-3*t)"))
         self.assertIn("solucion_exacta", resultado["detalles"]["verificacion"]["fallidas"])
+
+    def test_el_veredicto_del_porton_numerico_no_se_pierde(self):
+        """Aunque las pruebas agregadas después pasen, un 'no' de `verificar` cierra el portón."""
+        with mock.patch("orquestacion.capacidades.verificar",
+                        return_value={"ok": False, "pruebas": [], "fallidas": ["residuo"],
+                                      "resumen": "No se superaron: residuo."}):
+            resultado = self._rechaza_en("verificacion", _sin_visualizar(LINEAL))
+        self.assertIn("residuo", resultado["detalles"]["verificacion"]["fallidas"])
+
+    def test_un_punto_que_no_es_equilibrio_se_rechaza(self):
+        self._rechaza_en("verificacion",
+                         {"ecuaciones": ["mu - x**2"], "variables_estado": ["x"],
+                          "parametros": {"mu": 1.0}, "equilibrios": [[0.5]]},
+                         herramienta=analizar_equilibrios_sistema)
 
 
 class SerializacionTests(unittest.TestCase):
@@ -278,15 +306,9 @@ class SerializacionTests(unittest.TestCase):
         self.assertFalse(resultado["ok"])
 
     def test_visualizacion_dice_que_dibujo_y_donde_verlo(self):
-        """La respuesta lleva el enlace al informe, no el documento.
-
-        El HTML de una herramienta no lo dibuja ningún cliente de chat, así que
-        mandarlo inline gastaba el 75 % de la respuesta en algo que el modelo no
-        puede usar. Lo que sí necesita para redactar es qué se dibujó; lo que el
-        usuario necesita para verlo es el enlace.
-        """
+        """La respuesta lleva el enlace al informe, no el documento."""
         visualizacion = analizar_edo({**LOGISTICO, "visualizar": True})["visualizacion"]
-        self.assertIn("series", visualizacion["figuras"])
+        self.assertEqual(visualizacion["figuras"][0], "solucion")
         self.assertIn("linea_fase", visualizacion["figuras"])
         self.assertIn("informe", visualizacion)
         self.assertNotIn("html", visualizacion)
@@ -301,43 +323,64 @@ class SerializacionTests(unittest.TestCase):
 
 
 class EquilibriosYAutonomiaTests(unittest.TestCase):
+    """La búsqueda exacta de equilibrios de `matematica.analisis_estabilidad`."""
+
+    y, x = sp.symbols("y x", real=True)
+
     def test_detecta_dependencia_de_la_variable_independiente(self):
-        self.assertFalse(es_autonomo(compilar_campo(["3*x*y**2"], "x", ["y"])))
-        self.assertTrue(es_autonomo(compilar_campo(["y**3 - y"], "x", ["y"])))
+        self.assertFalse(es_autonomo([3 * self.x * self.y ** 2], self.x))
+        self.assertTrue(es_autonomo([self.y ** 3 - self.y], self.x))
 
     def test_equilibrios_simbolicos_del_logistico(self):
-        campo = compilar_campo(["r*y*(1 - y/K)"], "t", ["y"], ["r", "K"])
-        equilibrios, origen = buscar_equilibrios(campo, {"r": 1.0, "K": 7.0})
-        self.assertEqual(sorted(p[0] for p in equilibrios), [0.0, 7.0])
-        self.assertEqual(origen["metodo"], "simbolico")
+        equilibrios, informe = buscar_equilibrios([self.y * (1 - self.y / 7)], [self.y])
+        self.assertEqual([e.punto for e in equilibrios], [(0,), (7,)])
+        self.assertEqual(informe["metodo"], "simbolico")
 
     def test_sin_equilibrios_reales_se_informa(self):
-        """x' = 1 + x**2 no tiene equilibrios reales."""
-        campo = compilar_campo(["1 + y**2"], "t", ["y"])
-        equilibrios, origen = buscar_equilibrios(campo, {})
+        equilibrios, informe = buscar_equilibrios([1 + self.y ** 2], [self.y])
         self.assertEqual(equilibrios, [])
-        self.assertEqual(origen["metodo"], "simbolico")
+        self.assertEqual(informe["encontrados"], 0)
 
-    def test_no_autonomo_no_tiene_equilibrios_definidos(self):
-        campo = compilar_campo(["3*x*y**2"], "x", ["y"])
-        equilibrios, origen = buscar_equilibrios(campo, {})
+    def test_infinitos_equilibrios_se_dan_en_una_ventana(self):
+        equilibrios, informe = buscar_equilibrios([sp.sin(self.y)], [self.y])
+        self.assertIn("general", informe)
+        self.assertEqual([e.punto[0] for e in equilibrios], [k * sp.pi for k in range(-2, 3)])
+
+
+class TestAvisosDeBusquedaDeEquilibrios(unittest.TestCase):
+    """Las advertencias de `buscar_equilibrios` se suman; no se pisan.
+
+    ẋ = y, ẏ = x² + 1 solo tiene soluciones complejas (x = ±i): se descartan y
+    hay que decirlo. Si además se recorta por exceder el máximo, el resultado
+    tiene dos cosas que advertir a la vez. (Con los símbolos reales que usa el
+    agente sympy ya no devuelve las complejas; con símbolos sin supuestos sí, y
+    es la ruta que se prueba aquí.)
+    """
+
+    x, y = sp.symbols("x y")
+
+    def test_las_soluciones_complejas_se_descartan_y_se_dice(self):
+        equilibrios, informe = buscar_equilibrios([self.y, self.x ** 2 + 1], [self.x, self.y])
         self.assertEqual(equilibrios, [])
-        self.assertIn("no es autónomo", origen["nota"])
+        self.assertEqual(informe["descartados"], 2)
+        self.assertIn("descartada", informe["nota"])
 
-    def test_describir_capacidades_es_honesto(self):
-        capacidades = describir_capacidades()
-        self.assertTrue(capacidades["analisis"]["estabilidad"]["implementado"])
-        self.assertFalse(capacidades["analisis"]["caos"]["implementado"])
-        self.assertFalse(capacidades["analisis"]["bifurcaciones"]["implementado"])
-        self.assertEqual(capacidades["limites"]["dimension_maxima"], 3)
+    def test_descartes_y_recorte_se_reportan_juntos(self):
+        campo = [self.y, (self.x ** 2 + 1) * (self.x ** 2 - 1)]
+        with mock.patch.object(analisis_estabilidad, "MAXIMO_EQUILIBRIOS", 1):
+            equilibrios, informe = buscar_equilibrios(campo, [self.x, self.y])
+        self.assertEqual(len(equilibrios), 1)
+        self.assertEqual(informe["descartados"], 2)
+        self.assertEqual(informe["recortados"], 1)
+        self.assertIn("descartada", informe["nota"])
+        self.assertIn("se reportan", informe["nota"])
 
 
 class EquilibriosSinTrayectoriaTests(unittest.TestCase):
     """analizar_equilibrios responde preguntas que no son un PVI.
 
-    "Clasifique los equilibrios de x' = mu - x^2" no trae condicion inicial.
-    Antes habia que inventarla para poder preguntar, y el servidor integraba una
-    trayectoria que nadie habia pedido.
+    "Clasifique los equilibrios de x' = mu - x^2" no trae condición inicial: no
+    hay que inventarla ni integrar una trayectoria que nadie pidió.
     """
 
     SILLA_NODO = {"ecuaciones": ["mu - x**2"], "variables_estado": ["x"]}
@@ -347,33 +390,26 @@ class EquilibriosSinTrayectoriaTests(unittest.TestCase):
             {**self.SILLA_NODO, "parametros": {"mu": 1.0}})
         self.assertTrue(resultado["ok"], resultado.get("error"))
         equilibrios = resultado["analisis"]["estabilidad"]["equilibrios"]
-        self.assertEqual(sorted(e["punto"][0] for e in equilibrios), [-1.0, 1.0])
         clases = {e["punto"][0]: e["clasificacion"] for e in equilibrios}
-        self.assertEqual(clases[-1.0], "inestable")
-        self.assertEqual(clases[1.0], "estable")
+        self.assertEqual(clases, {-1.0: "inestable", 1.0: "estable"})
+        self.assertEqual(resultado["desarrollo"]["familia"], "equilibrios_1d")
 
     def test_verifica_que_los_puntos_anulen_el_campo(self):
-        """La verificacion propia de esta pregunta es F(x*) = 0."""
+        """La verificación propia de esta pregunta es F(x*) = 0."""
         resultado = analizar_equilibrios_sistema(
             {**self.SILLA_NODO, "parametros": {"mu": 4.0}})
         self.assertTrue(resultado["verificacion"]["ok"])
-        self.assertEqual(len(resultado["verificacion"]["pruebas"]), 2)
-        for prueba in resultado["verificacion"]["pruebas"]:
+        anulan = [p for p in resultado["verificacion"]["pruebas"] if p["nombre"].startswith("F(x*)=0")]
+        self.assertEqual(len(anulan), 2)
+        for prueba in anulan:
             self.assertLess(prueba["residuo"], prueba["umbral"])
-
-    def test_rechaza_un_punto_que_no_es_equilibrio(self):
-        resultado = analizar_equilibrios_sistema(
-            {**self.SILLA_NODO, "parametros": {"mu": 1.0}, "equilibrios": [[0.5]]})
-        self.assertFalse(resultado["ok"])
-        self.assertEqual(resultado["etapa"], "verificacion")
-        self.assertNotIn("analisis", resultado)
 
     def test_sin_equilibrios_reales_lo_dice(self):
         resultado = analizar_equilibrios_sistema(
             {**self.SILLA_NODO, "parametros": {"mu": -1.0}})
         self.assertTrue(resultado["ok"])
         self.assertEqual(resultado["solucion"]["cantidad"], 0)
-        self.assertTrue(any("no tiene equilibrios" in n for n in resultado["notas"]))
+        self.assertTrue(any("No hay equilibrios" in c for c in resultado["desarrollo"]["conclusiones"]))
 
     def test_un_sistema_no_autonomo_no_tiene_equilibrios_definidos(self):
         resultado = analizar_equilibrios_sistema(
@@ -383,16 +419,16 @@ class EquilibriosSinTrayectoriaTests(unittest.TestCase):
         self.assertEqual(resultado["etapa"], "no_aplica")
         self.assertIn("analizar_edo", resultado["detalles"]["sugerencia"])
 
-    def test_hereda_el_porton_de_los_mapas_discretos(self):
+    def test_un_mapa_da_sus_puntos_fijos_y_la_duda_se_pregunta(self):
         resultado = analizar_equilibrios_sistema(
-            {**self.SILLA_NODO, "tipo_de_sistema": "mapa_discreto"})
-        self.assertEqual(resultado["etapa"], "fuera_de_alcance")
+            {**self.SILLA_NODO, "parametros": {"mu": 1.0}, "tipo_de_sistema": "mapa_discreto"})
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["familia"], "mapa_1d")
         resultado = analizar_equilibrios_sistema(
-            {**self.SILLA_NODO, "tipo_de_sistema": "no_estoy_seguro"})
+            {**self.SILLA_NODO, "parametros": {"mu": 1.0}, "tipo_de_sistema": "no_estoy_seguro"})
         self.assertEqual(resultado["etapa"], "aclaracion_necesaria")
 
-    def test_una_bifurcacion_se_estudia_repitiendo_la_llamada(self):
-        """Es lo que el agente recomienda mientras el barrido no exista."""
+    def test_repetir_la_llamada_sigue_dando_cada_valor(self):
         conteos = []
         for mu in (-1.0, 0.0, 1.0):
             resultado = analizar_equilibrios_sistema(
@@ -401,10 +437,11 @@ class EquilibriosSinTrayectoriaTests(unittest.TestCase):
             conteos.append(resultado["solucion"]["cantidad"])
         self.assertEqual(conteos, [0, 1, 2])
 
-    def test_la_nota_remite_al_barrido_pendiente(self):
-        resultado = analizar_equilibrios_sistema(
-            {**self.SILLA_NODO, "parametros": {"mu": 1.0}})
-        self.assertTrue(any("pendiente" in n for n in resultado["notas"]))
+    def test_con_el_parametro_declarado_basta_una_llamada(self):
+        resultado = analizar_equilibrios_sistema({**self.SILLA_NODO, "parametro": "mu"})
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["familia"], "bifurcacion_1d")
+        self.assertTrue(any("silla-nodo" in c for c in resultado["desarrollo"]["conclusiones"]))
 
     def test_rechaza_dimension_por_encima_del_limite(self):
         resultado = analizar_equilibrios_sistema(
@@ -419,25 +456,6 @@ class EquilibriosSinTrayectoriaTests(unittest.TestCase):
              "variables_estado": ["x", "y"], "parametros": {"mu": 1.0}})
         self.assertTrue(resultado["ok"], resultado.get("error"))
         json.dumps(resultado, allow_nan=False, ensure_ascii=False)
-
-
-class TestAvisosDeBusquedaDeEquilibrios(unittest.TestCase):
-    """Las advertencias de `buscar_equilibrios` se suman; no se pisan.
-
-    x' = x**4 - 1 tiene cuatro raíces: dos reales (±1) y dos imaginarias, que se
-    descartan. Si además se recortan por exceder el máximo, el resultado tiene
-    dos cosas que advertir a la vez. Antes la segunda sobrescribía a la primera
-    y el cliente no se enteraba de los descartes.
-    """
-
-    def test_descartes_y_recorte_se_reportan_juntos(self):
-        campo = compilar_campo(["x**4 - 1"], "t", ["x"])
-        with mock.patch.object(capacidades, "MAXIMO_EQUILIBRIOS", 1):
-            equilibrios, nota = capacidades.buscar_equilibrios(campo, {})
-        self.assertEqual(len(equilibrios), 1)
-        self.assertEqual(nota["descartados"], 2)
-        self.assertIn("descartada", nota["nota"])
-        self.assertIn("se reportan", nota["nota"])
 
 
 if __name__ == "__main__":

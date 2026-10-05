@@ -31,7 +31,9 @@ import storage
 from orquestacion.capacidades import analizar_edo as _analizar_edo
 from orquestacion.capacidades import analizar_equilibrios_sistema as _analizar_equilibrios
 from orquestacion.capacidades import describir_capacidades
+from matematica.clasificacion import alcance_del_problema
 from orquestacion.catalogo import cargar_catalogo
+from orquestacion.contratos import Trozo
 from orquestacion.informe import MODO as MODO_INFORME
 from orquestacion.informe import SESION
 
@@ -67,59 +69,84 @@ servidor = MCPServer(
     name="edos-grupo09",
     title="Agente de EDOs y sistemas dinámicos (grupo 09)",
     instructions=(
-        "Resuelve y analiza ecuaciones diferenciales ordinarias de 1 a 3 variables.\n\n"
-        "QUÉ ESTÁ IMPLEMENTADO: integración numérica con control de error, y el "
-        "análisis de estabilidad (equilibrios exactos, Jacobiano, autovalores y "
-        "clasificación).\n\n"
-        "QUÉ HERRAMIENTA USAR: `resolver_graficar_y_analizar_edo` cuando haya condición inicial y se "
-        "quiera la trayectoria. `analizar_equilibrios` cuando la pregunta sea sobre "
-        "equilibrios, estabilidad o una bifurcación y NO haya condición inicial: así "
-        "no hay que inventar una trayectoria que nadie pidió. Para una bifurcación, "
-        "llame a `analizar_equilibrios` varias veces variando el parámetro.\n\n"
-        "QUÉ NO ESTÁ IMPLEMENTADO TODAVÍA. Si el usuario pide algo de esta lista, "
-        "dígaselo claramente en vez de ofrecer un sustituto como si fuera la "
-        "respuesta:\n"
-        "  - Exponente de Lyapunov, secciones de Poincaré, cuantificación del caos "
-        "(pida analisis=['caos'] y el servidor devolverá el detalle de lo pendiente).\n"
-        "  - Diagramas de bifurcación y barridos paramétricos automáticos "
-        "(analisis=['bifurcaciones']). Sí se puede, mientras tanto, llamar varias "
-        "veces con distintos valores del parámetro: cada llamada da los equilibrios "
-        "exactos y su estabilidad para ese valor.\n"
-        "  - Resolución ANALÍTICA o simbólica (analisis=['solucion_analitica']). El "
-        "agente integra numéricamente; no deriva soluciones cerradas. Si el usuario "
-        "pide 'resuélvelo analíticamente', no presente el resultado numérico como si "
-        "fuera la solución simbólica.\n\n"
-        "MAPAS ITERADOS: fuera de alcance, y hay que declararlo. El parámetro "
-        "`tipo_de_sistema` existe porque x_{n+1} = f(x_n) y dx/dt = f(x) se escriben "
-        "con el mismo lado derecho, así que el servidor no puede distinguirlos: quien "
-        "lo sabe es el usuario. Si el enunciado usa notación de recurrencia (x_{n+1}, "
-        "x_n, 'iterar', 'el mapa logístico'), declare tipo_de_sistema='mapa_discreto' "
-        "y el servidor dirá que está fuera de alcance. Si no puede determinarlo del "
-        "enunciado, declare 'no_estoy_seguro': el servidor devolverá la pregunta que "
-        "hay que hacerle al usuario, con las dos opciones y sus consecuencias. "
-        "PREGUNTE al usuario en ese caso, no adivine: el mapa logístico con r=3.8 es "
-        "caótico, mientras que la EDO continua con el mismo lado derecho converge a un "
-        "equilibrio. Los problemas 4.1 a 4.3 y 5.3 del balotario son mapas.\n\n"
+        "Resuelve problemas de ecuaciones diferenciales ordinarias (1 a 3 variables) y de "
+        "mapas unidimensionales con el DESARROLLO MATEMÁTICO del balotario del grupo: "
+        "clasifica el problema, elige el método que le corresponde, lo ejecuta con cálculo "
+        "simbólico (sympy) y numérico (scipy), lo verifica y lo dibuja.\n\n"
+        "QUÉ RESUELVE (familias del balotario, Temas 1 a 3 y el problema 4.1):\n"
+        "  - Tema 1: separables (con intervalo maximal), lineales de primer orden (factor "
+        "integrante), Bernoulli, Riccati (con una solución particular), Cauchy-Euler "
+        "(ecuación indicial y variación de parámetros), y sistemas conservativos como el "
+        "péndulo (energía, separatriz, periodo con la integral elíptica K).\n"
+        "  - Tema 2: sistemas lineales planos (autovalores, autovectores, clasificación, "
+        "trayectorias, variedades), clasificación según un parámetro, sistemas no "
+        "lineales (equilibrios, jacobiano, linealización, nulclinas, cuencas), "
+        "hamiltonianos (órbita homoclínica) y ciclos límite por Poincaré-Bendixson.\n"
+        "  - Tema 3: bifurcaciones silla-nodo, transcrítica y de horquilla (condiciones de "
+        "Sotomayor, histéresis), Hopf (coeficiente de Lyapunov) y homoclínica (Melnikov y "
+        "disparo numérico).\n"
+        "  - Problema 4.1: exponente de Lyapunov y horizonte de predictibilidad de un mapa "
+        "unidimensional (por ejemplo el mapa tienda).\n\n"
+        "QUÉ HERRAMIENTA USAR: `resolver_graficar_y_analizar_edo` para resolver, hallar la "
+        "solución general, graficar o analizar un problema (la condición inicial es "
+        "OPCIONAL: 'halle la solución general' no la necesita). `analizar_equilibrios` "
+        "cuando la pregunta sea solo sobre equilibrios, estabilidad o una bifurcación.\n\n"
+        "PASE EL ENUNCIADO Y LO QUE SE PIDE. Copie el enunciado del usuario en `enunciado`: "
+        "de él se lee el método que nombra (Bernoulli, Riccati, Hopf...) y lo que pide "
+        "(intervalo máximo, trayectorias, separatriz, periodo...), que decide qué partes "
+        "tiene el desarrollo. Si el enunciado nombra un método, póngalo también en "
+        "`metodo_analitico`. Para un estudio según un parámetro (γ, μ) declárelo en "
+        "`parametro` (y su dominio en `rango_parametro`, p. ej. [0, null] para γ ≥ 0); "
+        "para una constante que deba quedar simbólica (ω₀) también, con [0, null]. Para "
+        "Riccati, la solución particular conocida va en `solucion_particular`. Para una "
+        "región (cuadrante biológico) use `region`.\n\n"
+        "CÓMO PRESENTAR LA RESPUESTA: la respuesta trae `desarrollo`, el procedimiento "
+        "que el servidor REALMENTE calculó. Preséntelo siguiendo `desarrollo.secciones` "
+        "en orden: el título de cada sección y sus fórmulas (vienen en LaTeX), con las "
+        "conclusiones al final. Puede explicar, enlazar los pasos y redactar, pero NO "
+        "agregue operaciones, sustituciones ni resultados que no estén en el desarrollo: "
+        "si un paso no está, el servidor no lo hizo. Las fórmulas destacadas son los "
+        "resultados que el balotario encuadra.\n\n"
+        "FUERA DE ALCANCE POR AHORA (el balotario todavía no los resuelve): duplicación "
+        "de periodo y Feigenbaum (4.2, 4.3), disipatividad y elipsoide de Lorenz (4.4), "
+        "espectro de Lyapunov de flujos (4.5) y todo el Tema 5 (dimensión fractal, "
+        "herradura de Smale, Hénon, secciones de Poincaré, Kaplan-Yorke). Si el usuario "
+        "pide uno de ellos, el servidor lo marca como fuera de alcance: dígaselo así, sin "
+        "ofrecer un sustituto como si fuera la respuesta. Un sistema que no pertenece a "
+        "ninguna familia se resuelve numéricamente, y el desarrollo lo dice.\n\n"
+        "MAPAS ITERADOS: x_{n+1} = f(x_n) y dx/dt = f(x) se escriben con el mismo lado "
+        "derecho, así que el servidor no puede distinguirlos: quien lo sabe es el usuario. "
+        "Si el enunciado usa notación de recurrencia (x_{n+1}, x_n, 'iterar', 'el mapa "
+        "tienda'), declare tipo_de_sistema='mapa_discreto'; un mapa definido a trozos va en "
+        "`trozos` (o con Abs/Min/Max) y la separación δ₀ en `separacion_inicial`. Si no "
+        "puede determinarlo del enunciado, declare 'no_estoy_seguro': el servidor "
+        "devolverá la pregunta que hay que hacerle al usuario. PREGUNTE al usuario en ese "
+        "caso, no adivine: el mapa logístico con r=3.8 es caótico, mientras que la EDO "
+        "continua con el mismo lado derecho converge a un equilibrio.\n\n"
         "Si una respuesta llega con etapa='aclaracion_necesaria', no reintente con una "
         "suposición: traslade la pregunta al usuario y vuelva a llamar con su respuesta.\n\n"
         "CÓMO ESCRIBIR EL SISTEMA: forma explícita de primer orden x' = F(t, x), una "
         "expresión por variable de estado. Una EDO de orden n se reduce antes a un "
         "sistema de n ecuaciones; por ejemplo theta'' = -sin(theta) se escribe como "
-        "ecuaciones=['v', '-sin(theta)'] con variables_estado=['theta', 'v'].\n\n"
-        "VERIFICACIÓN: toda respuesta trae un bloque `verificacion`. Si `ok` es false, "
-        "el servidor no entrega conclusiones y hay que explicar al usuario qué "
-        "comprobación falló en lugar de interpretar números inválidos.\n\n"
+        "ecuaciones=['v', '-sin(theta)'] con variables_estado=['theta', 'v'], y "
+        "x²y'' − 2xy' + 2y = x³ ln x como ecuaciones=['yp', '(2*x*yp - 2*y + "
+        "x**3*log(x))/x**2'] con variables_estado=['y', 'yp'] y variable_independiente='x'. "
+        "El servidor reconoce esa forma y la trata como la EDO de orden n que es.\n\n"
+        "VERIFICACIÓN: toda respuesta trae un bloque `verificacion`, con las comprobaciones "
+        "simbólicas del desarrollo (sustituir la solución en la EDO, conservación de "
+        "integrales primeras, identidades) y las numéricas. Si `ok` es false, el servidor "
+        "no entrega conclusiones y hay que explicar al usuario qué comprobación falló en "
+        "lugar de interpretar números inválidos.\n\n"
         "NO REHAGA EL CÁLCULO POR SU CUENTA. No vuelva a integrar el sistema con "
         "scipy, ni dibuje la figura con matplotlib, ni escriba código para "
-        "reproducir lo que esta herramienta ya devolvió. El servidor ya integró "
-        "con control de error y pasó la solución por cinco verificaciones "
-        "independientes; una trayectoria que usted reintegre aparte NO pasó por "
-        "ese portón, así que presentarla al usuario deshace la única garantía que "
-        "este agente ofrece. Si lo que le falta es una imagen que el usuario pueda "
-        "ver, ya existe: es el informe, y basta con darle el enlace.\n\n"
-        "Lo que sí le toca a usted es redactar: interpretar los equilibrios, "
-        "explicar la dinámica y relacionar los números con la matemática del "
-        "problema. Los números salen de la respuesta, no de un cálculo suyo.\n\n"
+        "reproducir lo que esta herramienta ya devolvió. El servidor ya calculó el "
+        "desarrollo, integró con control de error y lo verificó; un cálculo que usted "
+        "haga aparte NO pasó por ese portón, así que presentarlo al usuario deshace la "
+        "única garantía que este agente ofrece. Si lo que le falta es una imagen que el "
+        "usuario pueda ver, ya existe: es el informe, y basta con darle el enlace.\n\n"
+        "Lo que sí le toca a usted es redactar: ordenar y explicar el desarrollo, "
+        "interpretar los equilibrios y la dinámica, y relacionar los resultados con la "
+        "pregunta. Los números y las fórmulas salen de la respuesta, no de un cálculo suyo.\n\n"
         "AL EMPEZAR UNA CONVERSACIÓN, LLAME A `nuevo_informe`. Este servidor sigue "
         "vivo entre conversaciones: no se reinicia con cada chat. Si no lo llama, "
         "las preguntas de este chat se acumulan en el mismo documento que las del "
@@ -149,7 +176,8 @@ servidor = MCPServer(
         "  - `informe` como herramienta devuelve la dirección en cualquier momento, "
         "y sirve para dársela ANTES del primer análisis si el usuario quiere mirar "
         "cómo se va llenando.\n\n"
-        "Use `ping` para obtener el inventario exacto de capacidades y pendientes."),
+        "Use `ping` para obtener el inventario exacto de familias y de lo que queda fuera de "
+        "alcance."),
 )
 
 
@@ -253,15 +281,18 @@ def informe() -> dict:
 @servidor.tool(
     name="resolver_graficar_y_analizar_edo",
     description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, siempre que haya que "
-                "resolver numéricamente una EDO o un sistema de EDOs con condición "
-                "inicial, graficar x(t), dibujar un plano de fase o retrato de fase, "
-                "un campo de direcciones, una línea de fase o una trayectoria 3D, "
-                "encontrar o clasificar puntos de equilibrio, o estudiar estabilidad, "
-                "ciclos límite, atractores y sensibilidad a condiciones iniciales. "
-                "Hace todo eso de una sola llamada: integra con control de error "
-                "(RK45, DOP853, Radau, BDF, LSODA), resuelve F(x)=0 de forma exacta "
-                "con sympy, calcula Jacobiano y autovalores, verifica la solución con "
-                "cinco pruebas independientes y genera las figuras. "
+                "resolver una EDO o un sistema de EDOs (analíticamente o resolver "
+                "numéricamente), hallar su solución general o particular, graficar x(t), "
+                "dibujar un plano de fase o retrato de fase, un campo de direcciones, una "
+                "línea de fase o una trayectoria 3D, encontrar o clasificar puntos de "
+                "equilibrio, o estudiar estabilidad, bifurcaciones, ciclos límite, "
+                "atractores y sensibilidad a condiciones iniciales. Clasifica el problema "
+                "(separable, lineal, Bernoulli, Riccati, Cauchy-Euler, conservativo, sistema "
+                "lineal o no lineal, Hopf, homoclínica, mapa) y hace el DESARROLLO "
+                "MATEMÁTICO completo con sympy: transformaciones, ecuaciones intermedias, "
+                "constantes, autovalores, separatrices. Si hay condición inicial, además "
+                "integra con control de error (RK45, DOP853, Radau, BDF, LSODA) y contrasta "
+                "la solución analítica con la numérica; verifica todo y genera las figuras. "
                 "NO uses scipy, solve_ivp ni matplotlib para esto: lo que calcules por "
                 "tu cuenta no pasa por esas verificaciones y no debe mostrarse al "
                 "usuario como resultado. Reduce EDOs de orden n a sistemas de primer "
@@ -270,10 +301,19 @@ def informe() -> dict:
 def analizar_edo(
     ecuaciones: list[str],
     variables_estado: list[str],
-    y0: list[float],
-    intervalo: list[float],
+    y0: list[float] | None = None,
+    intervalo: list[float] | None = None,
     variable_independiente: str = "t",
     parametros: dict[str, float] | None = None,
+    enunciado: str | None = None,
+    metodo_analitico: str | None = None,
+    pedidos: list[str] | None = None,
+    parametro: str | None = None,
+    rango_parametro: list[float | None] | None = None,
+    region: dict[str, list[float | None]] | None = None,
+    solucion_particular: str | None = None,
+    trozos: list[Trozo] | None = None,
+    separacion_inicial: float | None = None,
     analisis: list[str] | None = None,
     equilibrios: list[list[float]] | None = None,
     solucion_exacta: str | None = None,
@@ -285,72 +325,79 @@ def analizar_edo(
     titulo: str | None = None,
     tipo_de_sistema: str = "edo_continua",
 ) -> dict:
-    """Recorre validar → resolver → verificar → analizar → visualizar.
+    """Interpreta, clasifica, desarrolla, calcula, verifica y dibuja un problema.
 
     Args:
         ecuaciones: Lado derecho de x' = F(t, x), una expresión por variable de
             estado, en el mismo orden. Se escriben con `**` para la potencia y
             pueden usar sin, cos, tan, exp, log, sqrt, sinh, cosh, tanh, Abs,
-            sign, pi. Ejemplos: ["-2*y"], ["r*y*(1 - y/K)"],
-            ["v", "-w0**2*sin(theta)"].
+            sign, Min, Max, pi. Ejemplos: ["-2*y"], ["y**3 - y"],
+            ["yp", "(2*x*yp - 2*y + x**3*log(x))/x**2"], ["v", "-w0**2*sin(theta)"].
         variables_estado: Nombres de las variables de estado, de 1 a 3.
-        y0: Condición inicial, un valor por variable de estado.
-        intervalo: Par [t_inicial, t_final] con t_final > t_inicial.
-        variable_independiente: Nombre de la variable independiente. Usa "x"
+        y0: Condición inicial, un valor por variable. OPCIONAL: "halle la
+            solución general" o "clasifique el equilibrio" no la tienen.
+        intervalo: [t_inicial, t_final]; t_inicial es donde vale la condición
+            inicial. Obligatorio si se da y0; sin y0 solo fija la ventana de las
+            gráficas.
+        variable_independiente: Nombre de la variable independiente. Use "x"
             cuando el problema está escrito como dy/dx.
-        parametros: Valores de los parámetros con nombre que usan las ecuaciones,
-            por ejemplo {"r": 1.0, "K": 10.0}. Todo nombre que aparezca en las
-            ecuaciones y no sea variable de estado debe estar aquí.
-        analisis: Análisis a ejecutar. Implementado: "estabilidad". Reconocidos
-            pero PENDIENTES de implementación, que informan qué falta en lugar
-            de devolver números: "caos" (Lyapunov, Poincaré, sensibilidad),
-            "bifurcaciones" (barridos y ramas) y "solucion_analitica"
-            (resolución simbólica). Se aceptan alias naturales: "lyapunov" y
-            "poincare" se resuelven a "caos", "hopf" y "barrido" a
-            "bifurcaciones", "simbolica" a "solucion_analitica". Por defecto
-            ["estabilidad"].
-        equilibrios: Equilibrios a clasificar. Si se omite, se resuelven de forma
-            exacta con sympy cuando el sistema es autónomo.
-        solucion_exacta: Solución analítica conocida, en función de la variable
-            independiente, para contrastarla con la numérica. Ejemplo:
-            "exp(-2*t)". Si no coincide, la verificación falla y no se emiten
-            conclusiones.
-        metodo: Integrador de SciPy. Opciones: RK45, RK23, DOP853, Radau, BDF,
-            LSODA. Radau o BDF para problemas rígidos.
+        parametros: Valores de los parámetros con nombre, p. ej. {"r": 1.0}.
+            Todo nombre que no sea variable de estado debe estar aquí o en
+            `parametro`.
+        enunciado: El enunciado tal como lo escribió el usuario. Decide el
+            método que se nombra y qué partes tiene el desarrollo.
+        metodo_analitico: Método que pide el enunciado: separable, lineal,
+            bernoulli, riccati, cauchy_euler, conservativo, lineal_plano,
+            no_lineal, ciclo_limite, bifurcacion, hopf, homoclinica, mapa o
+            numerico. Si la ecuación no tiene esa forma, el servidor lo dice y
+            usa el método que sí corresponde.
+        pedidos: Lo que pide el enunciado, si quiere precisarlo: solucion_general,
+            intervalo_maximo, trayectorias, separatriz, periodo, energia,
+            hamiltoniano, equilibrios, ciclo_limite, homoclinica,
+            diagrama_bifurcacion, lyapunov, horizonte.
+        parametro: Parámetro que se estudia de forma simbólica (γ de un
+            oscilador, μ de una bifurcación) o constante que debe quedar
+            simbólica (ω₀). Su valor en `parametros`, si se da, se usa para
+            integrar y graficar.
+        rango_parametro: [mínimo, máximo] del parámetro, null = no acotado.
+            Ejemplos: [0, null] para γ ≥ 0 o para ω₀ > 0.
+        region: Cotas de las variables, p. ej. {"x": [0, null], "y": [0, null]}
+            para el cuadrante biológico.
+        solucion_particular: Solución particular conocida de una Riccati
+            (p. ej. "x"). Si falta, se busca una polinómica.
+        trozos: Mapa definido a trozos: [{"expresion": "2*x", "desde": 0,
+            "hasta": 0.5}, {"expresion": "2*(1 - x)", "desde": 0.5, "hasta": 1}].
+        separacion_inicial: δ₀ del horizonte de predictibilidad de un mapa.
+        analisis: Bloques adicionales: "estabilidad" (equilibrios con los
+            parámetros dados, por defecto), "solucion_analitica",
+            "bifurcaciones", "caos". El desarrollo matemático se hace siempre.
+        equilibrios: Equilibrios a clasificar en el bloque de estabilidad. Si se
+            omite, se resuelven de forma exacta.
+        solucion_exacta: Solución analítica conocida para contrastar con la
+            numérica (si no se da, se usa la que obtiene el desarrollo).
+        metodo: Integrador de SciPy: RK45, RK23, DOP853, Radau, BDF, LSODA.
         rtol: Tolerancia relativa del integrador.
         atol: Tolerancia absoluta del integrador.
         puntos: Puntos de la malla de salida.
-        visualizar: Generar la visualización HTML interactiva.
-        titulo: Título para la gráfica y el reporte.
-        tipo_de_sistema: Cómo planteó el usuario el problema. Importa porque
-            x_{n+1} = r*x_n*(1-x_n) y dx/dt = r*x*(1-x) se escriben con el
-            mismo lado derecho pero tienen dinámicas distintas, y el servidor
-            no puede distinguirlos solo. Valores:
-              - "edo_continua" (por defecto): el usuario planteó una ecuación
-                diferencial, con derivadas respecto de un tiempo continuo.
-              - "mapa_discreto": el usuario planteó una recurrencia o iteración
-                (notación x_{n+1}, x_n, "iterar", "el mapa logístico"). Está
-                fuera de alcance y el servidor lo dirá en vez de calcular.
-              - "no_estoy_seguro": no se puede determinar del enunciado. El
-                servidor devolverá la pregunta que hay que hacerle al usuario,
-                con las dos opciones y sus consecuencias, en lugar de un
-                resultado. Úselo en vez de adivinar.
+        visualizar: Generar las figuras del informe.
+        titulo: Título para el informe.
+        tipo_de_sistema: "edo_continua" (por defecto), "mapa_discreto" para una
+            recurrencia x_{n+1} = f(x_n) (notación x_n, "iterar", "el mapa
+            tienda"), o "no_estoy_seguro": el servidor devuelve la pregunta que
+            hay que hacerle al usuario en lugar de un resultado.
 
     Returns:
-        Si `ok` es true: `configuracion` (para reproducir el cálculo),
-        `solucion` (malla, estado inicial y final), `verificacion` (el detalle de
-        cada comprobación), `analisis` y `visualizacion` con el HTML.
+        Si `ok` es true: `desarrollo` (familia, método, `secciones` con las
+        fórmulas en LaTeX en el orden en que se presentan, `resultados` con
+        nombre, `conclusiones`), `clasificacion`, `verificacion` (comprobaciones
+        simbólicas y numéricas), `solucion` (trayectoria si hubo condición
+        inicial), `analisis` y `visualizacion` con el enlace al informe.
+        Presente el desarrollo siguiendo `desarrollo.secciones`, sin agregar
+        operaciones que no estén ahí.
 
-        Si `visualizacion` trae un campo `url`, es la visualización interactiva
-        que este servidor acaba de generar y publicar en el storage del
-        laboratorio (mismo dominio que este MCP), a máxima resolución.
-        Entrégala al usuario como enlace markdown, por ejemplo
-        `[Ver la visualización interactiva](<url>)`, en vez de solo
-        describirla: ningún cliente de chat ofrece ese enlace por su cuenta a
-        partir del resultado de la tool. Cuando además venga `html_omitido`,
-        el documento no entró inline y el enlace es la única forma de verlo.
         Si `ok` es false: `etapa` y `error`, y ninguna conclusión. Las etapas
-        posibles son validacion_solicitud, compilacion, resolucion y verificacion.
+        posibles son validacion_solicitud, compilacion, interpretacion,
+        resolucion y verificacion.
 
         Nota sobre sistemas caóticos: la verificación compara punto a punto solo
         en el tramo inicial. Si dos integraciones coinciden al principio y se
@@ -365,6 +412,15 @@ def analizar_edo(
         "intervalo": intervalo,
         "variable_independiente": variable_independiente,
         "parametros": parametros or {},
+        "enunciado": enunciado,
+        "metodo_analitico": metodo_analitico,
+        "pedidos": pedidos,
+        "parametro": parametro,
+        "rango_parametro": rango_parametro,
+        "region": region,
+        "solucion_particular": solucion_particular,
+        "trozos": [t.model_dump() if hasattr(t, "model_dump") else t for t in trozos] if trozos else None,
+        "separacion_inicial": separacion_inicial,
         "analisis": analisis or ["estabilidad"],
         "equilibrios": equilibrios,
         "solucion_exacta": solucion_exacta,
@@ -381,45 +437,54 @@ def analizar_edo(
 @servidor.tool(
     description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, para encontrar y clasificar "
                 "puntos de equilibrio y su estabilidad (nodo, silla, foco, centro, "
-                "estable o inestable) con Jacobiano y autovalores, SIN integrar ninguna "
-                "trayectoria. Es la indicada cuando la pregunta es sobre equilibrios, "
-                "estabilidad o bifurcaciones y NO hay condición inicial; si la hay, usa "
-                "`resolver_graficar_y_analizar_edo`, que también los clasifica. Para una bifurcación, "
-                "llámala varias veces variando el parámetro.")
+                "estable o inestable) con Jacobiano y autovalores, o para estudiar una "
+                "bifurcación (silla-nodo, transcrítica, horquilla, Hopf, homoclínica) "
+                "según un parámetro, SIN integrar ninguna trayectoria. Hace el desarrollo "
+                "matemático completo. Es la indicada cuando la pregunta es sobre "
+                "equilibrios, estabilidad o bifurcaciones y NO hay condición inicial; si "
+                "la hay, usa `resolver_graficar_y_analizar_edo`.")
 @sin_contaminar_stdout
 def analizar_equilibrios(
     ecuaciones: list[str],
     variables_estado: list[str],
     variable_independiente: str = "t",
     parametros: dict[str, float] | None = None,
+    enunciado: str | None = None,
+    metodo_analitico: str | None = None,
+    pedidos: list[str] | None = None,
+    parametro: str | None = None,
+    rango_parametro: list[float | None] | None = None,
+    region: dict[str, list[float | None]] | None = None,
     equilibrios: list[list[float]] | None = None,
     tipo_de_sistema: str = "edo_continua",
 ) -> dict:
-    """Resuelve F(x)=0 de forma exacta y clasifica cada equilibrio.
-
-    Use esta herramienta en lugar de `resolver_graficar_y_analizar_edo` cuando el enunciado pregunte
-    por equilibrios, estabilidad o una bifurcación y **no** dé una condición
-    inicial. Pedir aquí no obliga a inventar una trayectoria.
-
-    Para estudiar una bifurcación, llame varias veces variando el parámetro de
-    interés: cada llamada da los equilibrios exactos y su estabilidad para ese
-    valor. El barrido automático está pendiente de implementación.
+    """Equilibrios, estabilidad y bifurcaciones, con su desarrollo.
 
     Args:
         ecuaciones: Lado derecho de x'=F(x), una expresión por variable de
-            estado. El sistema debe ser autónomo: si depende de la variable
-            independiente, sus equilibrios no están definidos.
+            estado. El sistema debe ser autónomo.
         variables_estado: Nombres de las variables de estado, de 1 a 3.
         variable_independiente: Nombre de la variable independiente.
         parametros: Valores de los parámetros que usan las ecuaciones.
+        enunciado: El enunciado del usuario (decide qué partes tiene el desarrollo).
+        metodo_analitico: Método que nombra el enunciado (bifurcacion, hopf,
+            homoclinica, lineal_plano, no_lineal, ciclo_limite...).
+        pedidos: Lo que pide el enunciado (equilibrios, diagrama_bifurcacion...).
+        parametro: El parámetro de la bifurcación o de la clasificación (μ, γ).
+            Para estudiar una bifurcación basta UNA llamada con el parámetro
+            declarado: el servidor calcula las ramas, los valores críticos y el
+            tipo de bifurcación.
+        rango_parametro: [mínimo, máximo] del parámetro; null = no acotado.
+        region: Cotas de las variables (p. ej. el cuadrante x ≥ 0, y ≥ 0).
         equilibrios: Equilibrios a clasificar. Si se omite, se resuelven F(x)=0
             de forma exacta con sympy.
-        tipo_de_sistema: Igual que en `resolver_graficar_y_analizar_edo`; vea su documentación.
+        tipo_de_sistema: Igual que en `resolver_graficar_y_analizar_edo`.
 
     Returns:
-        Si `ok` es true: `analisis.estabilidad.equilibrios` con el punto, su
-        clasificación, sus autovalores y el Jacobiano, más `verificacion`, que
-        comprueba que cada punto anule de verdad el campo. Si `ok` es false,
+        Si `ok` es true: `desarrollo` con el procedimiento calculado,
+        `analisis.estabilidad.equilibrios` con los equilibrios para los valores
+        dados de los parámetros y `verificacion`, que comprueba entre otras
+        cosas que cada punto anule de verdad el campo. Si `ok` es false,
         `etapa` dice qué no se superó y no hay conclusiones.
     """
     registro.info("analizar_equilibrios: %s variables, parametros=%s",
@@ -429,17 +494,24 @@ def analizar_equilibrios(
         "variables_estado": variables_estado,
         "variable_independiente": variable_independiente,
         "parametros": parametros or {},
+        "enunciado": enunciado,
+        "metodo_analitico": metodo_analitico,
+        "pedidos": pedidos,
+        "parametro": parametro,
+        "rango_parametro": rango_parametro,
+        "region": region,
         "equilibrios": equilibrios,
         "tipo_de_sistema": tipo_de_sistema,
     })
 
 
 @servidor.tool(
-    description="Lista los problemas del balotario del grupo, que sirven como vara de "
-                "nivel y como casos de referencia ya resueltos.")
+    description="Lista los problemas del balotario del grupo, que definen qué resuelve el "
+                "agente (y qué queda fuera de alcance por ahora), con su enunciado y su "
+                "ecuación lista para pasar a las otras herramientas.")
 @sin_contaminar_stdout
 def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) -> dict:
-    """Problemas del balotario con su ecuación y condiciones iniciales.
+    """Problemas del balotario con su ecuación, condiciones iniciales y alcance.
 
     Args:
         tema: Identificador de un tema concreto, por ejemplo "tema_01". Si se
@@ -449,9 +521,12 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
 
     Returns:
         Los temas con sus problemas. Cada problema trae id, enunciado, tipo,
-        dificultad, el bloque `ecuacion` listo para pasar a `resolver_graficar_y_analizar_edo`, y sus
-        condiciones iniciales. El campo `ci_derivada` indica si la condición
-        inicial viene del enunciado original o se fijó para concretar un PVI.
+        dificultad, el bloque `ecuacion` listo para pasar a `resolver_graficar_y_analizar_edo`, sus
+        condiciones iniciales y `alcance`: "dentro" (con las `familias` que lo
+        resuelven) o "fuera_de_alcance". El campo `ci_derivada` indica si la
+        condición inicial viene del enunciado original o se fijó para concretar
+        un PVI. Si el balotario tiene un error en ese problema, viene
+        `revision_matematica` con lo que el agente calcula en su lugar.
     """
     temas = cargar_catalogo()
     if tema is not None:
@@ -467,6 +542,9 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
             resumen = {clave: problema.get(clave) for clave in
                        ("id", "titulo", "enunciado", "tipo", "dificultad",
                         "ecuacion", "condiciones_iniciales")}
+            resumen.update(alcance_del_problema(problema["id"]))
+            if "revision_matematica" in problema:
+                resumen["revision_matematica"] = problema["revision_matematica"]["resumen"]
             if incluir_solucion:
                 resumen["solucion_esperada"] = problema.get("solucion_esperada")
             problemas.append(resumen)
@@ -474,12 +552,15 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
     return {"ok": True, "temas": salida,
             "nota": "Las ecuaciones vienen en forma de sistema de primer orden: "
                     "`campo`, `variables_estado` y `variable_independiente` se pasan "
-                    "tal cual. Un problema CON `condiciones_iniciales` va a "
-                    "`resolver_graficar_y_analizar_edo`; uno SIN ellas (las familias paramétricas del "
-                    "Tema 3) va a `analizar_equilibrios`, usando el `parametros` de "
-                    "cada caso de su `solucion_esperada`. Los que traen "
-                    "`verificable_con_solver: false` no son resolubles por este "
-                    "motor y dicen por qué en `motivo_no_verificable`."}
+                    "tal cual, junto con el `enunciado`. Un problema CON "
+                    "`condiciones_iniciales` va a `resolver_graficar_y_analizar_edo`; uno SIN "
+                    "ellas puede ir a cualquiera de las dos (la solución general no necesita "
+                    "condición inicial). Las familias paramétricas del Tema 3 van a "
+                    "`analizar_equilibrios` con `parametro` declarado: una sola llamada estudia "
+                    "la bifurcación entera. El 4.1 es un mapa: tipo_de_sistema='mapa_discreto' y "
+                    "el mapa en `trozos` ([{expresion, desde, hasta}]). Los problemas con "
+                    "`alcance: fuera_de_alcance` todavía no tienen solución en el balotario: "
+                    "el agente lo dice y no los resuelve."}
 
 
 def main():

@@ -1,12 +1,20 @@
 """Contratos de solicitud y resultado del agente, y conversión a JSON.
 
-Separa dos responsabilidades que antes no existían:
+Separa dos responsabilidades:
 
-* **Qué puede pedir un cliente** (`SolicitudEDO`): se valida en la frontera, de
-  modo que un pedido mal formado se rechace antes de tocar el solver.
+* **Qué puede pedir un cliente** (`SolicitudEDO`, `SolicitudEquilibrios`): se
+  valida en la frontera, de modo que un pedido mal formado se rechace antes de
+  tocar la matemática.
 * **Qué devuelve el agente** (`respuesta_ok` / `respuesta_error`): una forma
   estable, siempre serializable, con la configuración usada incluida para que
   cualquier resultado sea reproducible.
+
+La solicitud describe un **problema**, no solo un problema de valor inicial:
+la condición inicial es opcional, porque "halle la solución general" o
+"clasifique el equilibrio según γ" no la tienen. Los campos que permiten el
+desarrollo matemático (el enunciado, el método que nombra, el parámetro que se
+estudia, la región, la solución particular conocida) son opcionales; el
+agente funciona sin ellos y los usa cuando llegan.
 
 `serializable` existe porque los objetos que produce la capa matemática
 (`OdeResult` de SciPy, `ndarray`, autovalores complejos, `Path`) no pasan a
@@ -22,20 +30,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from matematica import MAX_DIMENSION
 
-#: Análisis que el agente sabe ejecutar hoy.
-ANALISIS_IMPLEMENTADOS = ("estabilidad",)
-
-#: Análisis que el agente sabe enrutar pero todavía no calcula. Pedirlos es
-#: válido: la respuesta dice que están pendientes, en vez de inventar números.
-ANALISIS_PENDIENTES = ("caos", "bifurcaciones", "solucion_analitica")
-
-#: Todo lo que `analisis` acepta.
-ANALISIS_DISPONIBLES = ANALISIS_IMPLEMENTADOS + ANALISIS_PENDIENTES
+#: Análisis adicionales que se pueden pedir. El desarrollo matemático se hace
+#: siempre; esto agrega bloques auxiliares o fuerza un tratamiento.
+ANALISIS_DISPONIBLES = ("estabilidad", "solucion_analitica", "bifurcaciones", "caos")
 
 #: Nombres con los que un usuario pide de forma natural algo que el agente
-#: agrupa bajo otro nombre. Sin esto, pedir "lyapunov" daba un error de
-#: nombre desconocido que remitía a "caos", obligando a un segundo intento
-#: para enterarse de que tampoco está implementado.
+#: agrupa bajo otro nombre.
 ALIAS_ANALISIS = {
     "equilibrios": "estabilidad",
     "estabilidad_local": "estabilidad",
@@ -64,23 +64,17 @@ ALIAS_ANALISIS = {
 #: Métodos de integración aceptados por scipy.integrate.solve_ivp.
 METODOS = ("RK45", "RK23", "DOP853", "Radau", "BDF", "LSODA")
 
-#: Cómo declara el cliente la naturaleza del sistema.
-#:
-#: `x_{n+1} = r·x_n(1 - x_n)` y `dx/dt = r·x(1 - x)` se escriben con el mismo
-#: lado derecho, así que el servidor no puede distinguirlos mirando las
-#: ecuaciones. Quien sí lo sabe es el usuario. Por eso la distinción es un campo
-#: del contrato y no una suposición: "no_estoy_seguro" es una respuesta válida
-#: que hace que el agente devuelva la pregunta en vez de un número.
+#: Cómo declara el cliente la naturaleza del sistema. `x_{n+1} = r·x_n(1 − x_n)`
+#: y `dx/dt = r·x(1 − x)` se escriben con el mismo lado derecho, así que el
+#: servidor no puede distinguirlos mirando las ecuaciones; quien lo sabe es el
+#: usuario. "no_estoy_seguro" hace que el agente devuelva la pregunta.
 TIPOS_DE_SISTEMA = ("edo_continua", "mapa_discreto", "no_estoy_seguro")
 
-#: Nombres de variable independiente que delatan una recurrencia en vez de un
-#: flujo continuo: nadie escribe dx/dn. Sirven para detectar un mapa declarado
-#: por error como EDO continua.
+#: Nombres de variable independiente que delatan una recurrencia: nadie escribe dx/dn.
 INDICES_DISCRETOS = ("n", "k", "i", "j", "m")
 
 #: Variables de estado con sufijo de índice (`x_n`, `theta_k`), propias de una
-#: sucesión. Solo la forma explícita con guion bajo, para no confundir `x1` y
-#: `x2`, que son nombres habituales de componentes de un sistema continuo.
+#: sucesión. Solo la forma explícita con guion bajo, para no confundir `x1`.
 _SUFIJO_INDICE = re.compile(r"^[A-Za-z]+_[" + "".join(INDICES_DISCRETOS) + r"]$",
                             re.IGNORECASE)
 
@@ -115,15 +109,22 @@ def serializable(objeto):
     return str(objeto)
 
 
-class _SolicitudBase(BaseModel):
-    """Lo que `SolicitudEDO` y `SolicitudEquilibrios` tienen en común.
+class Trozo(BaseModel):
+    """Un tramo de un mapa definido a trozos: f(x) = expresion para desde ≤ x ≤ hasta."""
 
-    Las dos describen el mismo sistema x' = F(t, x): mismas ecuaciones, mismas
-    variables, mismos parámetros y la misma ambigüedad continua/discreta. Antes
-    los dos modelos repetían campo por campo y validador por validador, así que
-    un arreglo en uno se olvidaba en el otro. Lo que cambia entre ellos -- que
-    uno exige condición inicial e intervalo y el otro no -- se declara abajo.
-    """
+    expresion: str
+    desde: float
+    hasta: float
+
+    @model_validator(mode="after")
+    def _orden(self):
+        if not self.hasta > self.desde:
+            raise ValueError("En cada trozo debe ser hasta > desde.")
+        return self
+
+
+class _SolicitudBase(BaseModel):
+    """Lo que tienen en común las dos herramientas: el sistema y el problema."""
 
     ecuaciones: list[str] = Field(
         ..., description="Lado derecho de x'=F(t,x). Una expresión por variable de estado.")
@@ -134,16 +135,34 @@ class _SolicitudBase(BaseModel):
     parametros: dict[str, float] = Field(
         default_factory=dict, description="Parámetros con nombre que usan las ecuaciones.")
     equilibrios: list[list[float]] | None = Field(
-        None, description="Equilibrios a clasificar. Si se omite, se resuelven "
-                          "F(x)=0 de forma exacta con sympy.")
+        None, description="Equilibrios a clasificar. Si se omite, se resuelven F(x)=0 exactos.")
     tipo_de_sistema: str = Field(
         "edo_continua",
-        description="Cómo planteó el usuario el problema: 'edo_continua' para una "
-                    "ecuación diferencial dx/dt = f(x); 'mapa_discreto' para una "
-                    "recurrencia x_{n+1} = f(x_n), que está fuera de alcance; "
-                    "'no_estoy_seguro' si no se puede determinar, y entonces el "
-                    "servidor devuelve la pregunta que hay que hacerle al usuario "
-                    "en vez de un resultado.")
+        description="'edo_continua' para dx/dt = f(x); 'mapa_discreto' para x_{n+1} = f(x_n); "
+                    "'no_estoy_seguro' si no se puede determinar.")
+    enunciado: str | None = Field(
+        None, description="El enunciado del problema tal como lo escribió el usuario.")
+    metodo_analitico: str | None = Field(
+        None, description="Método que nombra el enunciado: separable, lineal, bernoulli, "
+                          "riccati, cauchy_euler, conservativo, lineal_plano, no_lineal, "
+                          "ciclo_limite, bifurcacion, hopf, homoclinica, mapa, numerico.")
+    pedidos: list[str] | None = Field(
+        None, description="Lo que pide el enunciado: solucion_general, intervalo_maximo, "
+                          "trayectorias, separatriz, periodo, hamiltoniano, energia, "
+                          "equilibrios, ciclo_limite, homoclinica, diagrama_bifurcacion, "
+                          "lyapunov, horizonte...")
+    parametro: str | None = Field(
+        None, description="Parámetro que se estudia de forma simbólica (γ, μ, ω₀).")
+    rango_parametro: list[float | None] | None = Field(
+        None, description="[mínimo, máximo] del parámetro; null = no acotado.")
+    region: dict[str, list[float | None]] | None = Field(
+        None, description="Cotas de las variables, p. ej. {'x': [0, null], 'y': [0, null]}.")
+    solucion_particular: str | None = Field(
+        None, description="Solución particular conocida (Riccati), p. ej. 'x'.")
+    trozos: list[Trozo] | None = Field(
+        None, description="Mapa definido a trozos: [{expresion, desde, hasta}, ...].")
+    separacion_inicial: float | None = Field(
+        None, gt=0, description="δ₀ para el horizonte de predictibilidad de un mapa.")
 
     @field_validator("tipo_de_sistema")
     @classmethod
@@ -151,6 +170,17 @@ class _SolicitudBase(BaseModel):
         if valor not in TIPOS_DE_SISTEMA:
             raise ValueError(f"tipo_de_sistema debe ser uno de "
                              f"{', '.join(TIPOS_DE_SISTEMA)}; llegó {valor!r}.")
+        return valor
+
+    @field_validator("rango_parametro")
+    @classmethod
+    def _rango(cls, valor):
+        if valor is None:
+            return valor
+        if len(valor) != 2:
+            raise ValueError("rango_parametro debe ser [mínimo, máximo].")
+        if valor[0] is not None and valor[1] is not None and valor[1] <= valor[0]:
+            raise ValueError("En rango_parametro debe ser máximo > mínimo.")
         return valor
 
     @model_validator(mode="after")
@@ -167,15 +197,15 @@ class _SolicitudBase(BaseModel):
             for equilibrio in self.equilibrios:
                 if len(equilibrio) != n:
                     raise ValueError(f"Cada equilibrio debe tener {n} coordenadas.")
+        for nombre, cotas in (self.region or {}).items():
+            if nombre not in self.variables_estado:
+                raise ValueError(f"La región menciona {nombre!r}, que no es una variable de estado.")
+            if len(cotas) != 2:
+                raise ValueError("Cada cota de la región debe ser [mínimo, máximo].")
         return self
 
     def notacion_sugiere_mapa(self):
-        """Indicios de que esto es una recurrencia aunque se declare continua.
-
-        Nadie escribe dx/dn: si la variable independiente es un índice, o las
-        variables de estado llevan sufijo de índice, lo más probable es que el
-        usuario haya planteado un mapa iterado.
-        """
+        """Indicios de que esto es una recurrencia aunque se declare continua."""
         motivos = []
         if self.variable_independiente.lower() in INDICES_DISCRETOS:
             motivos.append(f"la variable independiente es "
@@ -187,20 +217,36 @@ class _SolicitudBase(BaseModel):
                            f"índice, propio de una sucesión")
         return motivos
 
+    def _configuracion_comun(self):
+        return {
+            "ecuaciones": self.ecuaciones,
+            "variable_independiente": self.variable_independiente,
+            "variables_estado": self.variables_estado,
+            "parametros": self.parametros,
+            "parametro": self.parametro,
+            "rango_parametro": self.rango_parametro,
+            "region": self.region,
+            "tipo_de_sistema": self.tipo_de_sistema,
+            "metodo_analitico": self.metodo_analitico,
+            "pedidos": self.pedidos,
+            "enunciado": self.enunciado,
+            "trozos": [t.model_dump() for t in self.trozos] if self.trozos else None,
+        }
+
 
 class SolicitudEDO(_SolicitudBase):
-    """Un problema de valor inicial tal como lo pide un cliente.
+    """Un problema con EDOs (o un mapa) tal como lo pide un cliente.
 
-    Ejemplo mínimo: ecuaciones=["-2*y"], variables_estado=["y"], y0=[1.0],
-    intervalo=[0.0, 5.0].
+    La condición inicial es opcional. Con ella el agente además integra la
+    trayectoria y contrasta la solución analítica con la numérica.
     """
 
-    y0: list[float] = Field(..., description="Condición inicial, un valor por variable.")
-    intervalo: list[float] = Field(
-        ..., description="Par [t_inicial, t_final] con t_final > t_inicial.")
+    y0: list[float] | None = Field(None, description="Condición inicial, un valor por variable.")
+    intervalo: list[float] | None = Field(
+        None, description="Par [t_inicial, t_final]; t_inicial es donde vale la condición inicial.")
     analisis: list[str] = Field(
         default_factory=lambda: ["estabilidad"],
-        description=f"Análisis solicitados. Disponibles: {', '.join(ANALISIS_DISPONIBLES)}.")
+        description=f"Análisis adicionales. Disponibles: {', '.join(ANALISIS_DISPONIBLES)}.")
     solucion_exacta: str | None = Field(
         None, description="Solución analítica conocida, para contrastar la numérica.")
     metodo: str = Field("RK45", description=f"Integrador. Opciones: {', '.join(METODOS)}.")
@@ -208,7 +254,7 @@ class SolicitudEDO(_SolicitudBase):
     atol: float = Field(1e-10, gt=0, description="Tolerancia absoluta del integrador.")
     puntos: int = Field(400, ge=2, le=200_000,
                         description="Número de puntos de la malla de salida.")
-    visualizar: bool = Field(True, description="Generar la visualización HTML.")
+    visualizar: bool = Field(True, description="Generar las figuras.")
     titulo: str | None = Field(None, description="Título para la gráfica y el reporte.")
 
     @field_validator("metodo")
@@ -233,33 +279,32 @@ class SolicitudEDO(_SolicitudBase):
         if desconocidos:
             raise ValueError(
                 f"Análisis desconocidos: {desconocidos}. "
-                f"Implementados: {', '.join(ANALISIS_IMPLEMENTADOS)}. "
-                f"Reconocidos pero pendientes de implementación: "
-                f"{', '.join(ANALISIS_PENDIENTES)}.")
+                f"Disponibles: {', '.join(ANALISIS_DISPONIBLES)}.")
         return list(dict.fromkeys(resueltos))
 
     @model_validator(mode="after")
-    def _coherencia_del_problema_de_valor_inicial(self):
-        """Solo lo que distingue a un PVI; el resto lo valida `_SolicitudBase`."""
+    def _coherencia_del_problema(self):
         n = len(self.variables_estado)
-        if len(self.y0) != n:
-            raise ValueError(f"La condición inicial debe tener {n} valores, "
-                             f"no {len(self.y0)}.")
-        if len(self.intervalo) != 2:
-            raise ValueError("El intervalo debe tener la forma [t_inicial, t_final].")
-        if self.intervalo[1] <= self.intervalo[0]:
-            raise ValueError("Se requiere t_final > t_inicial.")
+        if self.y0 is not None:
+            if len(self.y0) != n:
+                raise ValueError(f"La condición inicial debe tener {n} valores, "
+                                 f"no {len(self.y0)}.")
+            if self.intervalo is None:
+                raise ValueError("Con condición inicial hace falta el intervalo [t_inicial, "
+                                 "t_final]: t_inicial es donde vale la condición.")
+        if self.intervalo is not None:
+            if len(self.intervalo) != 2:
+                raise ValueError("El intervalo debe tener la forma [t_inicial, t_final].")
+            if self.intervalo[1] <= self.intervalo[0]:
+                raise ValueError("Se requiere t_final > t_inicial.")
         return self
 
     def configuracion(self):
         """Configuración de cálculo que se adjunta al resultado, para reproducirlo."""
         return serializable({
-            "ecuaciones": self.ecuaciones,
-            "variable_independiente": self.variable_independiente,
-            "variables_estado": self.variables_estado,
+            **self._configuracion_comun(),
             "y0": self.y0,
             "intervalo": self.intervalo,
-            "parametros": self.parametros,
             "analisis": self.analisis,
             "metodo": self.metodo,
             "rtol": self.rtol,
@@ -268,13 +313,21 @@ class SolicitudEDO(_SolicitudBase):
         })
 
 
-def respuesta_error(etapa, mensaje, configuracion=None, detalles=None):
-    """Resultado de un fallo. No lleva conclusiones, por diseño.
+class SolicitudEquilibrios(_SolicitudBase):
+    """Una pregunta sobre equilibrios, estabilidad o bifurcaciones, sin trayectoria.
 
-    La propuesta exige que si una validación falla el agente informe el problema
-    y evite emitir conclusiones basadas en resultados inválidos: esta forma hace
-    imposible devolver ambas cosas a la vez.
+    "Clasifique los equilibrios de x' = μ − x²" no es un problema de valor
+    inicial: exigir una condición inicial obligaría a integrar una trayectoria
+    que nadie pidió.
     """
+
+    def configuracion(self):
+        return serializable({**self._configuracion_comun(),
+                             "equilibrios_aportados": self.equilibrios})
+
+
+def respuesta_error(etapa, mensaje, configuracion=None, detalles=None):
+    """Resultado de un fallo. No lleva conclusiones, por diseño."""
     return serializable({
         "ok": False,
         "etapa": etapa,
@@ -285,37 +338,8 @@ def respuesta_error(etapa, mensaje, configuracion=None, detalles=None):
     })
 
 
-class SolicitudEquilibrios(_SolicitudBase):
-    """Una pregunta sobre equilibrios y estabilidad, sin trayectoria.
-
-    Existe porque "clasifique los equilibrios de x' = mu - x^2" no es un
-    problema de valor inicial: no hay condición inicial ni intervalo, y exigirlos
-    obligaría a integrar una trayectoria que nadie pidió. Es la forma de los
-    problemas del Tema 3 del balotario, que son familias paramétricas.
-
-    No declara ningún campo propio: hereda enteros los de `_SolicitudBase`,
-    que es exactamente lo que esta pregunta necesita. Lo único suyo es qué
-    adjunta al resultado para reproducirlo.
-    """
-
-    def configuracion(self):
-        """Configuración que se adjunta al resultado, para reproducirlo."""
-        return serializable({
-            "ecuaciones": self.ecuaciones,
-            "variable_independiente": self.variable_independiente,
-            "variables_estado": self.variables_estado,
-            "parametros": self.parametros,
-            "equilibrios_aportados": self.equilibrios,
-        })
-
-
 def respuesta_aclaracion(pregunta, opciones, configuracion=None, motivos=None):
-    """Resultado que pide una aclaración al usuario en lugar de adivinar.
-
-    Existe porque hay una ambigüedad que el servidor no puede resolver por
-    cuenta propia y que cambia la respuesta por completo. Devolver la pregunta
-    es más honesto que elegir una interpretación y presentarla como la única.
-    """
+    """Resultado que pide una aclaración al usuario en lugar de adivinar."""
     return serializable({
         "ok": False,
         "etapa": "aclaracion_necesaria",
@@ -330,10 +354,16 @@ def respuesta_aclaracion(pregunta, opciones, configuracion=None, motivos=None):
 
 
 def respuesta_ok(configuracion, solucion, verificacion, analisis=None,
-                 visualizacion=None, notas=None):
-    """Resultado completo de un análisis superado."""
+                 visualizacion=None, notas=None, **extra):
+    """Resultado completo de un problema resuelto y verificado.
+
+    `extra` lleva el desarrollo matemático, la clasificación y la lectura del
+    enunciado: lo que el modelo necesita para presentar la solución sin
+    inventar pasos.
+    """
     return serializable({
         "ok": True,
+        **extra,
         "configuracion": configuracion,
         "solucion": solucion,
         "verificacion": verificacion,
@@ -344,12 +374,7 @@ def respuesta_ok(configuracion, solucion, verificacion, analisis=None,
 
 
 def solucion_a_datos(solucion, variables_estado, maximo_puntos=None):
-    """Convierte un `OdeResult` de SciPy en datos JSON.
-
-    `maximo_puntos` submuestrea la malla cuando la trayectoria es larga, para no
-    enviar cientos de miles de números por el transporte; el estado final y el
-    conteo original se conservan intactos.
-    """
+    """Convierte un `OdeResult` de SciPy en datos JSON, submuestreando si hace falta."""
     tiempos = np.asarray(solucion.t, dtype=float)
     estados = np.asarray(solucion.y, dtype=float)
     paso = 1

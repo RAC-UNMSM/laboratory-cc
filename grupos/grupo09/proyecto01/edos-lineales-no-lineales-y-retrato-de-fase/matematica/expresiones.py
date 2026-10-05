@@ -60,7 +60,7 @@ def _validar_texto(texto, permitidos):
             f"({', '.join(sorted(FUNCIONES_PERMITIDAS))}).")
 
 
-def _parsear(texto, simbolos):
+def _parsear(texto, simbolos, racional=False):
     """Capa 3: parseo con sympy y comprobación de lo que quedó en la expresión."""
     entorno = dict(simbolos)
     # Se recorre ordenado para que el entorno no dependa del orden de iteración
@@ -75,7 +75,7 @@ def _parsear(texto, simbolos):
             entorno[nombre] = atributo
     _validar_texto(texto, set(entorno))
     try:
-        expresion = sp.sympify(texto, locals=entorno)
+        expresion = sp.sympify(texto, locals=entorno, rational=racional)
     except (sp.SympifyError, SyntaxError, TypeError) as exc:
         raise ExpresionInvalida(f"No se pudo interpretar {texto!r}: {exc}") from exc
 
@@ -91,7 +91,7 @@ def _parsear(texto, simbolos):
     return expresion
 
 
-def _simbolos(nombres):
+def _simbolos(nombres, **supuestos):
     """Diccionario nombre -> símbolo, rechazando nombres repetidos o inválidos."""
     limpios = []
     for nombre in nombres:
@@ -103,7 +103,27 @@ def _simbolos(nombres):
         if nombre in limpios:
             raise ExpresionInvalida(f"Nombre de variable repetido: {nombre!r}")
         limpios.append(nombre)
-    return {nombre: sp.Symbol(nombre) for nombre in limpios}
+    return {nombre: sp.Symbol(nombre, **supuestos) for nombre in limpios}
+
+
+def simbolos(nombres, **supuestos):
+    """Símbolos validados para la capa simbólica (con supuestos, p. ej. real=True).
+
+    Aplica las mismas reglas de nombre que la compilación numérica: un nombre
+    que aquí se acepta es uno que `compilar_campo` también aceptaría.
+    """
+    return _simbolos(nombres, **supuestos)
+
+
+def parsear(texto, simbolos_declarados):
+    """Expresión sympy validada en las tres capas, sobre símbolos ya creados.
+
+    Es la entrada de la capa simbólica: las familias trabajan con la expresión
+    exacta, no con la función numérica. `simbolos_declarados` es un diccionario
+    nombre -> símbolo (por ejemplo los de `simbolos(..., real=True)`), de modo
+    que la expresión quede escrita sobre esos mismos objetos y sus supuestos.
+    """
+    return _parsear(texto, dict(simbolos_declarados), racional=True)
 
 
 def compilar_escalar(texto, nombres):

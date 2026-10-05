@@ -1,0 +1,1206 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe de sesión · Agente de EDOs · grupo 09</title>
+
+<!--
+  PLANTILLA DEL INFORME. Es HTML de verdad: se abre, se edita y se previsualiza
+  como tal. No lleva ningún dato de ningún problema.
+
+  Los datos entran por el <script id="datos"> que el servidor rellena, y el
+  render ocurre aquí, en el navegador, con textContent (nunca innerHTML).
+
+  EL ASPECTO. La referencia no es un panel de control: es un cuaderno de
+  laboratorio. Papel cálido, tinta, una regla al margen con el número de cada
+  análisis colgando fuera del texto, numeración de parágrafo como en un
+  artículo, y las ecuaciones compuestas en un bloque aparte con filetes arriba
+  y abajo. Los números técnicos van en monoespaciada y alineados a la derecha,
+  como la salida de un instrumento.
+
+  LOS COLORES DE LAS FIGURAS NO ESTÁN EN LAS FIGURAS. Cada traza que manda el
+  servidor declara su rol (`meta.rol`) y aquí se le asigna el color leyéndolo
+  de las variables CSS de abajo. Por eso la misma figura se ve correcta en
+  claro y en oscuro: son dos juegos de valores, no un volteo automático.
+
+  La paleta está validada con el verificador de la guía de visualización:
+  banda de luminosidad, piso de croma, separación para daltonismo y contraste
+  contra cada superficie. El verde y el rojo de estable/inestable quedan en la
+  banda de advertencia para deutan, así que el color NO va solo: el marcador
+  cambia de forma (disco / aspa / rombo) y la etiqueta dice la palabra.
+-->
+
+<script src="https://cdn.jsdelivr.net/npm/plotly.js@3.6.0/dist/plotly.min.js" charset="utf-8"></script>
+
+<!-- KaTeX compone las fórmulas del desarrollo. Sin red, cada fórmula se
+     muestra como su LaTeX en monoespaciada: se lee igual, solo que sin componer. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" charset="utf-8"></script>
+
+<style>
+/* ===================== TOKENS ===================== */
+:root{
+  color-scheme: light;
+
+  /* Superficies: papel cálido, no el gris azulado de todos lados. */
+  --papel:        #f5f1e8;
+  --hoja:         #fbf9f4;
+  --hoja-honda:   #efeadd;
+  --regla:        #ddd5c3;
+  --filete:       #c9bfa8;
+
+  /* Tinta */
+  --tinta:        #1a1814;
+  --tinta-media:  #554f42;
+  --tinta-tenue:  #857c6a;
+
+  /* Series: validadas sobre --papel (CVD ΔE 10.3 / normal 18.0, contraste ≥3:1) */
+  --serie-1:      #3449b8;
+  --serie-2:      #c0462a;
+  --serie-3:      #0b8f78;
+  --serie-4:      #b07d10;
+  --serie-5:      #9c3d85;
+
+  /* Estado. Reservados: nunca se reutilizan como "serie 6". */
+  --estable:      #1f7a4d;
+  --inestable:    #b3321f;
+  --indefinido:   #7a7263;
+
+  --rejilla:      #e3dccb;
+  --campo:        #c4bba6;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --papel:      #15161a;
+    --hoja:       #1c1e23;
+    --hoja-honda: #121317;
+    --regla:      #2e3138;
+    --filete:     #3d414a;
+    --tinta:      #ece7dc;
+    --tinta-media:#a9a294;
+    --tinta-tenue:#7d7768;
+    --serie-1:    #6d7fe4;
+    --serie-2:    #dd5f3a;
+    --serie-3:    #13a07f;
+    --serie-4:    #b78f12;
+    --serie-5:    #c05fab;
+    --estable:    #3fa877;
+    --inestable:  #e8604a;
+    --indefinido: #8d8676;
+    --rejilla:    #262930;
+    --campo:      #3a3e46;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --papel:#15161a; --hoja:#1c1e23; --hoja-honda:#121317;
+  --regla:#2e3138; --filete:#3d414a;
+  --tinta:#ece7dc; --tinta-media:#a9a294; --tinta-tenue:#7d7768;
+  --serie-1:#6d7fe4; --serie-2:#dd5f3a; --serie-3:#13a07f;
+  --serie-4:#b78f12; --serie-5:#c05fab;
+  --estable:#3fa877; --inestable:#e8604a; --indefinido:#8d8676;
+  --rejilla:#262930; --campo:#3a3e46;
+}
+
+/* ===================== TIPOGRAFÍA ===================== */
+:root{
+  --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino,
+           "Book Antiqua", Georgia, serif;
+  --sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:  ui-monospace, "Cascadia Mono", "SF Mono", "JetBrains Mono",
+           Consolas, "Liberation Mono", monospace;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--papel); color:var(--tinta);
+  font:16px/1.65 var(--serif);
+  /* Rayado tenue de cuaderno. Puro adorno: se apaga al imprimir. */
+  background-image:
+    repeating-linear-gradient(to bottom,
+      transparent 0 31px, color-mix(in srgb, var(--regla) 30%, transparent) 31px 32px);
+}
+
+/* ===================== ESTRUCTURA ===================== */
+.hoja{max-width:1180px; margin:0 auto; padding:0 20px 80px}
+
+/* --- cabecera: placa de instrumento --- */
+.placa{
+  padding:40px 0 22px; margin-bottom:8px;
+  border-bottom:3px double var(--filete);
+}
+.placa .marca{
+  font:600 11px/1 var(--sans); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin:0 0 14px;
+}
+.placa h1{
+  font:400 clamp(28px,4.2vw,40px)/1.1 var(--serif);
+  margin:0 0 12px; letter-spacing:-.015em;
+}
+.placa .pie-placa{
+  display:flex; flex-wrap:wrap; gap:8px 22px; align-items:baseline;
+  font:13px/1.4 var(--sans); color:var(--tinta-media); margin:0;
+}
+.placa .pie-placa b{font-weight:600; color:var(--tinta); font-variant-numeric:tabular-nums}
+#latido{
+  width:7px; height:7px; border-radius:50%; background:var(--estable);
+  display:inline-block; margin-right:7px; opacity:.3; transition:opacity .25s;
+}
+#latido.activo{opacity:1}
+
+/* --- cuerpo con índice al costado --- */
+.cuerpo{display:grid; grid-template-columns:1fr; gap:0}
+@media (min-width:1040px){
+  .cuerpo{grid-template-columns:1fr 186px; gap:48px; align-items:start}
+}
+
+/* --- índice lateral --- */
+.indice-lateral{display:none}
+@media (min-width:1040px){
+  .indice-lateral{
+    display:block; position:sticky; top:28px; order:2;
+    font:13px/1.5 var(--sans); padding-top:34px;
+  }
+  .indice-lateral h2{
+    font:600 10px/1 var(--sans); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--tinta-tenue); margin:0 0 12px;
+  }
+  .indice-lateral ol{list-style:none; margin:0; padding:0}
+  .indice-lateral li{margin-bottom:9px; display:flex; gap:9px; align-items:baseline}
+  .indice-lateral .n{
+    font:600 11px var(--mono); color:var(--tinta-tenue); min-width:16px;
+    font-variant-numeric:tabular-nums;
+  }
+  .indice-lateral a{
+    color:var(--tinta-media); text-decoration:none;
+    border-bottom:1px solid transparent; padding-bottom:1px;
+  }
+  .indice-lateral a:hover{color:var(--tinta); border-bottom-color:var(--filete)}
+  .indice-lateral .punto{
+    width:6px; height:6px; border-radius:50%; flex:none;
+    margin-top:6px; background:var(--indefinido);
+  }
+  .indice-lateral .punto.ok{background:var(--estable)}
+  .indice-lateral .punto.mal{background:var(--inestable)}
+}
+
+main{order:1; min-width:0}
+
+/* --- estado vacío --- */
+.vacio{
+  margin-top:40px; padding:60px 32px; text-align:center;
+  border:1px solid var(--regla); border-radius:3px; background:var(--hoja);
+}
+.vacio .glifo{
+  font:300 46px/1 var(--serif); color:var(--filete); display:block; margin-bottom:18px;
+}
+.vacio p{margin:0 auto; max-width:46ch; color:var(--tinta-media)}
+.vacio strong{color:var(--tinta); font-weight:600}
+
+/* ===================== UN ANÁLISIS ===================== */
+article.analisis{
+  position:relative; padding:38px 0 30px;
+  border-bottom:1px solid var(--regla);
+}
+article.analisis:last-child{border-bottom:none}
+article.analisis.entrando{animation:aparecer .45s ease-out}
+@keyframes aparecer{
+  from{opacity:0; transform:translateY(10px)}
+  to{opacity:1; transform:none}
+}
+
+/* El número cuelga en el margen, como en un cuaderno rayado. */
+.folio{
+  font:600 13px/1 var(--mono); color:var(--tinta-tenue);
+  font-variant-numeric:tabular-nums; display:block; margin-bottom:10px;
+}
+@media (min-width:760px){
+  article.analisis:has(.folio){padding-left:72px}
+  .folio{
+    position:absolute; left:0; top:40px; margin:0;
+    width:52px; text-align:right; font-size:15px;
+    padding-top:4px; border-top:2px solid var(--tinta);
+  }
+}
+
+article.analisis h2{
+  font:400 clamp(21px,2.6vw,26px)/1.25 var(--serif);
+  margin:0 0 8px; letter-spacing:-.01em;
+}
+.linea-estado{
+  display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;
+  margin:0 0 26px; font:12px/1 var(--sans); color:var(--tinta-tenue);
+}
+
+/* --- distintivo de estado: forma + palabra, nunca color solo --- */
+.distintivo{
+  display:inline-flex; align-items:center; gap:6px;
+  font:600 11px/1 var(--sans); letter-spacing:.09em; text-transform:uppercase;
+  padding:5px 10px 5px 8px; border-radius:2px; border:1px solid currentColor;
+}
+.distintivo .glifo{font-size:12px; line-height:1}
+.distintivo.ok{color:var(--estable)}
+.distintivo.mal{color:var(--inestable)}
+.distintivo.medio{color:var(--indefinido)}
+
+/* --- rúbricas de sección --- */
+.rubrica{
+  font:600 10px/1 var(--sans); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin:32px 0 12px;
+  padding-bottom:7px; border-bottom:1px solid var(--regla);
+}
+.rubrica:first-of-type{margin-top:0}
+
+/* --- el sistema de ecuaciones, compuesto --- */
+.sistema{
+  margin:0; padding:22px 26px; background:var(--hoja);
+  border-top:2px solid var(--tinta); border-bottom:1px solid var(--regla);
+  font:17px/2.05 var(--mono); overflow-x:auto; white-space:pre;
+  letter-spacing:-.01em;
+}
+.sistema .lhs{color:var(--tinta-media)}
+
+/* --- ficha del planteamiento --- */
+.ficha{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  gap:0; margin:0; border-top:1px solid var(--regla);
+}
+.ficha>div{
+  padding:12px 16px 12px 0; border-bottom:1px solid var(--regla);
+  border-right:1px solid var(--regla);
+}
+.ficha dt{
+  font:600 10px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin:0 0 5px;
+}
+.ficha dd{
+  margin:0; font:14px/1.45 var(--mono); word-break:break-word;
+  font-variant-numeric:tabular-nums;
+}
+
+/* --- tablas --- */
+.tabla{width:100%; border-collapse:collapse; font:14px/1.5 var(--sans)}
+.tabla th{
+  text-align:left; font:600 10px/1 var(--sans); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--tinta-tenue);
+  padding:0 14px 9px 0; border-bottom:1px solid var(--filete);
+}
+.tabla th.der, .tabla td.der{text-align:right; padding-right:0}
+.tabla td{padding:11px 14px 11px 0; border-bottom:1px solid var(--regla); vertical-align:top}
+.tabla tr:last-child td{border-bottom:none}
+.tabla .cifra{
+  font:13px/1.5 var(--mono); font-variant-numeric:tabular-nums;
+  color:var(--tinta-media); white-space:nowrap;
+}
+.tabla .glosa{display:block; font:12px/1.45 var(--sans); color:var(--tinta-tenue); margin-top:3px}
+.tabla .nombre{font-weight:600}
+
+/* Medidor de holgura: cuánto margen sobró en una prueba, en escala log.
+   No es decoración -- "pasó" y "pasó por los pelos" no son lo mismo. */
+.holgura{
+  display:block; width:72px; height:5px; margin-top:6px; margin-left:auto;
+  background:var(--hoja-honda); border-radius:2px; overflow:hidden;
+}
+.holgura i{display:block; height:100%; border-radius:2px; background:var(--estable)}
+.holgura.mal i{background:var(--inestable)}
+
+/* Marca de aprobado/fallado en la tabla */
+.marca{font:600 15px/1 var(--mono)}
+.marca.ok{color:var(--estable)}
+.marca.mal{color:var(--inestable)}
+
+/* --- figuras --- */
+figure.lamina{
+  margin:18px 0 26px; padding:10px 6px 6px;
+  background:var(--hoja); border:1px solid var(--regla); border-radius:3px;
+  min-height:70px;
+}
+figure.lamina figcaption{
+  font:600 10px/1 var(--sans); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--tinta-tenue); padding:4px 10px 10px;
+}
+
+/* --- fallo --- */
+.fallo{
+  padding:16px 20px; background:var(--hoja);
+  border-left:3px solid var(--inestable);
+}
+.fallo .encabezado{
+  font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--inestable); display:block; margin-bottom:7px;
+}
+.fallo .detalle{font:15px/1.6 var(--serif); color:var(--tinta); margin:0}
+
+/* --- listas --- */
+.apuntes{margin:0; padding-left:22px; color:var(--tinta-media); font-size:15px}
+.apuntes li{margin-bottom:7px}
+.apuntes li::marker{color:var(--filete)}
+.apuntes strong{color:var(--tinta); font-weight:600}
+
+/* --- colofón --- */
+.colofon{
+  margin-top:48px; padding-top:18px; border-top:3px double var(--filete);
+  font:12px/1.6 var(--sans); color:var(--tinta-tenue);
+  display:flex; flex-wrap:wrap; gap:6px 18px; justify-content:space-between;
+}
+
+/* ===================== DESARROLLO MATEMÁTICO ===================== */
+.enunciado{
+  margin:0 0 22px; padding:14px 18px; background:var(--hoja);
+  border-left:3px solid var(--filete); font:16px/1.6 var(--serif); color:var(--tinta);
+}
+.enunciado .marca-enunciado{
+  display:block; font:600 10px/1 var(--sans); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin-bottom:8px;
+}
+.fichas{display:flex; flex-wrap:wrap; gap:6px 8px; margin:0 0 18px}
+.ficha-chip{
+  font:600 11px/1 var(--sans); letter-spacing:.06em; padding:6px 9px; border-radius:2px;
+  border:1px solid var(--regla); color:var(--tinta-media); background:var(--hoja);
+}
+.ficha-chip b{color:var(--tinta); font-weight:700}
+.desarrollo section{margin:0 0 26px}
+.desarrollo h3{
+  font:600 17px/1.35 var(--serif); margin:0 0 10px; color:var(--tinta);
+  padding-bottom:5px; border-bottom:1px solid var(--regla);
+}
+.desarrollo h3 .num{font:600 12px var(--mono); color:var(--tinta-tenue); margin-right:8px}
+.formula{
+  margin:6px 0; padding:4px 2px; overflow-x:auto; overflow-y:hidden;
+  font:14px/1.6 var(--mono); color:var(--tinta);
+}
+.formula .katex-display{margin:.35em 0}
+.formula.destacada{
+  margin:10px 0; padding:6px 14px; background:var(--hoja);
+  border:1px solid var(--filete); border-left:3px solid var(--serie-1); border-radius:2px;
+}
+.rotulo{margin:16px 0 4px; font:600 14px/1.5 var(--serif); color:var(--tinta)}
+.desarrollo p.prosa{margin:6px 0 8px; font:15px/1.6 var(--serif); color:var(--tinta-media)}
+.desarrollo .tabla{margin:8px 0 12px}
+.conclusiones{margin:0; padding-left:22px; font:15.5px/1.6 var(--serif); color:var(--tinta)}
+.conclusiones li{margin-bottom:8px}
+.alcance{
+  margin:0 0 20px; padding:14px 18px; background:var(--hoja);
+  border-left:3px solid var(--inestable);
+}
+.alcance strong{display:block; font:600 11px/1 var(--sans); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--inestable); margin-bottom:6px}
+.alcance p{margin:4px 0 0; font:15px/1.55 var(--serif)}
+.laminas{display:grid; grid-template-columns:1fr; gap:0 18px}
+@media (min-width:980px){
+  .laminas.varias{grid-template-columns:1fr 1fr}
+  .laminas.varias figure.lamina.ancha{grid-column:1 / -1}
+}
+.tipo-prueba{
+  display:inline-block; margin-left:6px; font:600 9px/1 var(--sans); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--tinta-tenue); border:1px solid var(--regla);
+  padding:2px 4px; border-radius:2px; vertical-align:middle;
+}
+
+/* ===================== IMPRESIÓN ===================== */
+@media print{
+  body{background:#fff; background-image:none; color:#000; font-size:11pt}
+  .hoja{max-width:none; padding:0}
+  .cuerpo{display:block}
+  .indice-lateral, #latido{display:none}
+  article.analisis{break-inside:avoid; padding-left:0; border-bottom:1px solid #bbb}
+  .folio{position:static; width:auto; text-align:left; border-top:none}
+  figure.lamina{break-inside:avoid; border-color:#bbb}
+  .sistema{background:#f7f7f7; border-color:#000}
+}
+@media (prefers-reduced-motion:reduce){
+  article.analisis.entrando{animation:none}
+  #latido{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="hoja">
+  <header class="placa">
+    <p class="marca">UNMSM · Laboratorio · Grupo 09</p>
+    <h1 id="titulo">Informe de sesión</h1>
+    <p class="pie-placa">
+      <span>Agente de EDOs y sistemas dinámicos</span>
+      <span><span id="latido"></span><span id="resumen"></span></span>
+    </p>
+  </header>
+
+  <div class="cuerpo">
+    <nav class="indice-lateral" id="indice" hidden>
+      <h2>En este informe</h2>
+      <ol id="indice-lista"></ol>
+    </nav>
+    <main id="secciones"></main>
+  </div>
+
+  <footer class="colofon">
+    <span id="colofon-izq"></span>
+    <span id="colofon-der"></span>
+  </footer>
+</div>
+
+<!-- El servidor reemplaza el contenido de este script por el JSON de la sesión. -->
+<script type="application/json" id="datos">{"titulo": "Informe de la sesión", "entradas": [{"titulo": "EDO de Bernoulli", "configuracion": {"ecuaciones": ["-2*y/x + x**2*y**3"], "variable_independiente": "x", "variables_estado": ["y"], "parametros": {}, "parametro": null, "rango_parametro": null, "region": null, "tipo_de_sistema": "edo_continua", "metodo_analitico": "Bernoulli", "pedidos": ["identificar tipo", "solución analítica", "solución particular", "intervalo de validez", "verificación"], "enunciado": "Resuelve el PVI y' + (2/x) y = x^2 y^3, y(1)=1, x>0. 1) Identifica el tipo de EDO. 2) Desarrolla la resolución analítica justificando las sustituciones. 3) Aplica la condición inicial y obtén la solución particular. 4) Determina el intervalo donde la solución es válida. 5) Verifica sustituyendo en la EDO original.", "trozos": null, "y0": [1.0], "intervalo": [1.0, 1.9], "analisis": ["estabilidad"], "metodo": "RK45", "rtol": 1e-08, "atol": 1e-10, "puntos": 400}, "ok": true, "verificacion": {"ok": true, "pruebas": [{"nombre": "solucion_general_satisface_la_edo", "ok": true, "descripcion": "La solución general (con C arbitraria) sustituida en la ecuación da y' − f(x, y) ≡ 0.", "tipo": "simbolica", "concluyente": true}, {"nombre": "solucion_particular_satisface_la_edo", "ok": true, "descripcion": "La solución particular sustituida en la ecuación da y' − f(x, y) ≡ 0.", "tipo": "simbolica", "concluyente": true}, {"nombre": "condicion_inicial_exacta", "ok": true, "descripcion": "La solución particular cumple y(1) = 1 exactamente.", "tipo": "simbolica", "concluyente": true}, {"nombre": "condicion_inicial", "ok": true, "desvio": 0.0, "umbral": 1e-10, "descripcion": "La solución arranca en la condición inicial pedida."}, {"nombre": "residuo", "ok": true, "concluyente": true, "residuo_relativo": 0.0003305630768879848, "umbral": 1e-06, "error_esperado_por_malla": 0.00030670524998606765, "umbral_efectivo": 0.0015335262499303383, "paso_malla": 0.0022556390977443996, "descripcion": "La trayectoria satisface x' = F(t, x) al sustituirla, descontando el error de la derivada por diferencias finitas."}, {"nombre": "convergencia", "ok": true, "umbral": 1e-05, "desvio_ventana": 1.4227767541915532e-08, "desvio_total": 1.7671987166683338e-07, "desvio_estadistico": 2.218300357225841e-08, "umbral_estadistico": 0.15, "t_ventana": 1.1330827067669174, "estadisticas_coinciden": true, "sensibilidad_detectada": false, "factor_tolerancia": 100.0, "descripcion": "La solución no cambia al afinar las tolerancias 100 veces."}, {"nombre": "metodo_alternativo", "ok": true, "umbral": 1e-05, "desvio_ventana": 1.4200383780261488e-08, "desvio_total": 1.7319253672261457e-07, "desvio_estadistico": 2.1316364187851292e-08, "umbral_estadistico": 0.15, "t_ventana": 1.1330827067669174, "estadisticas_coinciden": true, "sensibilidad_detectada": false, "metodo": "DOP853", "descripcion": "RK45 y DOP853 coinciden en el tramo inicial."}, {"nombre": "solucion_exacta", "ok": true, "error_maximo": 2.1441398212473928e-07, "error_relativo_maximo": 9.763002309619762e-08, "umbral": 1e-06, "criterio": "|y_num - y_exacta| \u003c= umbral*(1 + |y_exacta|) en cada punto", "descripcion": "La trayectoria numérica coincide con la solución analítica obtenida en el desarrollo."}], "fallidas": [], "resumen": "Todas las verificaciones se superaron."}, "analisis": {"estabilidad": {"disponible": false, "origen": {"metodo": "ninguno"}, "nota": "El sistema no es autónomo (depende de x): el análisis de equilibrios no aplica."}}, "notas": [], "etapa": null, "error": null, "enunciado": "Resuelve el PVI y' + (2/x) y = x^2 y^3, y(1)=1, x>0. 1) Identifica el tipo de EDO. 2) Desarrolla la resolución analítica justificando las sustituciones. 3) Aplica la condición inicial y obtén la solución particular. 4) Determina el intervalo donde la solución es válida. 5) Verifica sustituyendo en la EDO original.", "desarrollo": {"familia": "bernoulli", "nombre": "Ecuación de Bernoulli", "tema": "Tema 1 · EDOs lineales y no lineales", "metodo": "Cambio de variable v = y^{1−n} y factor integrante", "tratamiento": ["analitico", "numerico"], "balotario": ["1.2"], "clasificacion": {"familia": "bernoulli", "nombre": "Ecuación de Bernoulli", "tema": "Tema 1 · EDOs lineales y no lineales", "balotario": ["1.2"], "compatibles": ["bernoulli"], "motivo": "El enunciado pide el método: Ecuación de Bernoulli.", "fuera_de_alcance": null, "metodo_rechazado": null}, "secciones": [{"clave": "clasificacion", "titulo": "Planteamiento y clasificación", "bloques": [{"tipo": "formula", "latex": "y' = x^{2} y^{3} - \\frac{2 y}{x}"}, {"tipo": "texto", "texto": "El enunciado pide el método: Ecuación de Bernoulli."}]}, {"clave": "identificacion", "titulo": "Identificación de la ecuación de Bernoulli", "bloques": [{"tipo": "formula", "latex": "y' + P(x)y = Q(x)y^{n}", "destacada": true}, {"tipo": "formula", "latex": "y' + \\frac{2}{x}\\, y = x^{2}\\, y^{3}"}, {"tipo": "formula", "latex": "P(x) = \\frac{2}{x},\\qquad Q(x) = x^{2},\\qquad n = 3"}]}, {"clave": "cambio_de_variable", "titulo": "Cambio de variable $v = y^{1-n}$", "bloques": [{"tipo": "formula", "latex": "v = y^{1-n} = \\frac{1}{y^{2}}", "destacada": true, "ref": "sustitucion"}, {"tipo": "formula", "latex": "\\frac{dv}{dx} = - \\frac{2}{y^{3}} \\frac{dy}{dx}"}, {"tipo": "formula", "latex": "v' = - \\frac{2}{y^{3}} y'", "texto": "v' = (-2/y**3)*y'", "destacada": true}, {"tipo": "formula", "latex": "\\frac{y'}{y^{3}} = - \\frac{v'}{2}", "texto": "y'/y**3 = -v'/2"}]}, {"clave": "division", "titulo": "División de la ecuación entre $y^{3}$", "bloques": [{"tipo": "formula", "latex": "y' + \\frac{2}{x}\\, y = x^{2}\\, y^{3}"}, {"tipo": "formula", "latex": "\\frac{1}{y^{3}}\\, y' + \\frac{2}{x}\\, \\frac{1}{y^{2}} = x^{2}"}, {"tipo": "formula", "latex": "\\frac{y'}{y^{3}} = - \\frac{v'}{2} ,\\qquad \\frac{1}{y^{2}} = v"}, {"tipo": "formula", "latex": "\\frac{2 v}{x} - \\frac{v'}{2} = x^{2}", "texto": "2*v/x - v'/2 = x**2"}]}, {"clave": "ecuacion_lineal", "titulo": "Ecuación lineal en $v$", "bloques": [{"tipo": "formula", "latex": "v' - \\frac{4}{x}\\, v = - 2 x^{2}", "destacada": true, "ref": "ecuacion_lineal"}]}, {"clave": "v_factor_integrante", "titulo": "Factor integrante de la ecuación lineal en $v$", "bloques": [{"tipo": "formula", "latex": "v' + P(x)\\, v = Q(x)"}, {"tipo": "formula", "latex": "P(x) = - \\frac{4}{x},\\qquad Q(x) = - 2 x^{2}"}, {"tipo": "formula", "latex": "\\mu(x) = e^{\\int P\\, dx} = e^{- 4 \\ln{\\left(x \\right)}}", "destacada": true, "ref": "v_factor_integrante"}]}, {"clave": "v_integracion", "titulo": "Multiplicación por el factor integrante e integración", "bloques": [{"tipo": "formula", "latex": "\\frac{1}{x^{4}}\\, v' - \\frac{4}{x^{5}}\\, v = - \\frac{2}{x^{2}}"}, {"tipo": "formula", "latex": "\\frac{d}{dx}\\left[\\frac{v}{x^{4}}\\right] = - \\frac{2}{x^{2}}"}, {"tipo": "formula", "latex": "\\int - \\frac{2}{x^{2}}\\, dx = \\frac{2}{x}"}, {"tipo": "formula", "latex": "\\frac{v}{x^{4}} = C + \\frac{2}{x}", "texto": "v/x**4 = C + 2/x"}, {"tipo": "formula", "latex": "v = C x^{4} + 2 x^{3}", "texto": "v = C*x**4 + 2*x**3", "destacada": true, "ref": "v_solucion_general"}]}, {"clave": "regreso", "titulo": "Regreso a la variable original $y$", "bloques": [{"tipo": "formula", "latex": "\\frac{1}{y^{2}} = C x^{4} + 2 x^{3}", "texto": "y**(-2) = C*x**4 + 2*x**3"}, {"tipo": "formula", "latex": "y = \\pm \\frac{1}{\\sqrt{C x^{4} + 2 x^{3}}}"}, {"tipo": "formula", "latex": "y(x) = \\frac{1}{\\sqrt{C x^{4} + 2 x^{3}}}", "texto": "y(x) = 1/sqrt(C*x**4 + 2*x**3)", "destacada": true, "ref": "solucion_general"}, {"tipo": "texto", "texto": "Además, y ≡ 0 es solución: se excluyó al dividir entre y^3."}]}, {"clave": "condicion_inicial", "titulo": "Aplicación de la condición inicial $y(1) = 1$", "bloques": [{"tipo": "formula", "latex": "1 = \\frac{1}{\\sqrt{(1)^{4} C + 2 (1)^{3}}}", "texto": "1 = 1/sqrt((1)**4*C + 2*(1)**3)"}, {"tipo": "formula", "latex": "C = -1", "texto": "C = -1", "destacada": true, "ref": "constante"}, {"tipo": "formula", "latex": "y = \\frac{1}{\\sqrt{- x^{4} + 2 x^{3}}}", "texto": "y = 1/sqrt(-x**4 + 2*x**3)"}, {"tipo": "formula", "latex": "y(x) = \\frac{1}{\\sqrt{x^{3} \\left(2 - x\\right)}}", "texto": "y(x) = 1/sqrt(x**3*(2 - x))", "destacada": true, "ref": "solucion_particular"}]}, {"clave": "intervalo_maximal", "titulo": "Intervalo maximal de existencia", "bloques": [{"tipo": "formula", "latex": "\\sqrt{x^{3} \\left(2 - x\\right)} = 0 \\implies x \\in \\left\\{0,\\; 2\\right\\}"}, {"tipo": "formula", "latex": "\\lim_{x \\to 0^{+}} y(x) = \\infty"}, {"tipo": "formula", "latex": "\\lim_{x \\to 2^{-}} y(x) = \\infty"}, {"tipo": "formula", "latex": "x_0 = 1 \\in \\left(0,\\, 2\\right)"}, {"tipo": "formula", "latex": "I = \\left(0,\\, 2\\right)", "destacada": true, "ref": "intervalo_maximal"}]}, {"clave": "solucion_numerica", "titulo": "Solución numérica", "bloques": [{"tipo": "formula", "latex": "\\text{Integrador RK45},\\quad \\mathrm{rtol} = 1.0000 \\times 10^{-8},\\quad \\mathrm{atol} = 1.0000 \\times 10^{-10},\\quad 400\\ \\text{puntos}"}, {"tipo": "formula", "latex": "y(1.9) \\approx 1.207451", "destacada": true, "ref": "estado_final"}]}], "resultados": {"P": {"latex": "\\frac{2}{x}", "texto": "2/x"}, "Q": {"latex": "x^{2}", "texto": "x**2"}, "n": {"latex": "3", "texto": "3", "valor": 3.0}, "sustitucion": {"latex": "v = \\frac{1}{y^{2}}", "texto": "Eq(v, y**(-2))"}, "ecuacion_lineal": {"latex": "- \\frac{4 v}{x} + v' = - 2 x^{2}", "texto": "Eq(-4*v/x + v', -2*x**2)"}, "v_factor_integrante": {"latex": "\\frac{1}{x^{4}}", "texto": "x**(-4)"}, "v_solucion_general": {"latex": "C x^{4} + 2 x^{3}", "texto": "C*x**4 + 2*x**3"}, "solucion_general": {"latex": "\\frac{1}{\\sqrt{C x^{4} + 2 x^{3}}}", "texto": "1/sqrt(C*x**4 + 2*x**3)"}, "solucion_trivial": {"latex": "0", "texto": "0", "valor": 0.0}, "constante": {"latex": "-1", "texto": "-1", "valor": -1.0}, "solucion_particular": {"latex": "\\frac{1}{\\sqrt{x^{3} \\left(2 - x\\right)}}", "texto": "1/sqrt(x**3*(2 - x))"}, "intervalo_maximal": {"latex": "\\left(0, 2\\right)", "texto": "Interval.open(0, 2)"}, "estado_final": {"y": 1.2074510257140683}}, "conclusiones": ["La solución solo existe en I = (0, 2): explota en x = 0, x = 2."], "validaciones": [{"nombre": "solucion_general_satisface_la_edo", "ok": true, "descripcion": "La solución general (con C arbitraria) sustituida en la ecuación da y' − f(x, y) ≡ 0.", "tipo": "simbolica", "concluyente": true}, {"nombre": "solucion_particular_satisface_la_edo", "ok": true, "descripcion": "La solución particular sustituida en la ecuación da y' − f(x, y) ≡ 0.", "tipo": "simbolica", "concluyente": true}, {"nombre": "condicion_inicial_exacta", "ok": true, "descripcion": "La solución particular cumple y(1) = 1 exactamente.", "tipo": "simbolica", "concluyente": true}], "advertencias": []}, "figuras": [{"nombre": "solucion", "spec": {"data": [{"connectgaps": false, "line": {"dash": "solid", "width": 1.4}, "meta": {"rol": "familia"}, "mode": "lines", "name": "C = -2", "x": [0.00526316, 0.0125313, 0.0197995, 0.0270677, 0.0343358, 0.041604, 0.0488722, 0.0561404, 0.0634085, 0.0706767, 0.0779449, 0.085213, 0.0924812, 0.0997494, 0.107018, 0.114286, 0.121554, 0.128822, 0.13609, 0.143358, 0.150627, 0.157895, 0.165163, 0.172431, 0.179699, 0.186967, 0.194236, 0.201504, 0.208772, 0.21604, 0.223308, 0.230576, 0.237845, 0.245113, 0.252381, 0.259649, 0.266917, 0.274185, 0.281454, 0.288722, 0.29599, 0.303258, 0.310526, 0.317794, 0.325063, 0.332331, 0.339599, 0.346867, 0.354135, 0.361404, 0.368672, 0.37594, 0.383208, 0.390476, 0.397744, 0.405013, 0.412281, 0.419549, 0.426817, 0.434085, 0.441353, 0.448622, 0.45589, 0.463158, 0.470426, 0.477694, 0.484962, 0.492231, 0.499499, 0.506767, 0.514035, 0.521303, 0.528571, 0.53584, 0.543108, 0.550376, 0.557644, 0.564912, 0.57218, 0.579449, 0.586717, 0.593985, 0.601253, 0.608521, 0.615789, 0.623058, 0.630326, 0.637594, 0.644862, 0.65213, 0.659398, 0.666667, 0.673935, 0.681203, 0.688471, 0.695739, 0.703008, 0.710276, 0.717544, 0.724812, 0.73208, 0.739348, 0.746617, 0.753885, 0.761153, 0.768421, 0.775689, 0.782957, 0.790226, 0.797494, 0.804762, 0.81203, 0.819298, 0.826566, 0.833835, 0.841103, 0.848371, 0.855639, 0.862907, 0.870175, 0.877444, 0.884712, 0.89198, 0.899248, 0.906516, 0.913784, 0.921053, 0.928321, 0.935589, 0.942857, 0.950125, 0.957393, 0.964662, 0.97193, 0.979198, 0.986466, 0.993734, null], "y": [1856.78, 507.257, 256.358, 160.978, 113.097, 85.1157, 67.1078, 54.7165, 45.7603, 39.038, 33.8396, 29.7212, 26.3923, 23.6558, 21.3738, 19.4469, 17.8022, 16.385, 15.1534, 14.0751, 13.1245, 12.2815, 11.5296, 10.8557, 10.2489, 9.70023, 9.20212, 8.7483, 8.33347, 7.9531, 7.60332, 7.28081, 6.9827, 6.70649, 6.45, 6.21135, 5.98885, 5.78103, 5.5866, 5.40438, 5.23335, 5.0726, 4.92129, 4.77868, 4.64411, 4.51698, 4.39675, 4.28291, 4.17504, 4.07271, 3.97555, 3.88324, 3.79545, 3.71191, 3.63236, 3.55655, 3.48426, 3.4153, 3.34947, 3.2866, 3.22654, 3.16913, 3.11424, 3.06174, 3.01151, 2.96345, 2.91745, 2.87342, 2.83127, 2.79091, 2.75228, 2.71531, 2.67992, 2.64605, 2.61366, 2.58268, 2.55307, 2.52479, 2.49779, 2.47203, 2.44748, 2.4241, 2.40187, 2.38077, 2.36076, 2.34183, 2.32396, 2.30712, 2.29132, 2.27654, 2.26277, 2.25, 2.23824, 2.22748, 2.21772, 2.20898, 2.20126, 2.19458, 2.18895, 2.1844, 2.18094, 2.17862, 2.17746, 2.1775, 2.1788, 2.18141, 2.18539, 2.19081, 2.19777, 2.20635, 2.21667, 2.22886, 2.24306, 2.25944, 2.27822, 2.2996, 2.32389, 2.35139, 2.38249, 2.41767, 2.45747, 2.50259, 2.55388, 2.6124, 2.6795, 2.75694, 2.84701, 2.95285, 3.07877, 3.23099, 3.4188, 3.65688, 3.97008, 4.40464, 5.05972, 6.20371, 9.0177, null], "type": "scatter"}, {"connectgaps": false, "line": {"dash": "solid", "width": 1.4}, "meta": {"rol": "familia"}, "mode": "lines", "name": "C = -3/2", "x": [0.00526316, 0.0125313, 0.0197995, 0.0270677, 0.0343358, 0.041604, 0.0488722, 0.0561404, 0.0634085, 0.0706767, 0.0779449, 0.085213, 0.0924812, 0.0997494, 0.107018, 0.114286, 0.121554, 0.128822, 0.13609, 0.143358, 0.150627, 0.157895, 0.165163, 0.172431, 0.179699, 0.186967, 0.194236, 0.201504, 0.208772, 0.21604, 0.223308, 0.230576, 0.237845, 0.245113, 0.252381, 0.259649, 0.266917, 0.274185, 0.281454, 0.288722, 0.29599, 0.303258, 0.310526, 0.317794, 0.325063, 0.332331, 0.339599, 0.346867, 0.354135, 0.361404, 0.368672, 0.37594, 0.383208, 0.390476, 0.397744, 0.405013, 0.412281, 0.419549, 0.426817, 0.434085, 0.441353, 0.448622, 0.45589, 0.463158, 0.470426, 0.477694, 0.484962, 0.492231, 0.499499, 0.506767, 0.514035, 0.521303, 0.528571, 0.53584, 0.543108, 0.550376, 0.557644, 0.564912, 0.57218, 0.579449, 0.586717, 0.593985, 0.601253, 0.608521, 0.615789, 0.623058, 0.630326, 0.637594, 0.644862, 0.65213, 0.659398, 0.666667, 0.673935, 0.681203, 0.688471, 0.695739, 0.703008, 0.710276, 0.717544, 0.724812, 0.73208, 0.739348, 0.746617, 0.753885, 0.761153, 0.768421, 0.775689, 0.782957, 0.790226, 0.797494, 0.804762, 0.81203, 0.819298, 0.826566, 0.833835, 0.841103, 0.848371, 0.855639, 0.862907, 0.870175, 0.877444, 0.884712, 0.89198, 0.899248, 0.906516, 0.913784, 0.921053, 0.928321, 0.935589, 0.942857, 0.950125, 0.957393, 0.964662, 0.97193, 0.979198, 0.986466, 0.993734, 1.001, 1.00827, 1.01554, 1.02281, 1.03008, 1.03734, 1.04461, 1.05188, 1.05915, 1.06642, 1.07368, 1.08095, 1.08822, 1.09549, 1.10276, 1.11003, 1.11729, 1.12456, 1.13183, 1.1391, 1.14637, 1.15363, 1.1609, 1.16817, 1.17544, 1.18271, 1.18997, 1.19724, 1.20451, 1.21178, 1.21905, 1.22632, 1.23358, 1.24085, 1.24812, 1.25539, 1.26266, 1.26992, 1.27719, 1.28446, 1.29173, 1.299, 1.30627, 1.31353, 1.3208, 1.32807, null], "y": [1855.56, 506.454, 255.713, 160.421, 112.597, 84.6576, 66.6809, 54.3142, 45.3779, 38.6721, 33.4876, 29.381, 26.0624, 23.3348, 21.0606, 19.1406, 17.5021, 16.0903, 14.8636, 13.7896, 12.8429, 12.0034, 11.2547, 10.5836, 9.97932, 9.43287, 8.93677, 8.48475, 8.07151, 7.69253, 7.34397, 7.02251, 6.72528, 6.44981, 6.19393, 5.95574, 5.73358, 5.52598, 5.33164, 5.14941, 4.97826, 4.81727, 4.66563, 4.52258, 4.38748, 4.25972, 4.13875, 4.0241, 3.9153, 3.81196, 3.7137, 3.62019, 3.53112, 3.44619, 3.36516, 3.28778, 3.21383, 3.1431, 3.07542, 3.01059, 2.94847, 2.88891, 2.83175, 2.77688, 2.72418, 2.67352, 2.62482, 2.57796, 2.53287, 2.48945, 2.44762, 2.40731, 2.36846, 2.33098, 2.29483, 2.25994, 2.22625, 2.19373, 2.16231, 2.13196, 2.10263, 2.07428, 2.04686, 2.02036, 1.99472, 1.96992, 1.94593, 1.92271, 1.90025, 1.87851, 1.85748, 1.83712, 1.81741, 1.79834, 1.77989, 1.76203, 1.74474, 1.72802, 1.71185, 1.69621, 1.68108, 1.66645, 1.65232, 1.63866, 1.62547, 1.61274, 1.60046, 1.58861, 1.57719, 1.5662, 1.55561, 1.54544, 1.53566, 1.52628, 1.51729, 1.50868, 1.50045, 1.4926, 1.48512, 1.47802, 1.47128, 1.46491, 1.45891, 1.45327, 1.44801, 1.4431, 1.43857, 1.43441, 1.43062, 1.42721, 1.42418, 1.42154, 1.41929, 1.41744, 1.416, 1.41498, 1.41438, 1.41422, 1.41451, 1.41526, 1.41649, 1.41822, 1.42047, 1.42325, 1.4266, 1.43053, 1.43508, 1.44028, 1.44616, 1.45277, 1.46014, 1.46834, 1.47742, 1.48743, 1.49845, 1.51057, 1.52387, 1.53846, 1.55446, 1.572, 1.59125, 1.61239, 1.63564, 1.66125, 1.68954, 1.72085, 1.75564, 1.79443, 1.83791, 1.88689, 1.94244, 2.00593, 2.07919, 2.16465, 2.26576, 2.38744, 2.53713, 2.72665, 2.97624, 3.32416, 3.85448, 4.80506, 7.35359, null], "type": "scatter"}, {"connectgaps": false, "line": {"dash": "solid", "width": 1.4}, "meta": {"rol": "familia"}, "mode": "lines", "name": "C = -1/2", "x": [0.00526316, 0.0125313, 0.0197995, 0.0270677, 0.0343358, 0.041604, 0.0488722, 0.0561404, 0.0634085, 0.0706767, 0.0779449, 0.085213, 0.0924812, 0.0997494, 0.107018, 0.114286, 0.121554, 0.128822, 0.13609, 0.143358, 0.150627, 0.157895, 0.165163, 0.172431, 0.179699, 0.186967, 0.194236, 0.201504, 0.208772, 0.21604, 0.223308, 0.230576, 0.237845, 0.245113, 0.252381, 0.259649, 0.266917, 0.274185, 0.281454, 0.288722, 0.29599, 0.303258, 0.310526, 0.317794, 0.325063, 0.332331, 0.339599, 0.346867, 0.354135, 0.361404, 0.368672, 0.37594, 0.383208, 0.390476, 0.397744, 0.405013, 0.412281, 0.419549, 0.426817, 0.434085, 0.441353, 0.448622, 0.45589, 0.463158, 0.470426, 0.477694, 0.484962, 0.492231, 0.499499, 0.506767, 0.514035, 0.521303, 0.528571, 0.53584, 0.543108, 0.550376, 0.557644, 0.564912, 0.57218, 0.579449, 0.586717, 0.593985, 0.601253, 0.608521, 0.615789, 0.623058, 0.630326, 0.637594, 0.644862, 0.65213, 0.659398, 0.666667, 0.673935, 0.681203, 0.688471, 0.695739, 0.703008, 0.710276, 0.717544, 0.724812, 0.73208, 0.739348, 0.746617, 0.753885, 0.761153, 0.768421, 0.775689, 0.782957, 0.790226, 0.797494, 0.804762, 0.81203, 0.819298, 0.826566, 0.833835, 0.841103, 0.848371, 0.855639, 0.862907, 0.870175, 0.877444, 0.884712, 0.89198, 0.899248, 0.906516, 0.913784, 0.921053, 0.928321, 0.935589, 0.942857, 0.950125, 0.957393, 0.964662, 0.97193, 0.979198, 0.986466, 0.993734, 1.001, 1.00827, 1.01554, 1.02281, 1.03008, 1.03734, 1.04461, 1.05188, 1.05915, 1.06642, 1.07368, 1.08095, 1.08822, 1.09549, 1.10276, 1.11003, 1.11729, 1.12456, 1.13183, 1.1391, 1.14637, 1.15363, 1.1609, 1.16817, 1.17544, 1.18271, 1.18997, 1.19724, 1.20451, 1.21178, 1.21905, 1.22632, 1.23358, 1.24085, 1.24812, 1.25539, 1.26266, 1.26992, 1.27719, 1.28446, 1.29173, 1.299, 1.30627, 1.31353, 1.3208, 1.32807, 1.33534, 1.34261, 1.34987, 1.35714, 1.36441, 1.37168, 1.37895, 1.38622, 1.39348, 1.40075, 1.40802, 1.41529, 1.42256, 1.42982, 1.43709, 1.44436, 1.45163, 1.4589, 1.46617, 1.47343, 1.4807, 1.48797, 1.49524, 1.50251, 1.50977, 1.51704, 1.52431, 1.53158, 1.53885, 1.54612, 1.55338, 1.56065, 1.56792, 1.57519, 1.58246, 1.58972, 1.59699, 1.60426, 1.61153, 1.6188, 1.62607, 1.63333, 1.6406, 1.64787, 1.65514, 1.66241, 1.66967, 1.67694, 1.68421, 1.69148, 1.69875, 1.70602, 1.71328, 1.72055, 1.72782, 1.73509, 1.74236, 1.74962, 1.75689, 1.76416, 1.77143, 1.7787, 1.78596, 1.79323, 1.8005, 1.80777, 1.81504, 1.82231, 1.82957, 1.83684, 1.84411, 1.85138, 1.85865, 1.86591, 1.87318, 1.88045, 1.88772, 1.89499, 1.90226, 1.90952, 1.91679, 1.92406, 1.93133, 1.9386, 1.94586, 1.95313, 1.9604, 1.96767, 1.97494, 1.98221, 1.98947, 1.99674, 2.00401, 2.01128, 2.01855, 2.02581, 2.03308, 2.04035, 2.04762, 2.05489, 2.06216, 2.06942, 2.07669, 2.08396, 2.09123, 2.0985, 2.10576, 2.11303, 2.1203, 2.12757, 2.13484, 2.14211, 2.14937, 2.15664, 2.16391, 2.17118, 2.17845, 2.18571, 2.19298, 2.20025, 2.20752, 2.21479, 2.22206, 2.22932, 2.23659, 2.24386, 2.25113, 2.2584, 2.26566, 2.27293, 2.2802, 2.28747, 2.29474, 2.30201, 2.30927, 2.31654, 2.32381, 2.33108, 2.33835, 2.34561, 2.35288, 2.36015, 2.36742, 2.37469, 2.38195, 2.38922, 2.39649, 2.40376, 2.41103, 2.4183, 2.42556, 2.43283, 2.4401, 2.44737, 2.45464, 2.4619, 2.46917, 2.47644, 2.48371, 2.49098, 2.49825, 2.50551, 2.51278, 2.52005, 2.52732, 2.53459, 2.54185, 2.54912, 2.55639, 2.56366, 2.57093, 2.5782, 2.58546, 2.59273, 2.6], "y": [1853.11, 504.86, 254.438, 159.325, 111.618, 83.7631, 65.8509, 53.5355, 44.6409, 37.9701, 32.8153, 28.7344, 25.4381, 22.7302, 20.4735, 18.5691, 16.9447, 15.5456, 14.3305, 13.2671, 12.3301, 11.4995, 10.759, 10.0956, 9.49832, 8.95841, 8.46839, 8.02203, 7.61407, 7.24003, 6.89608, 6.57893, 6.28574, 6.01406, 5.76172, 5.52686, 5.30782, 5.10314, 4.91154, 4.73188, 4.56314, 4.4044, 4.25486, 4.11378, 3.98052, 3.85446, 3.73509, 3.62191, 3.51448, 3.4124, 3.3153, 3.22285, 3.13474, 3.05069, 2.97045, 2.89377, 2.82044, 2.75025, 2.68303, 2.61859, 2.55678, 2.49745, 2.44046, 2.38569, 2.33301, 2.28232, 2.23351, 2.18649, 2.14116, 2.09744, 2.05525, 2.01452, 1.97517, 1.93715, 1.90039, 1.86483, 1.83042, 1.79711, 1.76484, 1.73358, 1.70328, 1.6739, 1.64539, 1.61773, 1.59088, 1.56481, 1.53948, 1.51486, 1.49094, 1.46767, 1.44504, 1.42302, 1.4016, 1.38073, 1.36042, 1.34063, 1.32134, 1.30255, 1.28423, 1.26636, 1.24894, 1.23194, 1.21535, 1.19916, 1.18335, 1.16791, 1.15283, 1.1381, 1.1237, 1.10963, 1.09588, 1.08243, 1.06928, 1.05641, 1.04383, 1.03151, 1.01946, 1.00766, 0.996105, 0.984793, 0.973713, 0.96286, 0.952227, 0.941808, 0.931596, 0.921587, 0.911774, 0.902152, 0.892717, 0.883463, 0.874385, 0.865479, 0.85674, 0.848164, 0.839746, 0.831484, 0.823372, 0.815407, 0.807585, 0.799903, 0.792357, 0.784944, 0.777661, 0.770505, 0.763472, 0.75656, 0.749766, 0.743087, 0.73652, 0.730063, 0.723713, 0.717469, 0.711326, 0.705284, 0.69934, 0.693491, 0.687736, 0.682073, 0.6765, 0.671014, 0.665614, 0.660297, 0.655063, 0.64991, 0.644835, 0.639838, 0.634916, 0.630068, 0.625292, 0.620588, 0.615953, 0.611386, 0.606886, 0.602452, 0.598082, 0.593775, 0.589529, 0.585345, 0.581219, 0.577152, 0.573142, 0.569188, 0.56529, 0.561445, 0.557653, 0.553913, 0.550224, 0.546586, 0.542996, 0.539455, 0.535962, 0.532515, 0.529114, 0.525758, 0.522446, 0.519178, 0.515952, 0.512769, 0.509626, 0.506524, 0.503462, 0.500439, 0.497455, 0.494509, 0.491599, 0.488727, 0.48589, 0.483089, 0.480323, 0.477592, 0.474894, 0.472229, 0.469597, 0.466997, 0.464429, 0.461892, 0.459386, 0.45691, 0.454463, 0.452047, 0.449659, 0.447299, 0.444967, 0.442663, 0.440387, 0.438137, 0.435913, 0.433716, 0.431544, 0.429397, 0.427275, 0.425178, 0.423105, 0.421056, 0.41903, 0.417028, 0.415048, 0.413091, 0.411156, 0.409244, 0.407352, 0.405483, 0.403634, 0.401806, 0.399998, 0.398211, 0.396444, 0.394696, 0.392968, 0.391259, 0.389569, 0.387898, 0.386245, 0.384611, 0.382994, 0.381396, 0.379814, 0.378251, 0.376704, 0.375174, 0.373661, 0.372165, 0.370685, 0.369221, 0.367773, 0.366341, 0.364924, 0.363523, 0.362137, 0.360766, 0.35941, 0.358068, 0.356741, 0.355429, 0.354131, 0.352847, 0.351576, 0.35032, 0.349077, 0.347848, 0.346632, 0.345429, 0.344239, 0.343063, 0.341899, 0.340747, 0.339609, 0.338482, 0.337368, 0.336266, 0.335176, 0.334099, 0.333033, 0.331978, 0.330935, 0.329904, 0.328884, 0.327876, 0.326878, 0.325892, 0.324917, 0.323952, 0.322999, 0.322056, 0.321123, 0.320202, 0.31929, 0.318389, 0.317499, 0.316618, 0.315748, 0.314887, 0.314037, 0.313196, 0.312365, 0.311544, 0.310733, 0.309931, 0.309139, 0.308356, 0.307583, 0.306819, 0.306064, 0.305318, 0.304581, 0.303854, 0.303136, 0.302426, 0.301726, 0.301034, 0.300351, 0.299677, 0.299012, 0.298355, 0.297707, 0.297068, 0.296437, 0.295814, 0.2952, 0.294595, 0.293997, 0.293408, 0.292828, 0.292256, 0.291692, 0.291136, 0.290588, 0.290049, 0.289517, 0.288994, 0.288479, 0.287971, 0.287472, 0.286981, 0.286498, 0.286023, 0.285555, 0.285096], "type": "scatter"}, {"connectgaps": false, "line": {"dash": "solid", "width": 1.4}, "meta": {"rol": "familia"}, "mode": "lines", "name": "C = 0", "x": [0.00526316, 0.0125313, 0.0197995, 0.0270677, 0.0343358, 0.041604, 0.0488722, 0.0561404, 0.0634085, 0.0706767, 0.0779449, 0.085213, 0.0924812, 0.0997494, 0.107018, 0.114286, 0.121554, 0.128822, 0.13609, 0.143358, 0.150627, 0.157895, 0.165163, 0.172431, 0.179699, 0.186967, 0.194236, 0.201504, 0.208772, 0.21604, 0.223308, 0.230576, 0.237845, 0.245113, 0.252381, 0.259649, 0.266917, 0.274185, 0.281454, 0.288722, 0.29599, 0.303258, 0.310526, 0.317794, 0.325063, 0.332331, 0.339599, 0.346867, 0.354135, 0.361404, 0.368672, 0.37594, 0.383208, 0.390476, 0.397744, 0.405013, 0.412281, 0.419549, 0.426817, 0.434085, 0.441353, 0.448622, 0.45589, 0.463158, 0.470426, 0.477694, 0.484962, 0.492231, 0.499499, 0.506767, 0.514035, 0.521303, 0.528571, 0.53584, 0.543108, 0.550376, 0.557644, 0.564912, 0.57218, 0.579449, 0.586717, 0.593985, 0.601253, 0.608521, 0.615789, 0.623058, 0.630326, 0.637594, 0.644862, 0.65213, 0.659398, 0.666667, 0.673935, 0.681203, 0.688471, 0.695739, 0.703008, 0.710276, 0.717544, 0.724812, 0.73208, 0.739348, 0.746617, 0.753885, 0.761153, 0.768421, 0.775689, 0.782957, 0.790226, 0.797494, 0.804762, 0.81203, 0.819298, 0.826566, 0.833835, 0.841103, 0.848371, 0.855639, 0.862907, 0.870175, 0.877444, 0.884712, 0.89198, 0.899248, 0.906516, 0.913784, 0.921053, 0.928321, 0.935589, 0.942857, 0.950125, 0.957393, 0.964662, 0.97193, 0.979198, 0.986466, 0.993734, 1.001, 1.00827, 1.01554, 1.02281, 1.03008, 1.03734, 1.04461, 1.05188, 1.05915, 1.06642, 1.07368, 1.08095, 1.08822, 1.09549, 1.10276, 1.11003, 1.11729, 1.12456, 1.13183, 1.1391, 1.14637, 1.15363, 1.1609, 1.16817, 1.17544, 1.18271, 1.18997, 1.19724, 1.20451, 1.21178, 1.21905, 1.22632, 1.23358, 1.24085, 1.24812, 1.25539, 1.26266, 1.26992, 1.27719, 1.28446, 1.29173, 1.299, 1.30627, 1.31353, 1.3208, 1.32807, 1.33534, 1.34261, 1.34987, 1.35714, 1.36441, 1.37168, 1.37895, 1.38622, 1.39348, 1.40075, 1.40802, 1.41529, 1.42256, 1.42982, 1.43709, 1.44436, 1.45163, 1.4589, 1.46617, 1.47343, 1.4807, 1.48797, 1.49524, 1.50251, 1.50977, 1.51704, 1.52431, 1.53158, 1.53885, 1.54612, 1.55338, 1.56065, 1.56792, 1.57519, 1.58246, 1.58972, 1.59699, 1.60426, 1.61153, 1.6188, 1.62607, 1.63333, 1.6406, 1.64787, 1.65514, 1.66241, 1.66967, 1.67694, 1.68421, 1.69148, 1.69875, 1.70602, 1.71328, 1.72055, 1.72782, 1.73509, 1.74236, 1.74962, 1.75689, 1.76416, 1.77143, 1.7787, 1.78596, 1.79323, 1.8005, 1.80777, 1.81504, 1.82231, 1.82957, 1.83684, 1.84411, 1.85138, 1.85865, 1.86591, 1.87318, 1.88045, 1.88772, 1.89499, 1.90226, 1.90952, 1.91679, 1.92406, 1.93133, 1.9386, 1.94586, 1.95313, 1.9604, 1.96767, 1.97494, 1.98221, 1.98947, 1.99674, 2.00401, 2.01128, 2.01855, 2.02581, 2.03308, 2.04035, 2.04762, 2.05489, 2.06216, 2.06942, 2.07669, 2.08396, 2.09123, 2.0985, 2.10576, 2.11303, 2.1203, 2.12757, 2.13484, 2.14211, 2.14937, 2.15664, 2.16391, 2.17118, 2.17845, 2.18571, 2.19298, 2.20025, 2.20752, 2.21479, 2.22206, 2.22932, 2.23659, 2.24386, 2.25113, 2.2584, 2.26566, 2.27293, 2.2802, 2.28747, 2.29474, 2.30201, 2.30927, 2.31654, 2.32381, 2.33108, 2.33835, 2.34561, 2.35288, 2.36015, 2.36742, 2.37469, 2.38195, 2.38922, 2.39649, 2.40376, 2.41103, 2.4183, 2.42556, 2.43283, 2.4401, 2.44737, 2.45464, 2.4619, 2.46917, 2.47644, 2.48371, 2.49098, 2.49825, 2.50551, 2.51278, 2.52005, 2.52732, 2.53459, 2.54185, 2.54912, 2.55639, 2.56366, 2.57093, 2.5782, 2.58546, 2.59273, 2.6], "y": [1851.89, 504.068, 253.807, 158.785, 111.138, 83.3263, 65.4474, 53.1585, 44.2857, 37.6332, 32.494, 28.4267, 25.1423, 22.445, 20.1977, 18.3019, 16.6852, 15.2932, 14.0846, 13.0272, 12.0957, 11.2702, 10.5346, 9.87556, 9.28251, 8.74654, 8.26022, 7.81736, 7.41271, 7.0418, 6.70082, 6.3865, 6.096, 5.82688, 5.57699, 5.34447, 5.12767, 4.92514, 4.7356, 4.55791, 4.39106, 4.23415, 4.08637, 3.94698, 3.81535, 3.69087, 3.57302, 3.46131, 3.3553, 3.25459, 3.15882, 3.06766, 2.9808, 2.89797, 2.8189, 2.74336, 2.67113, 2.60202, 2.53584, 2.47242, 2.4116, 2.35323, 2.29718, 2.24332, 2.19153, 2.14171, 2.09374, 2.04754, 2.00301, 1.96007, 1.91865, 1.87866, 1.84005, 1.80274, 1.76667, 1.73179, 1.69805, 1.66538, 1.63375, 1.60311, 1.57341, 1.54462, 1.5167, 1.48961, 1.46331, 1.43778, 1.41298, 1.38889, 1.36548, 1.34271, 1.32058, 1.29904, 1.27808, 1.25768, 1.23782, 1.21847, 1.19962, 1.18126, 1.16336, 1.1459, 1.12888, 1.11227, 1.09607, 1.08026, 1.06482, 1.04975, 1.03503, 1.02065, 1.0066, 0.992874, 0.979454, 0.966333, 0.953503, 0.940954, 0.928678, 0.916667, 0.904912, 0.893406, 0.882143, 0.871114, 0.860312, 0.849733, 0.839368, 0.829212, 0.81926, 0.809505, 0.799942, 0.790566, 0.781371, 0.772354, 0.763508, 0.75483, 0.746316, 0.73796, 0.729759, 0.721708, 0.713805, 0.706045, 0.698424, 0.69094, 0.683588, 0.676366, 0.66927, 0.662297, 0.655444, 0.648709, 0.642089, 0.63558, 0.62918, 0.622888, 0.616699, 0.610612, 0.604625, 0.598734, 0.592939, 0.587237, 0.581626, 0.576103, 0.570667, 0.565316, 0.560049, 0.554862, 0.549755, 0.544726, 0.539773, 0.534895, 0.53009, 0.525356, 0.520693, 0.516098, 0.51157, 0.507108, 0.50271, 0.498376, 0.494104, 0.489892, 0.48574, 0.481646, 0.477609, 0.473628, 0.469703, 0.465831, 0.462012, 0.458245, 0.454529, 0.450863, 0.447246, 0.443677, 0.440156, 0.43668, 0.43325, 0.429865, 0.426524, 0.423225, 0.419969, 0.416755, 0.413581, 0.410448, 0.407353, 0.404298, 0.40128, 0.3983, 0.395357, 0.392449, 0.389577, 0.38674, 0.383938, 0.381168, 0.378432, 0.375729, 0.373058, 0.370418, 0.367809, 0.36523, 0.362682, 0.360163, 0.357673, 0.355212, 0.352779, 0.350373, 0.347995, 0.345643, 0.343318, 0.341019, 0.338745, 0.336496, 0.334273, 0.332073, 0.329898, 0.327746, 0.325618, 0.323512, 0.321429, 0.319368, 0.31733, 0.315313, 0.313317, 0.311342, 0.309388, 0.307454, 0.30554, 0.303646, 0.301771, 0.299916, 0.29808, 0.296262, 0.294462, 0.292681, 0.290918, 0.289172, 0.287444, 0.285733, 0.284039, 0.282361, 0.2807, 0.279055, 0.277426, 0.275813, 0.274215, 0.272633, 0.271066, 0.269514, 0.267977, 0.266454, 0.264946, 0.263452, 0.261971, 0.260505, 0.259052, 0.257613, 0.256187, 0.254774, 0.253374, 0.251987, 0.250612, 0.24925, 0.2479, 0.246562, 0.245237, 0.243923, 0.242621, 0.24133, 0.240051, 0.238783, 0.237526, 0.23628, 0.235045, 0.233821, 0.232607, 0.231404, 0.230211, 0.229028, 0.227856, 0.226693, 0.22554, 0.224397, 0.223264, 0.22214, 0.221025, 0.21992, 0.218824, 0.217737, 0.216659, 0.21559, 0.21453, 0.213478, 0.212435, 0.2114, 0.210374, 0.209356, 0.208346, 0.207344, 0.20635, 0.205365, 0.204387, 0.203416, 0.202454, 0.201499, 0.200551, 0.199611, 0.198678, 0.197752, 0.196834, 0.195923, 0.195018, 0.194121, 0.19323, 0.192347, 0.19147, 0.190599, 0.189735, 0.188878, 0.188027, 0.187183, 0.186345, 0.185513, 0.184687, 0.183867, 0.183054, 0.182246, 0.181444, 0.180648, 0.179858, 0.179074, 0.178295, 0.177522, 0.176755, 0.175993, 0.175236, 0.174485, 0.17374, 0.172999, 0.172264, 0.171534, 0.170809, 0.170089, 0.169375, 0.168665], "type": "scatter"}, {"connectgaps": false, "line": {"dash": "solid", "width": 2.8}, "meta": {"rol": "analitica"}, "mode": "lines", "name": "y(x) = 1/sqrt(x**3*(2 - x))", "x": [0.00526316, 0.0125313, 0.0197995, 0.0270677, 0.0343358, 0.041604, 0.0488722, 0.0561404, 0.0634085, 0.0706767, 0.0779449, 0.085213, 0.0924812, 0.0997494, 0.107018, 0.114286, 0.121554, 0.128822, 0.13609, 0.143358, 0.150627, 0.157895, 0.165163, 0.172431, 0.179699, 0.186967, 0.194236, 0.201504, 0.208772, 0.21604, 0.223308, 0.230576, 0.237845, 0.245113, 0.252381, 0.259649, 0.266917, 0.274185, 0.281454, 0.288722, 0.29599, 0.303258, 0.310526, 0.317794, 0.325063, 0.332331, 0.339599, 0.346867, 0.354135, 0.361404, 0.368672, 0.37594, 0.383208, 0.390476, 0.397744, 0.405013, 0.412281, 0.419549, 0.426817, 0.434085, 0.441353, 0.448622, 0.45589, 0.463158, 0.470426, 0.477694, 0.484962, 0.492231, 0.499499, 0.506767, 0.514035, 0.521303, 0.528571, 0.53584, 0.543108, 0.550376, 0.557644, 0.564912, 0.57218, 0.579449, 0.586717, 0.593985, 0.601253, 0.608521, 0.615789, 0.623058, 0.630326, 0.637594, 0.644862, 0.65213, 0.659398, 0.666667, 0.673935, 0.681203, 0.688471, 0.695739, 0.703008, 0.710276, 0.717544, 0.724812, 0.73208, 0.739348, 0.746617, 0.753885, 0.761153, 0.768421, 0.775689, 0.782957, 0.790226, 0.797494, 0.804762, 0.81203, 0.819298, 0.826566, 0.833835, 0.841103, 0.848371, 0.855639, 0.862907, 0.870175, 0.877444, 0.884712, 0.89198, 0.899248, 0.906516, 0.913784, 0.921053, 0.928321, 0.935589, 0.942857, 0.950125, 0.957393, 0.964662, 0.97193, 0.979198, 0.986466, 0.993734, 1.001, 1.00827, 1.01554, 1.02281, 1.03008, 1.03734, 1.04461, 1.05188, 1.05915, 1.06642, 1.07368, 1.08095, 1.08822, 1.09549, 1.10276, 1.11003, 1.11729, 1.12456, 1.13183, 1.1391, 1.14637, 1.15363, 1.1609, 1.16817, 1.17544, 1.18271, 1.18997, 1.19724, 1.20451, 1.21178, 1.21905, 1.22632, 1.23358, 1.24085, 1.24812, 1.25539, 1.26266, 1.26992, 1.27719, 1.28446, 1.29173, 1.299, 1.30627, 1.31353, 1.3208, 1.32807, 1.33534, 1.34261, 1.34987, 1.35714, 1.36441, 1.37168, 1.37895, 1.38622, 1.39348, 1.40075, 1.40802, 1.41529, 1.42256, 1.42982, 1.43709, 1.44436, 1.45163, 1.4589, 1.46617, 1.47343, 1.4807, 1.48797, 1.49524, 1.50251, 1.50977, 1.51704, 1.52431, 1.53158, 1.53885, 1.54612, 1.55338, 1.56065, 1.56792, 1.57519, 1.58246, 1.58972, 1.59699, 1.60426, 1.61153, 1.6188, 1.62607, 1.63333, 1.6406, 1.64787, 1.65514, 1.66241, 1.66967, 1.67694, 1.68421, 1.69148, 1.69875, 1.70602, 1.71328, 1.72055, 1.72782, 1.73509, 1.74236, 1.74962, 1.75689, 1.76416, 1.77143, 1.7787, 1.78596, 1.79323, 1.8005, 1.80777, 1.81504, 1.82231, 1.82957, 1.83684, 1.84411, 1.85138, 1.85865, 1.86591, 1.87318, 1.88045, 1.88772, 1.89499, 1.90226, 1.90952, 1.91679, 1.92406, 1.93133, 1.9386, 1.94586, 1.95313, 1.9604, 1.96767, 1.97494, 1.98221, 1.98947, 1.99674, null], "y": [1854.33, 505.655, 255.073, 159.87, 112.105, 84.2068, 66.262, 53.9206, 45.0049, 38.3163, 33.1464, 29.0523, 25.7446, 23.0266, 20.7608, 18.8484, 17.2166, 15.8109, 14.5897, 13.5208, 12.5787, 11.7433, 10.9985, 10.3309, 9.72991, 9.18646, 8.69313, 8.24367, 7.83279, 7.456, 7.10946, 6.78987, 6.49438, 6.22052, 5.96612, 5.7293, 5.5084, 5.30196, 5.10868, 4.92743, 4.75717, 4.59699, 4.44607, 4.30369, 4.16917, 4.04193, 3.92142, 3.80716, 3.6987, 3.59563, 3.4976, 3.40425, 3.31529, 3.23042, 3.1494, 3.07198, 2.99794, 2.92709, 2.85922, 2.79417, 2.73178, 2.6719, 2.61439, 2.55913, 2.50598, 2.45484, 2.40562, 2.35819, 2.31249, 2.26842, 2.2259, 2.18487, 2.14524, 2.10695, 2.06994, 2.03415, 1.99953, 1.96603, 1.93359, 1.90217, 1.87173, 1.84222, 1.81361, 1.78586, 1.75894, 1.73281, 1.70743, 1.68279, 1.65885, 1.63559, 1.61298, 1.59099, 1.56961, 1.5488, 1.52856, 1.50886, 1.48967, 1.47099, 1.4528, 1.43508, 1.4178, 1.40097, 1.38456, 1.36856, 1.35295, 1.33773, 1.32289, 1.3084, 1.29426, 1.28046, 1.26699, 1.25383, 1.24099, 1.22844, 1.21619, 1.20421, 1.19252, 1.18109, 1.16992, 1.159, 1.14833, 1.1379, 1.1277, 1.11773, 1.10798, 1.09844, 1.08911, 1.07999, 1.07107, 1.06234, 1.0538, 1.04545, 1.03728, 1.02929, 1.02146, 1.01381, 1.00632, 0.998999, 0.991831, 0.984818, 0.977956, 0.971242, 0.964674, 0.958248, 0.951961, 0.945811, 0.939795, 0.933911, 0.928156, 0.922528, 0.917025, 0.911644, 0.906383, 0.901241, 0.896215, 0.891304, 0.886506, 0.881819, 0.877241, 0.872771, 0.868407, 0.864149, 0.859994, 0.855941, 0.85199, 0.848138, 0.844385, 0.84073, 0.837172, 0.833709, 0.830342, 0.827068, 0.823888, 0.8208, 0.817804, 0.814899, 0.812086, 0.809363, 0.806729, 0.804185, 0.801731, 0.799365, 0.797088, 0.7949, 0.792801, 0.79079, 0.788868, 0.787035, 0.785291, 0.783636, 0.782071, 0.780595, 0.779211, 0.777917, 0.776715, 0.775606, 0.77459, 0.773668, 0.772841, 0.77211, 0.771477, 0.770943, 0.770509, 0.770176, 0.769947, 0.769824, 0.769807, 0.769899, 0.770103, 0.770421, 0.770855, 0.771408, 0.772084, 0.772884, 0.773814, 0.774876, 0.776074, 0.777412, 0.778896, 0.780529, 0.782317, 0.784266, 0.786381, 0.78867, 0.791138, 0.793793, 0.796643, 0.799698, 0.802966, 0.806457, 0.810182, 0.814154, 0.818385, 0.822889, 0.827681, 0.832779, 0.8382, 0.843964, 0.850094, 0.856613, 0.863548, 0.870929, 0.878789, 0.887163, 0.896093, 0.905624, 0.915808, 0.926701, 0.93837, 0.950889, 0.964343, 0.978829, 0.994462, 1.01137, 1.02971, 1.04967, 1.07145, 1.09532, 1.12159, 1.15064, 1.18296, 1.21913, 1.25993, 1.30634, 1.35968, 1.42176, 1.49511, 1.5834, 1.69226, 1.8308, 2.01495, 2.27592, 2.68617, 3.4734, 6.20915, null], "type": "scatter"}, {"line": {"dash": "dash", "width": 1.6}, "meta": {"rol": "asintota"}, "mode": "lines", "name": "x = 0", "x": [0.0, 0.0], "y": [-3.259116343252693, 26.966895829127147], "type": "scatter"}, {"line": {"dash": "dash", "width": 1.6}, "meta": {"rol": "asintota"}, "mode": "lines", "name": "x = 2", "x": [2.0, 2.0], "y": [-3.259116343252693, 26.966895829127147], "type": "scatter"}, {"marker": {"line": {"width": 2}, "size": 13, "symbol": "circle-open"}, "meta": {"rol": "condicion_inicial"}, "mode": "markers+text", "name": "Condición inicial", "text": ["(1, 1)"], "textposition": "top right", "x": [1.0], "y": [1.0], "type": "scatter"}, {"marker": {"line": {"width": 2}, "size": 9, "symbol": "circle"}, "meta": {"rol": "numerica"}, "mode": "markers", "name": "Numérica (RK45)", "textposition": "top right", "x": [1.0, 1.02256, 1.04511, 1.06767, 1.09023, 1.11278, 1.13534, 1.15789, 1.18045, 1.20301, 1.22556, 1.24812, 1.27068, 1.29323, 1.31579, 1.33835, 1.3609, 1.38346, 1.40602, 1.42857, 1.45113, 1.47368, 1.49624, 1.5188, 1.54135, 1.56391, 1.58647, 1.60902, 1.63158, 1.65414, 1.67669, 1.69925, 1.7218, 1.74436, 1.76692, 1.78947, 1.81203, 1.83459, 1.85714, 1.8797], "y": [1.0, 0.97819, 0.95781, 0.938772, 0.920998, 0.904419, 0.888974, 0.874607, 0.861272, 0.848927, 0.837536, 0.827068, 0.817499, 0.80881, 0.800987, 0.794021, 0.787909, 0.782654, 0.778265, 0.774758, 0.772157, 0.770496, 0.769815, 0.770169, 0.771627, 0.774273, 0.778213, 0.783576, 0.790525, 0.799264, 0.81005, 0.82321, 0.839169, 0.858483, 0.881903, 0.910456, 0.9456, 0.98948, 1.0454, 1.11875], "type": "scatter"}], "layout": {"margin": {"l": 62, "r": 24, "t": 54, "b": 48}, "title": {"text": "Solución analítica"}, "xaxis": {"title": {"text": "x"}, "range": [-0.3, 2.6]}, "yaxis": {"title": {"text": "y(x)"}, "range": [-3.259116343252693, 26.966895829127147]}, "hovermode": "closest"}}}], "momento": "20:24:43"}], "momento": "04/10/2026 20:24:43", "refresco": 15, "datos_url": "informe-20261004-1945-d20a.json"}</script>
+
+<script>
+(function () {
+  "use strict";
+
+  var ESTADO = leerDatos();
+  var dibujadas = 0;
+
+  function leerDatos() {
+    try {
+      return JSON.parse(document.getElementById("datos").textContent);
+    } catch (e) {
+      return { entradas: [], sesion: null, refresco: 0, datos_url: null };
+    }
+  }
+
+  // ---------- paleta: una sola fuente, el CSS de arriba ----------
+  function tono(nombre) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue("--" + nombre).trim();
+  }
+
+  function paleta() {
+    return {
+      series: ["serie-1", "serie-2", "serie-3", "serie-4", "serie-5"].map(tono),
+      estable: tono("estable"),
+      inestable: tono("inestable"),
+      indefinido: tono("indefinido"),
+      tinta: tono("tinta"),
+      tintaMedia: tono("tinta-media"),
+      tintaTenue: tono("tinta-tenue"),
+      rejilla: tono("rejilla"),
+      campo: tono("campo"),
+      hoja: tono("hoja")
+    };
+  }
+
+  // Cada traza dice QUÉ es (meta.rol); aquí se decide de qué color va.
+  function colorDeRol(rol, p) {
+    if (!rol) return null;
+    if (rol.indexOf("serie:") === 0) {
+      return p.series[parseInt(rol.slice(6), 10) % p.series.length];
+    }
+    if (rol.indexOf("equilibrio:") === 0 || rol.indexOf("rama:") === 0) {
+      var estado = rol.slice(rol.indexOf(":") + 1);
+      return estado === "estable" ? p.estable
+           : estado === "inestable" ? p.inestable : p.indefinido;
+    }
+    switch (rol) {
+      case "campo":        return p.campo;
+      case "nivel":        return p.campo;
+      case "trayectoria":  return p.series[0];
+      case "trayectoria3d": return p.series[0];
+      case "orbita":       return p.tintaTenue;
+      case "inicio":       return p.estable;
+      case "final":        return p.inestable;
+      case "crece":        return p.estable;
+      case "decrece":      return p.inestable;
+      case "analitica":    return p.series[0];
+      case "numerica":     return p.series[1];
+      case "familia":      return p.tintaTenue;
+      case "particular":   return p.series[2];
+      case "condicion_inicial": return p.series[3];
+      case "asintota":     return p.inestable;
+      case "separatriz":   return p.inestable;
+      case "variedad_estable":   return p.series[0];
+      case "variedad_inestable": return p.series[1];
+      case "nulclina_x":   return p.series[2];
+      case "nulclina_y":   return p.series[3];
+      case "direccion":    return p.series[4];
+      case "ciclo":        return p.estable;
+      case "lazo":         return p.series[4];
+      case "frontera":     return p.series[3];
+      case "critico":      return p.series[4];
+      case "region":       return p.series[2];
+      case "mapa":         return p.series[0];
+      case "diagonal":     return p.tintaTenue;
+      case "telarana":     return p.series[1];
+      case "referencia":   return p.tintaTenue;
+      default:             return null;
+    }
+  }
+
+  // "#3449b8" → "rgba(52,73,184,0.14)": las regiones se sombrean con el
+  // color de su rol, pero transparentes para no tapar las curvas.
+  function translucido(color, alfa) {
+    var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color || "");
+    if (!m) return color;
+    return "rgba(" + parseInt(m[1], 16) + "," + parseInt(m[2], 16) + "," +
+           parseInt(m[3], 16) + "," + alfa + ")";
+  }
+
+  var EJE = function (p) {
+    return {
+      gridcolor: p.rejilla, zerolinecolor: p.rejilla, linecolor: p.rejilla,
+      tickfont: { color: p.tintaTenue, size: 11 },
+      title: { font: { color: p.tintaMedia, size: 12 } },
+      showline: true, ticks: "outside", ticklen: 4, tickcolor: p.rejilla
+    };
+  };
+
+  function vestir(spec) {
+    var p = paleta();
+    var datos = (spec.data || []).map(function (traza) {
+      var t = Object.assign({}, traza);
+      var color = colorDeRol((t.meta || {}).rol, p);
+      if (color && t.type === "contour") {
+        // Curvas de nivel de un solo tono: lo que importa es la forma, no la escala.
+        t.colorscale = [[0, color], [1, color]];
+        t.showscale = false;
+        return t;
+      }
+      if (color && t.fill === "toself") {
+        t.fillcolor = translucido(color, 0.14);
+        t.line = Object.assign({}, t.line, { color: "rgba(0,0,0,0)" });
+        return t;
+      }
+      if (color) {
+        if (t.line && !t.line.colorscale) t.line = Object.assign({}, t.line, { color: color });
+        if (t.marker) {
+          t.marker = Object.assign({}, t.marker, { color: color });
+          // Un aro del color del papel separa un marcador de lo que tenga debajo.
+          if (t.marker.line) t.marker.line = Object.assign({}, t.marker.line, { color: p.hoja });
+        }
+        if (t.textfont === undefined && t.mode && t.mode.indexOf("text") >= 0) {
+          t.textfont = { color: p.tintaMedia, size: 11 };
+        }
+      }
+      return t;
+    });
+
+    var eje = EJE(p);
+    var layout = Object.assign({}, spec.layout, {
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      font: { color: p.tintaMedia, size: 12,
+              family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' },
+      title: Object.assign({}, spec.layout && spec.layout.title, {
+        font: { color: p.tinta, size: 15 }, x: 0, xanchor: "left", pad: { l: 6 }
+      }),
+      legend: { font: { color: p.tintaMedia, size: 11 }, bgcolor: "rgba(0,0,0,0)",
+                orientation: "h", y: -0.18, x: 0 },
+      xaxis: Object.assign({}, spec.layout && spec.layout.xaxis, eje),
+      yaxis: Object.assign({}, spec.layout && spec.layout.yaxis, eje),
+      hoverlabel: { bgcolor: p.hoja, bordercolor: p.tintaTenue,
+                    font: { color: p.tinta, size: 12 } }
+    });
+    if (spec.layout && spec.layout.scene) {
+      var ejeTres = Object.assign({ backgroundcolor: "rgba(0,0,0,0)", showbackground: false },
+                                  eje);
+      layout.scene = Object.assign({}, spec.layout.scene, {
+        xaxis: Object.assign({}, spec.layout.scene.xaxis, ejeTres),
+        yaxis: Object.assign({}, spec.layout.scene.yaxis, ejeTres),
+        zaxis: Object.assign({}, spec.layout.scene.zaxis, ejeTres)
+      });
+    }
+    // La recta F = 0 de la línea de fase.
+    if (layout.shapes) {
+      layout.shapes = layout.shapes.map(function (s) {
+        return Object.assign({}, s, {
+          line: Object.assign({}, s.line, { color: p.tintaTenue })
+        });
+      });
+    }
+    return { data: datos, layout: layout };
+  }
+
+  // ---------- formato ----------
+  function num(valor, modo) {
+    if (valor === null || valor === undefined || valor === "") return "—";
+    var n = Number(valor);
+    if (!isFinite(n)) return String(valor);
+    if (modo === "exp") return n.toExponential(2);
+    if (n === 0) return "0";
+    if (Math.abs(n) >= 1e5 || Math.abs(n) < 1e-4) return n.toExponential(2);
+    return parseFloat(n.toPrecision(6)).toString();
+  }
+
+  function autovalor(v) {
+    if (v && typeof v === "object" && "re" in v) {
+      if (v.im) {
+        return num(v.re) + (v.im >= 0 ? " + " : " − ") + num(Math.abs(v.im)) + "i";
+      }
+      return num(v.re);
+    }
+    return num(v);
+  }
+
+  // Todo nodo se crea con textContent: lo que escribió el usuario en un título
+  // o en un nombre de variable entra como texto y no puede volverse marcado.
+  function el(etiqueta, clase, texto) {
+    var nodo = document.createElement(etiqueta);
+    if (clase) nodo.className = clase;
+    if (texto !== undefined && texto !== null) nodo.textContent = String(texto);
+    return nodo;
+  }
+
+  function estadoDe(entrada) {
+    if (!entrada.ok) return { clase: "mal", glifo: "✕", palabra: "no superado" };
+    if ((entrada.verificacion || {}).ok) return { clase: "ok", glifo: "✓", palabra: "verificado" };
+    return { clase: "medio", glifo: "◇", palabra: "sin verificar" };
+  }
+
+  // ---------- bloques ----------
+  function bloqueSistema(cfg) {
+    var variables = cfg.variables_estado || [], ecuaciones = cfg.ecuaciones || [];
+    if (!variables.length || !ecuaciones.length) return null;
+    var t = cfg.variable_independiente || "t";
+    var pre = el("pre", "sistema");
+    variables.forEach(function (v, i) {
+      pre.appendChild(el("span", "lhs", "d" + v + "/d" + t + "  =  "));
+      pre.appendChild(document.createTextNode(String(ecuaciones[i] || "")));
+      if (i < variables.length - 1) pre.appendChild(document.createTextNode("\n"));
+    });
+    return pre;
+  }
+
+  function bloqueFicha(cfg) {
+    var filas = [], variables = cfg.variables_estado || [];
+    if (cfg.y0 && cfg.y0.length) {
+      filas.push(["Condición inicial", cfg.y0.map(function (v, i) {
+        return (variables[i] || ("x" + i)) + " = " + num(v);
+      }).join("   ")]);
+    }
+    if (cfg.intervalo && cfg.intervalo.length === 2) {
+      filas.push(["Intervalo", (cfg.variable_independiente || "t") + " ∈ [" +
+                  num(cfg.intervalo[0]) + ", " + num(cfg.intervalo[1]) + "]"]);
+    }
+    if (cfg.parametros && Object.keys(cfg.parametros).length) {
+      filas.push(["Parámetros", Object.keys(cfg.parametros).map(function (k) {
+        return k + " = " + num(cfg.parametros[k]);
+      }).join("   ")]);
+    }
+    if (cfg.metodo) filas.push(["Integrador", cfg.metodo]);
+    if (cfg.rtol != null) {
+      filas.push(["Tolerancias", "rtol " + num(cfg.rtol, "exp") + "   atol " + num(cfg.atol, "exp")]);
+    }
+    if (cfg.puntos) filas.push(["Malla", cfg.puntos + " puntos"]);
+    if (!filas.length) return null;
+
+    var dl = el("dl", "ficha");
+    filas.forEach(function (par) {
+      var caja = el("div");
+      caja.appendChild(el("dt", null, par[0]));
+      caja.appendChild(el("dd", null, par[1]));
+      dl.appendChild(caja);
+    });
+    return dl;
+  }
+
+  function cabeceraTabla(columnas) {
+    var thead = el("thead"), fila = el("tr");
+    columnas.forEach(function (c) {
+      var th = el("th", c.der ? "der" : null, c.texto);
+      fila.appendChild(th);
+    });
+    thead.appendChild(fila);
+    return thead;
+  }
+
+  function bloqueEquilibrios(analisis) {
+    var est = (analisis || {}).estabilidad || {};
+    var puntos = est.equilibrios || [];
+    if (!puntos.length) {
+      return est.nota ? el("p", "apuntes", est.nota) : null;
+    }
+    var tabla = el("table", "tabla");
+    tabla.appendChild(cabeceraTabla([
+      { texto: "Punto" }, { texto: "Clasificación" }, { texto: "Autovalores" }
+    ]));
+    var tbody = el("tbody");
+    puntos.forEach(function (eq) {
+      var tr = el("tr");
+      tr.appendChild(el("td", "cifra",
+        "(" + (eq.punto || []).map(function (c) { return num(c); }).join(",  ") + ")"));
+
+      var clas = String(eq.clasificacion || "?");
+      var clase = clas.indexOf("estable") === 0 ? "ok"
+                : (clas.indexOf("inestable") === 0 ? "mal" : "medio");
+      var glifo = clase === "ok" ? "●" : (clase === "mal" ? "✕" : "◇");
+      var td = el("td");
+      var marca = el("span", "distintivo " + clase);
+      marca.appendChild(el("span", "glifo", glifo));
+      marca.appendChild(document.createTextNode(eq.tipo || clas));
+      td.appendChild(marca);
+      tr.appendChild(td);
+
+      tr.appendChild(el("td", "cifra",
+        (eq.autovalores || []).map(autovalor).join("    ")));
+      tbody.appendChild(tr);
+    });
+    tabla.appendChild(tbody);
+    return tabla;
+  }
+
+  // Cuánto margen sobró, en décadas: un "pasó" holgado y un "pasó raspando"
+  // no se leen igual, y en una verificación esa diferencia importa.
+  function medidorDeHolgura(medida, umbral, ok) {
+    if (medida == null || umbral == null) return null;
+    var m = Math.abs(Number(medida)), u = Math.abs(Number(umbral));
+    if (!isFinite(m) || !isFinite(u) || u === 0) return null;
+    var decadas = Math.log10(u / Math.max(m, u * 1e-6));   // >0 = sobró margen
+    var fraccion = Math.max(0.06, Math.min(1, (decadas + 1) / 7));
+    var caja = el("span", "holgura" + (ok ? "" : " mal"));
+    var barra = el("i");
+    barra.style.width = (ok ? fraccion * 100 : 100) + "%";
+    caja.appendChild(barra);
+    caja.title = ok ? ("Pasó con " + decadas.toFixed(1) + " décadas de margen")
+                    : "No pasó";
+    return caja;
+  }
+
+  var CLAVES_MEDIDA = ["desvio", "residuo_relativo", "desvio_ventana",
+                       "error_maximo", "residuo", "medida"];
+
+  function bloqueVerificacion(verificacion) {
+    var pruebas = (verificacion || {}).pruebas || [];
+    if (!pruebas.length) return null;
+    var tabla = el("table", "tabla");
+    tabla.appendChild(cabeceraTabla([
+      { texto: "" }, { texto: "Prueba" },
+      { texto: "Medido", der: true }, { texto: "Umbral", der: true }
+    ]));
+    var tbody = el("tbody");
+    pruebas.forEach(function (p) {
+      var tr = el("tr");
+      var tdMarca = el("td");
+      // ◇: la comprobación no pudo decidir; no cuenta en contra ni a favor.
+      var concluyente = p.concluyente !== false;
+      tdMarca.appendChild(el("span", "marca " + (!concluyente ? "" : (p.ok ? "ok" : "mal")),
+                             !concluyente ? "◇" : (p.ok ? "✓" : "✕")));
+      tr.appendChild(tdMarca);
+
+      var td = el("td");
+      td.appendChild(el("span", "nombre", p.nombre || "?"));
+      if (p.tipo) td.appendChild(el("span", "tipo-prueba", p.tipo === "simbolica" ? "simbólica" : "numérica"));
+      if (p.descripcion) td.appendChild(el("span", "glosa", p.descripcion));
+      tr.appendChild(td);
+
+      var medida = null;
+      for (var i = 0; i < CLAVES_MEDIDA.length; i++) {
+        if (CLAVES_MEDIDA[i] in p) { medida = p[CLAVES_MEDIDA[i]]; break; }
+      }
+      var umbral = ("umbral_efectivo" in p) ? p.umbral_efectivo : p.umbral;
+
+      var tdMedida = el("td", "cifra der", num(medida, "exp"));
+      var medidor = medidorDeHolgura(medida, umbral, p.ok);
+      if (medidor) tdMedida.appendChild(medidor);
+      tr.appendChild(tdMedida);
+      tr.appendChild(el("td", "cifra der", num(umbral, "exp")));
+      tbody.appendChild(tr);
+    });
+    tabla.appendChild(tbody);
+    return tabla;
+  }
+
+  function listaDeNotas(notas) {
+    if (!notas || !notas.length) return null;
+    var ul = el("ul", "apuntes");
+    notas.forEach(function (n) { ul.appendChild(el("li", null, n)); });
+    return ul;
+  }
+
+  function conRubrica(contenedor, texto, nodo) {
+    if (!nodo) return;
+    contenedor.appendChild(el("p", "rubrica", texto));
+    contenedor.appendChild(nodo);
+  }
+
+  var NOMBRE_DE_FIGURA = {
+    series: "Series temporales",
+    linea_fase: "Línea de fase",
+    plano_fase: "Retrato de fase",
+    trayectoria_3d: "Trayectoria en el espacio de fases",
+    solucion: "Solución",
+    retrato_fase: "Retrato de fase",
+    retrato_antes: "Antes de la bifurcación",
+    retrato_despues: "Después de la bifurcación",
+    diagrama_bifurcacion: "Diagrama de bifurcación",
+    traza_determinante: "Plano traza-determinante",
+    telarana: "Diagrama de telaraña",
+    convergencia_lyapunov: "Convergencia del exponente de Lyapunov",
+    separacion: "Separación"
+  };
+
+  function nombreDeFigura(nombre) {
+    if (NOMBRE_DE_FIGURA[nombre]) return NOMBRE_DE_FIGURA[nombre];
+    var m = /^retrato_fase_(\d+)$/.exec(nombre || "");
+    return m ? "Retrato de fase · régimen " + m[1] : (nombre || "Figura");
+  }
+
+  // ---------- fórmulas ----------
+  // Las fórmulas las escribe el servidor (salen de sympy), pero se componen con
+  // KaTeX sin `trust`: no hay forma de que una fórmula inserte marcado. Sin
+  // KaTeX (sin red) queda el LaTeX como texto, que se sigue leyendo.
+  function componer(nodo, fuente, enBloque) {
+    if (window.katex) {
+      try {
+        window.katex.render(String(fuente), nodo, { displayMode: !!enBloque, throwOnError: false,
+                                                     strict: "ignore", trust: false });
+        return nodo;
+      } catch (e) { /* cae al texto plano */ }
+    }
+    nodo.textContent = String(fuente);
+    return nodo;
+  }
+
+  // Texto con LaTeX en línea entre $...$ (títulos de sección).
+  function textoConFormulas(contenedor, texto) {
+    String(texto || "").split(/(\$[^$]+\$)/).forEach(function (trozo) {
+      if (!trozo) return;
+      if (trozo.charAt(0) === "$" && trozo.length > 1 && trozo.charAt(trozo.length - 1) === "$") {
+        contenedor.appendChild(componer(el("span"), trozo.slice(1, -1), false));
+      } else {
+        contenedor.appendChild(document.createTextNode(trozo));
+      }
+    });
+    return contenedor;
+  }
+
+  function bloqueDeDesarrollo(bloque) {
+    if (bloque.tipo === "formula") {
+      return componer(el("div", "formula" + (bloque.destacada ? " destacada" : "")), bloque.latex, true);
+    }
+    if (bloque.tipo === "rotulo") {
+      return componer(el("div", "rotulo"), bloque.latex, false);
+    }
+    if (bloque.tipo === "tabla") {
+      var tabla = el("table", "tabla");
+      tabla.appendChild(cabeceraTabla((bloque.columnas || []).map(function (c) { return { texto: c }; })));
+      var tbody = el("tbody");
+      (bloque.filas || []).forEach(function (fila) {
+        var tr = el("tr");
+        fila.forEach(function (celda) {
+          var td = el("td", "cifra");
+          if (celda && celda.latex) componer(td, celda.latex, false);
+          else td.textContent = celda && celda.texto !== undefined ? celda.texto : "";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      tabla.appendChild(tbody);
+      return tabla;
+    }
+    return el("p", "prosa", bloque.texto || "");
+  }
+
+  function bloqueFichas(desarrollo) {
+    var fichas = el("div", "fichas");
+    function chip(etiqueta, valor) {
+      if (!valor) return;
+      var c = el("span", "ficha-chip");
+      c.appendChild(document.createTextNode(etiqueta + " "));
+      c.appendChild(el("b", null, valor));
+      fichas.appendChild(c);
+    }
+    chip("Familia", desarrollo.nombre);
+    chip("Método", desarrollo.metodo);
+    chip("Tratamiento", (desarrollo.tratamiento || []).join(" · "));
+    if ((desarrollo.balotario || []).length) chip("Balotario", desarrollo.balotario.join(", "));
+    chip("", desarrollo.tema);
+    return fichas;
+  }
+
+  function bloqueDesarrollo(desarrollo) {
+    if (!desarrollo || !(desarrollo.secciones || []).length) return null;
+    var caja = el("div", "desarrollo");
+    caja.appendChild(bloqueFichas(desarrollo));
+    desarrollo.secciones.forEach(function (seccion, i) {
+      var s = el("section");
+      s.dataset.clave = seccion.clave || "";
+      var h = el("h3");
+      h.appendChild(el("span", "num", String(i + 1).padStart(2, "0")));
+      textoConFormulas(h, seccion.titulo);
+      s.appendChild(h);
+      (seccion.bloques || []).forEach(function (b) { s.appendChild(bloqueDeDesarrollo(b)); });
+      caja.appendChild(s);
+    });
+    return caja;
+  }
+
+  function listaDeConclusiones(desarrollo) {
+    var conclusiones = (desarrollo || {}).conclusiones || [];
+    if (!conclusiones.length) return null;
+    var ul = el("ul", "conclusiones");
+    conclusiones.forEach(function (c) { ul.appendChild(el("li", null, c)); });
+    return ul;
+  }
+
+  // Lo que el balotario todavía no desarrolla se dice arriba, no al pie.
+  function avisoDeAlcance(entrada) {
+    var avisos = ((entrada.desarrollo || {}).advertencias || []).filter(function (a) {
+      return a.indexOf("FUERA DE ALCANCE") === 0;
+    });
+    var analisis = entrada.analisis || {};
+    Object.keys(analisis).forEach(function (k) {
+      if (analisis[k] && analisis[k].estado === "fuera_de_alcance") avisos.push(analisis[k].motivo || k);
+    });
+    if (!avisos.length) return null;
+    var caja = el("div", "alcance");
+    caja.appendChild(el("strong", null, "Fuera de alcance por ahora"));
+    avisos.forEach(function (a) { caja.appendChild(el("p", null, a)); });
+    return caja;
+  }
+
+  // ---------- una sección ----------
+  function construirAnalisis(entrada, indice) {
+    var cfg = entrada.configuracion || {};
+    var art = el("article", "analisis entrando");
+    art.id = "analisis-" + indice;
+
+    // Numerar "01" cuando no hay un 02 no dice nada.
+    if ((ESTADO.entradas || []).length > 1) {
+      art.appendChild(el("span", "folio", String(indice).padStart(2, "0")));
+    }
+    art.appendChild(el("h2", null, entrada.titulo || ("Análisis " + indice)));
+
+    var estado = estadoDe(entrada);
+    var linea = el("p", "linea-estado");
+    var distintivo = el("span", "distintivo " + estado.clase);
+    distintivo.appendChild(el("span", "glifo", estado.glifo));
+    distintivo.appendChild(document.createTextNode(estado.palabra));
+    linea.appendChild(distintivo);
+    if (entrada.momento) linea.appendChild(el("span", null, entrada.momento));
+    var n = (cfg.variables_estado || []).length;
+    if (n) linea.appendChild(el("span", null, n + (n === 1 ? " variable" : " variables")));
+    art.appendChild(linea);
+
+    // El enunciado, si vino: es lo que se está respondiendo.
+    if (entrada.enunciado) {
+      var enunciado = el("div", "enunciado");
+      enunciado.appendChild(el("span", "marca-enunciado", "Enunciado"));
+      textoConFormulas(enunciado, entrada.enunciado);
+      art.appendChild(enunciado);
+    }
+
+    var alcance = avisoDeAlcance(entrada);
+    if (alcance) art.appendChild(alcance);
+
+    if (!entrada.ok) {
+      var sistema = bloqueSistema(cfg);
+      if (sistema) art.appendChild(sistema);
+      var fallo = el("div", "fallo");
+      fallo.appendChild(el("span", "encabezado",
+                           "Etapa no superada · " + (entrada.etapa || "desconocida")));
+      fallo.appendChild(el("p", "detalle", entrada.error || ""));
+      art.appendChild(fallo);
+      conRubrica(art, "Verificación", bloqueVerificacion(entrada.verificacion));
+      conRubrica(art, "Planteamiento", bloqueFicha(cfg));
+      return art;
+    }
+
+    // Primero las gráficas: son lo que el usuario viene a ver. Las del
+    // desarrollo (las que responden la pregunta) llegan antes que las numéricas.
+    var figuras = entrada.figuras || [];
+    if (figuras.length) {
+      var laminas = el("div", "laminas" + (figuras.length > 1 ? " varias" : ""));
+      figuras.forEach(function (figura, i) {
+        var ancha = i === 0 && figuras.length % 2 === 1;
+        var lamina = el("figure", "lamina" + (ancha ? " ancha" : ""));
+        lamina.dataset.figura = JSON.stringify(figura.spec || {});
+        lamina.appendChild(el("figcaption", null, nombreDeFigura(figura.nombre)));
+        laminas.appendChild(lamina);
+      });
+      art.appendChild(laminas);
+    }
+
+    conRubrica(art, "Conclusiones", listaDeConclusiones(entrada.desarrollo));
+    var desarrollo = bloqueDesarrollo(entrada.desarrollo);
+    if (desarrollo) {
+      conRubrica(art, "Desarrollo matemático", desarrollo);
+    } else {
+      var sistemaSolo = bloqueSistema(cfg);
+      if (sistemaSolo) art.appendChild(sistemaSolo);
+    }
+    conRubrica(art, "Verificación", bloqueVerificacion(entrada.verificacion));
+    conRubrica(art, "Equilibrios con los parámetros dados", bloqueEquilibrios(entrada.analisis));
+    conRubrica(art, "Notas", listaDeNotas(entrada.notas));
+    conRubrica(art, "Configuración del cálculo", bloqueFicha(cfg));
+    return art;
+  }
+
+  function dibujarFiguras(art) {
+    if (typeof Plotly === "undefined") return;
+    Array.prototype.forEach.call(art.querySelectorAll("figure[data-figura]"), function (lamina) {
+      var spec;
+      try { spec = JSON.parse(lamina.dataset.figura); } catch (e) { return; }
+      delete lamina.dataset.figura;
+      var caja = document.createElement("div");
+      lamina.insertBefore(caja, lamina.firstChild);
+      var vestida = vestir(spec);
+      Plotly.newPlot(caja, vestida.data, vestida.layout,
+                     { displaylogo: false, responsive: true,
+                       modeBarButtonsToRemove: ["lasso2d", "select2d"] });
+    });
+  }
+
+  // ---------- índice lateral ----------
+  function anotarIndice(entrada, indice) {
+    var nav = document.getElementById("indice");
+    var lista = document.getElementById("indice-lista");
+    // Un índice de un solo renglón no orienta a nadie; es ruido al lado del
+    // texto. En modo "ultimo" el informe tiene siempre una sección, así que
+    // esta comprobación lo apaga del todo sin que haga falta saber el modo.
+    nav.hidden = (ESTADO.entradas || []).length < 2;
+    var estado = estadoDe(entrada);
+    var li = el("li");
+    li.appendChild(el("span", "punto " + (estado.clase === "medio" ? "" : estado.clase)));
+    var a = el("a", null, entrada.titulo || ("Análisis " + indice));
+    a.href = "#analisis-" + indice;
+    li.appendChild(a);
+    // Arriba, igual que las secciones: el índice y el cuerpo tienen que leerse
+    // en el mismo orden o el índice deja de servir para orientarse.
+    lista.insertBefore(li, lista.firstChild);
+  }
+
+  // ---------- render incremental ----------
+  function pintar() {
+    var contenedor = document.getElementById("secciones");
+    var entradas = ESTADO.entradas || [];
+
+    document.getElementById("resumen").textContent = !entradas.length
+      ? "todavía sin análisis"
+      : (entradas.length === 1
+           ? "actualizado " + (ESTADO.momento || "")
+           : entradas.length + " análisis · actualizado " + (ESTADO.momento || ""));
+    document.getElementById("colofon-izq").textContent =
+      "Agente de EDOs y sistemas dinámicos · grupo 09 · UNMSM";
+
+    if (!entradas.length) {
+      if (!contenedor.querySelector(".vacio")) {
+        contenedor.textContent = "";
+        var caja = el("div", "vacio");
+        caja.appendChild(el("span", "glifo", "∫"));
+        var p = el("p");
+        p.appendChild(el("strong", null, "El informe todavía está vacío. "));
+        p.appendChild(document.createTextNode(
+          "Pídele al agente que resuelva o analice un problema: aparecerá aquí con " +
+          "sus gráficas, su desarrollo matemático y su verificación, sin que tengas " +
+          "que recargar."));
+        caja.appendChild(p);
+        contenedor.appendChild(caja);
+      }
+      return;
+    }
+    if (contenedor.querySelector(".vacio")) { contenedor.textContent = ""; dibujadas = 0; }
+
+    // Modo "ultimo": el servidor manda una sola entrada y cada pregunta
+    // reemplaza a la anterior. Como la lista no crece, el render incremental no
+    // detectaría el cambio -- hay que rehacer la sección.
+    if (entradas.length === 1 && dibujadas === 1) {
+      contenedor.textContent = "";
+      document.getElementById("indice-lista").textContent = "";
+      dibujadas = 0;
+    }
+
+    // Lo último preguntado va ARRIBA: al abrir el informe, lo primero que se ve
+    // es la respuesta que se acaba de pedir, no la primera de la conversación.
+    //
+    // La numeración NO se invierte: el análisis 1 sigue siendo el primero que se
+    // preguntó. Renumerar al insertar cambiaría el número de secciones que el
+    // usuario ya tiene a la vista, y los enlaces del índice apuntarían a otra
+    // cosa de un segundo para otro.
+    //
+    // Solo se construye lo que no está en pantalla, para no redibujar una
+    // gráfica que el usuario ya movió.
+    var altoAntes = document.documentElement.scrollHeight;
+    var desplazado = window.scrollY;
+
+    for (var i = dibujadas; i < entradas.length; i++) {
+      var art = construirAnalisis(entradas[i], i + 1);
+      contenedor.insertBefore(art, contenedor.firstChild);
+      dibujarFiguras(art);
+      anotarIndice(entradas[i], i + 1);
+    }
+    dibujadas = entradas.length;
+
+    // Insertar arriba empuja hacia abajo lo que el usuario estaba leyendo. Si
+    // había bajado, se compensa el desplazamiento para que el texto no se le
+    // mueva de debajo de los ojos; si estaba en el encabezado, se le deja ahí
+    // para que vea llegar lo nuevo.
+    if (desplazado > 0) {
+      var crecio = document.documentElement.scrollHeight - altoAntes;
+      if (crecio > 0) window.scrollTo(0, desplazado + crecio);
+    }
+  }
+
+  // ---------- actualización ----------
+  function latir() {
+    var punto = document.getElementById("latido");
+    punto.classList.add("activo");
+    setTimeout(function () { punto.classList.remove("activo"); }, 700);
+  }
+
+  function porFetch(url, segundos) {
+    document.getElementById("colofon-der").textContent =
+      "Se actualiza sola cada " + segundos + " s · no hace falta recargar";
+    setInterval(function () {
+      fetch(url, { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (datos) {
+          if (!datos) return;
+          latir();
+          // En modo "ultimo" siempre hay una sola entrada: el largo no cambia
+          // al llegar una pregunta nueva, pero el momento de escritura sí.
+          if ((datos.entradas || []).length !== (ESTADO.entradas || []).length ||
+              datos.momento !== ESTADO.momento) {
+            ESTADO = datos;
+            pintar();
+          }
+        })
+        .catch(function () { /* el servidor puede no estar listo todavía */ });
+    }, segundos * 1000);
+  }
+
+  function porRecarga(segundos) {
+    document.getElementById("colofon-der").textContent =
+      "Archivo local · se recarga cada " + segundos + " s conservando tu posición";
+    try {
+      var guardado = sessionStorage.getItem("informe-scroll");
+      if (guardado) window.scrollTo(0, parseInt(guardado, 10) || 0);
+    } catch (e) { /* sin sessionStorage solo se pierde el scroll */ }
+    window.addEventListener("beforeunload", function () {
+      try { sessionStorage.setItem("informe-scroll", String(window.scrollY)); } catch (e) {}
+    });
+    setTimeout(function () { location.reload(); }, segundos * 1000);
+  }
+
+  // Un cambio de tema del sistema repinta las figuras con la otra paleta: los
+  // colores viven en el CSS, pero plotly ya los copió al dibujar.
+  function seguirElTema() {
+    if (!window.matchMedia) return;
+    var consulta = window.matchMedia("(prefers-color-scheme: dark)");
+    var repintar = function () {
+      var contenedor = document.getElementById("secciones");
+      contenedor.textContent = "";
+      document.getElementById("indice-lista").textContent = "";
+      dibujadas = 0;
+      pintar();
+    };
+    if (consulta.addEventListener) consulta.addEventListener("change", repintar);
+  }
+
+  pintar();
+  seguirElTema();
+  var segundos = ESTADO.refresco || 0;
+  if (segundos > 0) {
+    if (ESTADO.datos_url && location.protocol !== "file:") {
+      porFetch(ESTADO.datos_url, segundos);
+    } else {
+      porRecarga(segundos);
+    }
+  } else {
+    document.getElementById("colofon-der").textContent = "Documento fijo";
+  }
+})();
+</script>
+</body>
+</html>

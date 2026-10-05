@@ -1,21 +1,36 @@
-"""Capa matemática del agente de EDOs: compilación, integración y análisis.
+"""Capa matemática del agente de EDOs: interpretación, métodos, análisis y verificación.
 
 No depende de `orquestacion` ni de MCP, de modo que cada pieza se pueda usar y
-probar por separado.
+probar por separado. Las familias de problemas que resuelve son exactamente las
+que el balotario del grupo desarrolla (Temas 1 a 3 y el problema 4.1); el resto
+se declara fuera de alcance con `FueraDeAlcance`, en vez de inventarse.
 """
 
 
-class AnalisisNoImplementado(NotImplementedError):
-    """Un análisis previsto por la propuesta que todavía no se calcula.
+class FueraDeAlcance(Exception):
+    """Lo pedido corresponde a un tema que el balotario todavía no desarrolla.
 
-    Vive aquí, y no en cada stub, porque `orquestacion.capacidades` necesita
-    atrapar una sola excepción para reportar "pendiente de implementación" en
-    vez de inventar números. Tres clases con el mismo nombre en tres módulos
-    distintos daban la ilusión de un tipo compartido que no existía.
+    Lleva la referencia al problema del balotario (`problema`, p. ej. "4.4") y
+    el `motivo`, para que la respuesta pueda decir con precisión qué falta en
+    lugar de ofrecer un sustituto con apariencia de solución.
+    """
+
+    def __init__(self, motivo, problema=None, tema=None):
+        super().__init__(motivo)
+        self.motivo = motivo
+        self.problema = problema
+        self.tema = tema
+
+
+class MetodoNoAplicable(ValueError):
+    """El método pedido no corresponde a la forma de la ecuación.
+
+    Por ejemplo, pedir Bernoulli para y' = sin(x·y). El mensaje dice qué forma
+    se esperaba y cuál tiene la ecuación, para que el agente lo explique.
     """
 
 
 #: Tope de variables de estado, heredado de la propuesta del grupo. Es el único
-#: lugar donde vive el número: `datos_validacion` lo aplica al entrar al solver
-#: y `orquestacion.contratos` al validar la solicitud.
+#: lugar donde vive el número: `modelo_edos` lo aplica al entrar al solver y
+#: `orquestacion.contratos` al validar la solicitud.
 MAX_DIMENSION = 3

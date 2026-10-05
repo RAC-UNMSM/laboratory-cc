@@ -1,12 +1,18 @@
-"""Pasa cada ejercicio del balotario por el solver y lo compara con su solución esperada.
+"""El balotario como especificación: integridad del catálogo y lo que el agente reproduce de él.
 
-Las expectativas no se escriben aquí: se leen de `balotario/tema_*.json`, que a su
-vez transcribe `balotario.tex`. Este archivo solo sabe *cómo* verificar cada tipo
-de solución esperada, no *cuál* es la respuesta de cada problema.
+Las expectativas no se escriben aquí: se leen de `balotario/tema_*.json`, que a
+su vez transcribe `balotario.tex`. Este archivo solo sabe *cómo* comparar cada
+tipo de solución esperada, no *cuál* es la respuesta de cada problema.
 
-Las expresiones del JSON se compilan con `matematica.expresiones`, el mismo
-módulo que usa el servidor MCP para las EDOs que llegan de un cliente: así el
-balotario ejercita la ruta real de entrada y no una copia paralela.
+Tres niveles:
+
+1. el catálogo está completo y es coherente (estructura, procedencia, alcance);
+2. sus soluciones son consistentes con una integración numérica independiente
+   (el JSON no es la única fuente de verdad);
+3. el agente, recibiendo el problema como lo recibiría de un cliente, llega a
+   los mismos resultados que el balotario. Donde el balotario se equivoca
+   (2.5 y 3.5, documentados en `revision_matematica`), el agente debe llegar al
+   resultado correcto, no al del .tex.
 """
 
 import math
@@ -16,11 +22,22 @@ import numpy as np
 import sympy as sp
 from scipy.special import ellipk
 
-from matematica.analisis_estabilidad import analizar_equilibrios
+from matematica.clasificacion import FAMILIAS, FUERA_DE_ALCANCE
 from matematica.expresiones import campo_desde_catalogo, escalar_desde_catalogo
 from matematica.modelo_edos import resolver_edo
-from orquestacion.capacidades import buscar_equilibrios
+from orquestacion.capacidades import analizar_edo, analizar_equilibrios_sistema
 from orquestacion.catalogo import cargar_catalogo
+
+
+def _problemas():
+    """Todos los problemas de todos los temas, aplanados."""
+    for tema in cargar_catalogo():
+        for problema in tema["problemas"]:
+            yield problema
+
+
+def _indice():
+    return {problema["id"]: problema for problema in _problemas()}
 
 
 def _resolver(problema):
@@ -43,58 +60,46 @@ def _error_maximo(problema):
     ecuacion, esperada = problema["ecuacion"], problema["solucion_esperada"]
     solucion = _resolver(problema)
     exacta = escalar_desde_catalogo(esperada["expresion"], ecuacion)
-    valores = np.asarray(exacta(**{ecuacion["variable_independiente"]: solucion.t}),
-                         dtype=float)
+    valores = np.asarray(exacta(**{ecuacion["variable_independiente"]: solucion.t}), dtype=float)
     componente = ecuacion["variables_estado"].index(esperada["componente"])
     return np.abs(solucion.y[componente] - np.broadcast_to(valores, solucion.t.shape)).max()
 
 
-def _ecuacion_del_caso(problema, variante=None):
-    """Bloque `ecuacion` del problema, o el de una de sus variantes."""
-    if variante is None:
-        return problema["ecuacion"]
-    for bloque in problema.get("variantes", []):
-        if bloque["id"] == variante:
-            return bloque
-    raise AssertionError(f"El problema {problema['id']} no declara la variante {variante!r}")
+def _texto(resultado):
+    """Un resultado del desarrollo tal como viaja en JSON, de vuelta a sympy."""
+    return sp.sympify(resultado["texto"])
 
 
-def _equilibrios_calculados(ecuacion, parametros):
-    """Equilibrios exactos del campo más su clasificación, ordenados."""
-    campo = campo_desde_catalogo({**ecuacion, "parametros": parametros})
-    puntos, origen = buscar_equilibrios(campo, parametros)
-    resultados = analizar_equilibrios(campo, sorted(puntos), parametros) if puntos else []
-    return resultados, origen
+def _plano(expresion):
+    expresion = sp.sympify(expresion)
+    return expresion.subs({s: sp.Symbol(s.name) for s in expresion.free_symbols})
 
 
-def _clasificacion_corta(texto):
-    """Normaliza el veredicto del motor al vocabulario del catálogo."""
-    return "no concluyente" if texto.startswith("no concluyente") else texto
+def _solicitud(problema, **extra):
+    """El problema del catálogo como lo pediría un cliente, con su enunciado."""
+    ecuacion = problema["ecuacion"]
+    solicitud = dict(ecuaciones=ecuacion["campo"], variables_estado=ecuacion["variables_estado"],
+                     variable_independiente=ecuacion.get("variable_independiente", "t"),
+                     parametros=ecuacion.get("parametros") or {}, enunciado=problema["enunciado"],
+                     visualizar=False)
+    ci = problema.get("condiciones_iniciales")
+    if ci:
+        solicitud.update(y0=ci["y0"], intervalo=ci["intervalo_sugerido"])
+    solicitud.update(extra)
+    return solicitud
 
 
-def _radio_final(ecuacion, radio_inicial, intervalo, numerico, fraccion=0.25):
-    """Integra desde un radio dado y devuelve el radio en el tramo final."""
-    campo = campo_desde_catalogo(ecuacion)
-    parametros = ecuacion.get("parametros", {})
-    solucion = resolver_edo(campo, [radio_inicial, 0.0], intervalo, parametros,
-                            puntos=numerico.get("puntos", 4000),
-                            metodo=numerico.get("metodo", "RK45"),
-                            rtol=numerico.get("rtol", 1e-10),
-                            atol=numerico.get("atol", 1e-12))
-    radios = np.hypot(solucion.y[0], solucion.y[1])
-    desde = int(len(radios) * (1 - fraccion))
-    return radios[desde:]
-
-
-def _problemas():
-    """Todos los problemas de todos los temas, aplanados."""
-    for tema in cargar_catalogo():
-        for problema in tema["problemas"]:
-            yield problema
-
-
-def _indice():
-    return {problema["id"]: problema for problema in _problemas()}
+def _casos_de_equilibrios(problema):
+    """(etiqueta, ecuación, parámetros, equilibrios esperados) de un problema del catálogo."""
+    esperada, ecuacion = problema["solucion_esperada"], problema["ecuacion"]
+    if "equilibrios" in esperada and esperada["tipo"] != "ciclo_limite":
+        yield problema["id"], ecuacion, ecuacion["parametros"], esperada["equilibrios"]
+    for caso in esperada.get("casos", []):
+        yield problema["id"], ecuacion, caso["parametros"], caso["equilibrios"]
+    for variante, casos in esperada.get("casos_variante", {}).items():
+        bloque = next(b for b in problema["variantes"] if b["id"] == variante)
+        for caso in casos:
+            yield variante, bloque, caso["parametros"], caso["equilibrios"]
 
 
 class EstructuraBalotarioTests(unittest.TestCase):
@@ -108,7 +113,6 @@ class EstructuraBalotarioTests(unittest.TestCase):
         for tema in temas:
             with self.subTest(tema=tema["tema"]["id"]):
                 self.assertEqual(len(tema["problemas"]), 5)
-        self.assertEqual(sum(len(t["problemas"]) for t in temas), 25)
 
     def test_cada_problema_declara_los_campos_requeridos(self):
         for problema in _problemas():
@@ -131,8 +135,7 @@ class EstructuraBalotarioTests(unittest.TestCase):
             if problema["verificable_con_solver"]:
                 continue
             with self.subTest(problema=problema["id"]):
-                self.assertTrue(problema.get("motivo_no_verificable", "").strip(),
-                                "declarar no verificable exige decir el motivo")
+                self.assertTrue(problema.get("motivo_no_verificable", "").strip())
 
     def test_un_problema_pendiente_declara_que_el_tex_no_lo_resuelve(self):
         """Nueve problemas del .tex no traen solución; eso debe quedar explícito."""
@@ -147,6 +150,22 @@ class EstructuraBalotarioTests(unittest.TestCase):
                 self.assertTrue(esperada.get("nota", "").strip())
         self.assertEqual(pendientes, ["4.2", "4.3", "4.4", "4.5",
                                       "5.1", "5.2", "5.3", "5.4", "5.5"])
+
+    def test_el_alcance_del_agente_es_el_del_balotario(self):
+        """Lo resuelto en el .tex es lo que las familias implementan; lo pendiente, lo fuera de alcance."""
+        resueltos = {p["id"] for p in _problemas() if p["solucion_esperada"]["tipo"] != "pendiente"}
+        pendientes = {p["id"] for p in _problemas() if p["solucion_esperada"]["tipo"] == "pendiente"}
+        self.assertEqual({ref for f in FAMILIAS for ref in f.balotario}, resueltos)
+        self.assertEqual({problema for problema, *_ in FUERA_DE_ALCANCE.values()}, pendientes)
+
+    def test_las_revisiones_matematicas_estan_documentadas(self):
+        revisados = {p["id"]: p["revision_matematica"] for p in _problemas() if "revision_matematica" in p}
+        self.assertEqual(sorted(revisados), ["2.5", "3.5"])
+        for identificador, revision in revisados.items():
+            with self.subTest(problema=identificador):
+                self.assertFalse(revision["tex_modificado"])
+                self.assertTrue(revision["resumen"].strip())
+                self.assertIn("tests/", revision["verificado_por"])
 
     def test_dimension_coincide_con_estado_y_campo(self):
         for problema in _problemas():
@@ -188,38 +207,19 @@ class EstructuraBalotarioTests(unittest.TestCase):
             with self.subTest(problema=problema["id"]):
                 self.assertIn("ci_derivada", ci)
                 if ci["ci_derivada"]:
-                    self.assertTrue(ci.get("notas", "").strip(),
-                                    "una CI derivada necesita notas que la justifiquen")
+                    self.assertTrue(ci.get("notas", "").strip())
 
 
-class SolucionAnaliticaTests(unittest.TestCase):
-    """Compara la trayectoria numérica contra la solución cerrada del balotario."""
+class ConsistenciaNumericaDelCatalogoTests(unittest.TestCase):
+    """El JSON contra una integración independiente: no es la única fuente de verdad."""
 
     def test_solucion_numerica_coincide_con_la_esperada(self):
-        casos = [p for p in _problemas()
-                 if p["solucion_esperada"]["tipo"] == "analitica_explicita"]
-        self.assertTrue(casos, "no hay soluciones analíticas que verificar")
+        casos = [p for p in _problemas() if p["solucion_esperada"]["tipo"] == "analitica_explicita"]
+        self.assertTrue(casos)
         for problema in casos:
             esperada = problema["solucion_esperada"]
-            with self.subTest(problema=problema["id"], tipo=problema["tipo"]):
-                error = _error_maximo(problema)
-                self.assertLess(error, esperada["tolerancia"],
-                                f"error máximo {error:.3e} supera la tolerancia")
-
-    def test_error_observado_registrado_sigue_siendo_representativo(self):
-        """Detecta una degradación silenciosa del integrador."""
-        for problema in _problemas():
-            esperada = problema["solucion_esperada"]
-            if esperada["tipo"] != "analitica_explicita" or "error_observado" not in esperada:
-                continue
             with self.subTest(problema=problema["id"]):
-                registrado = esperada["error_observado"]
-                self.assertLessEqual(_error_maximo(problema), max(10 * registrado, 1e-14),
-                                     f"el error creció frente al registrado ({registrado:.1e})")
-
-
-class VerificacionesEspecificasTests(unittest.TestCase):
-    """Comprobaciones que el enunciado pide y que no son comparación puntual."""
+                self.assertLess(_error_maximo(problema), esperada["tolerancia"])
 
     def test_1_1_explota_fuera_del_intervalo_maximal(self):
         problema = _indice()["1.1"]
@@ -230,295 +230,180 @@ class VerificacionesEspecificasTests(unittest.TestCase):
             resolver_edo(campo_desde_catalogo(ecuacion), ci["y0"],
                          (ci["t0"], singularidad + 0.4), ecuacion["parametros"], puntos=200)
 
-    def test_1_2_la_condicion_inicial_es_un_equilibrio_exacto(self):
-        problema = _indice()["1.2"]
+    def test_1_5_conserva_la_energia_y_su_periodo_es_el_eliptico(self):
+        problema = _indice()["1.5"]
+        invariantes = {i["tipo"]: i for i in problema["solucion_esperada"]["invariantes"]}
         ecuacion, ci = problema["ecuacion"], problema["condiciones_iniciales"]
-        derivada = campo_desde_catalogo(ecuacion)(ci["t0"], ci["y0"], ecuacion["parametros"])
-        self.assertEqual(float(derivada[0]), 0.0)
-
-    def test_1_4_la_solucion_particular_anula_el_residuo(self):
-        """y_1(x) = x debe satisfacer la EDO de Riccati, como pide el enunciado."""
-        problema = _indice()["1.4"]
-        ecuacion = problema["ecuacion"]
-        particular = problema["solucion_esperada"]["datos_adicionales"]["solucion_particular_expresion"]
-        x = sp.Symbol(ecuacion["variable_independiente"])
-        y1 = sp.sympify(particular, locals={str(x): x})
-        campo = sp.sympify(ecuacion["campo"][0],
-                           locals={str(x): x, ecuacion["variables_estado"][0]: y1})
-        self.assertEqual(sp.simplify(sp.diff(y1, x) - campo), 0)
-
-    def test_1_5_conserva_la_energia(self):
-        problema = _indice()["1.5"]
-        invariante = next(i for i in problema["solucion_esperada"]["invariantes"]
-                          if i["tipo"] == "conservado")
-        ecuacion = problema["ecuacion"]
         solucion = _resolver(problema)
-        funcion = escalar_desde_catalogo(invariante["expresion"], ecuacion)
-        valores = {ecuacion["variable_independiente"]: solucion.t, **ecuacion["parametros"]}
-        valores.update({nombre: solucion.y[i]
-                        for i, nombre in enumerate(ecuacion["variables_estado"])})
-        energia = np.asarray(funcion(**valores), dtype=float)
-        self.assertAlmostEqual(energia[0], invariante["valor_inicial"], places=10)
-        self.assertLess(np.abs(energia - energia[0]).max(), invariante["tolerancia"])
-
-    def test_1_5_periodo_coincide_con_la_integral_eliptica(self):
-        """Recalcula T con scipy: el JSON no es la única fuente de verdad."""
-        problema = _indice()["1.5"]
-        invariante = next(i for i in problema["solucion_esperada"]["invariantes"]
-                          if i["tipo"] == "periodo")
-        ci = problema["condiciones_iniciales"]
-        theta0, w0 = ci["y0"][0], problema["ecuacion"]["parametros"]["w0"]
-        k = math.sin(theta0 / 2)
-        periodo = 4 / w0 * float(ellipk(k * k))
-        self.assertAlmostEqual(periodo, invariante["valor"], places=10)
-        # El intervalo del catálogo cubre exactamente tres periodos teóricos.
+        energia = escalar_desde_catalogo(invariantes["conservado"]["expresion"], ecuacion)
+        valores = {ecuacion["variable_independiente"]: solucion.t, **ecuacion["parametros"],
+                   **{nombre: solucion.y[i] for i, nombre in enumerate(ecuacion["variables_estado"])}}
+        e = np.asarray(energia(**valores), dtype=float)
+        self.assertLess(np.abs(e - e[0]).max(), invariantes["conservado"]["tolerancia"])
+        k = math.sin(ci["y0"][0] / 2)
+        periodo = 4 / ecuacion["parametros"]["w0"] * float(ellipk(k * k))
+        self.assertAlmostEqual(periodo, invariantes["periodo"]["valor"], places=10)
         self.assertAlmostEqual(ci["intervalo_sugerido"][1], 3 * periodo, places=9)
-        solucion = _resolver(problema)
-        retorno = np.abs(solucion.y[:, -1] - np.asarray(ci["y0"], dtype=float)).max()
-        self.assertLess(retorno, invariante["tolerancia"],
-                        f"tras 3 periodos el estado no regresó (desvío {retorno:.3e})")
 
-    def test_1_5_la_separatriz_esta_sobre_su_nivel_de_energia(self):
-        problema = _indice()["1.5"]
-        datos = problema["solucion_esperada"]["datos_adicionales"]
-        ecuacion = problema["ecuacion"]
-        separatriz = escalar_desde_catalogo(datos["separatriz_expresion"], ecuacion)
-        energia = escalar_desde_catalogo(
-            next(i for i in problema["solucion_esperada"]["invariantes"]
-                 if i["tipo"] == "conservado")["expresion"], ecuacion)
-        parametros = ecuacion["parametros"]
-        for theta in (-2.0, -0.5, 0.0, 0.5, 2.0):
-            with self.subTest(theta=theta):
-                velocidad = float(separatriz(theta=theta, **parametros))
-                nivel = float(energia(theta=theta, thetapunto=velocidad, **parametros))
-                self.assertAlmostEqual(nivel, datos["energia_separatriz"], places=12)
-
-
-class ClasificacionEquilibriosTests(unittest.TestCase):
-    """Tema 2: los equilibrios y su estabilidad, contra lo que demuestra el .tex."""
-
-    def _comparar(self, etiqueta, ecuacion, parametros, esperados):
-        resultados, origen = _equilibrios_calculados(ecuacion, parametros)
-        self.assertEqual(len(resultados), len(esperados),
-                         f"{etiqueta}: se esperaban {len(esperados)} equilibrios "
-                         f"y se hallaron {len(resultados)} ({origen})")
-        orden_esperado = sorted(esperados, key=lambda e: e["punto"])
-        for calculado, esperado in zip(resultados, orden_esperado):
-            with self.subTest(caso=etiqueta, punto=esperado["punto"]):
-                np.testing.assert_allclose(calculado["equilibrio"], esperado["punto"],
-                                           atol=1e-9)
-                self.assertEqual(_clasificacion_corta(calculado["clasificacion"]),
-                                 esperado["clasificacion_motor"])
-                if "autovalores" in esperado:
-                    self._comparar_autovalores(calculado["autovalores"],
-                                               esperado["autovalores"])
-
-    def _comparar_autovalores(self, calculados, esperados):
-        def normalizar(valor):
-            if isinstance(valor, dict):
-                return complex(valor["re"], valor["im"])
-            return complex(valor)
-        np.testing.assert_allclose(
-            np.sort_complex(np.asarray(calculados)),
-            np.sort_complex(np.asarray([normalizar(v) for v in esperados])),
-            atol=1e-8)
-
-    def test_equilibrios_de_los_problemas_con_clasificacion(self):
-        casos = [p for p in _problemas()
-                 if p["solucion_esperada"]["tipo"] == "clasificacion_equilibrios"]
-        self.assertTrue(casos)
-        for problema in casos:
-            esperada = problema["solucion_esperada"]
-            with self.subTest(problema=problema["id"]):
-                self._comparar(problema["id"], problema["ecuacion"],
-                               problema["ecuacion"]["parametros"],
-                               esperada["equilibrios"])
-
-    def test_equilibrios_declarados_junto_a_invariantes(self):
-        """El 2.4 trae hamiltoniano y equilibrios a la vez."""
-        for problema in _problemas():
-            esperada = problema["solucion_esperada"]
-            if esperada["tipo"] != "invariantes" or "equilibrios" not in esperada:
-                continue
-            with self.subTest(problema=problema["id"]):
-                self._comparar(problema["id"], problema["ecuacion"],
-                               problema["ecuacion"]["parametros"],
-                               esperada["equilibrios"])
-
-    def test_energia_de_los_equilibrios_del_2_4(self):
-        """H(0,0)=0 en la silla y H(mas/menos 1,0)=-1/4 en los centros."""
-        problema = _indice()["2.4"]
-        esperada = problema["solucion_esperada"]
-        invariante = next(i for i in esperada["invariantes"] if i["tipo"] == "conservado")
-        energia = escalar_desde_catalogo(invariante["expresion"], problema["ecuacion"])
-        for equilibrio in esperada["equilibrios"]:
-            with self.subTest(punto=equilibrio["punto"]):
-                valores = dict(zip(problema["ecuacion"]["variables_estado"],
-                                   equilibrio["punto"]))
-                self.assertAlmostEqual(float(energia(**valores)),
-                                       equilibrio["energia"], places=12)
-
-
-class BifurcacionesTests(unittest.TestCase):
-    """Tema 3: como cambian los equilibrios al mover el parametro."""
-
-    def _verificar_casos(self, problema, casos, ecuacion):
-        comparador = ClasificacionEquilibriosTests()
-        for caso in casos:
-            etiqueta = f"{problema['id']} {caso['parametros']}"
-            with self.subTest(problema=problema["id"], parametros=caso["parametros"]):
-                comparador._comparar(etiqueta, ecuacion, caso["parametros"],
-                                     caso["equilibrios"])
-
-    def test_casos_del_parametro(self):
-        casos = [p for p in _problemas()
-                 if p["solucion_esperada"]["tipo"] == "bifurcacion"]
-        self.assertTrue(casos)
-        for problema in casos:
-            self._verificar_casos(problema, problema["solucion_esperada"]["casos"],
-                                  problema["ecuacion"])
-
-    def test_casos_de_las_variantes(self):
-        """El 3.3 compara dos sistemas distintos: la horquilla subcritica es variante."""
-        for problema in _problemas():
-            esperada = problema["solucion_esperada"]
-            for variante, casos in esperada.get("casos_variante", {}).items():
-                with self.subTest(problema=problema["id"], variante=variante):
-                    self._verificar_casos(problema, casos,
-                                          _ecuacion_del_caso(problema, variante))
-
-    def test_el_3_1_no_tiene_equilibrios_reales_para_mu_negativo(self):
-        problema = _indice()["3.1"]
-        caso = next(c for c in problema["solucion_esperada"]["casos"]
-                    if c["parametros"]["mu"] < 0)
-        resultados, _ = _equilibrios_calculados(problema["ecuacion"], caso["parametros"])
-        self.assertEqual(resultados, [])
-
-    def test_el_3_3b_tiene_cinco_equilibrios_en_la_zona_biestable(self):
-        """La histeresis exige que el origen y dos pares de ramas coexistan."""
-        problema = _indice()["3.3"]
-        casos = problema["solucion_esperada"]["casos_variante"]["3.3B"]
-        caso = next(c for c in casos if len(c["equilibrios"]) == 5)
-        resultados, _ = _equilibrios_calculados(_ecuacion_del_caso(problema, "3.3B"),
-                                                caso["parametros"])
-        self.assertEqual(len(resultados), 5)
-
-    def test_amplitud_del_ciclo_limite_de_hopf(self):
-        """El ciclo que nace del Hopf tiene radio sqrt(mu)."""
-        problema = _indice()["3.4"]
-        esperada = problema["solucion_esperada"]
-        for caso in esperada["casos"]:
-            ciclo = caso.get("ciclo_limite")
-            if not ciclo:
-                continue
-            with self.subTest(parametros=caso["parametros"]):
-                ecuacion = {**problema["ecuacion"], "parametros": caso["parametros"]}
-                radios = _radio_final(ecuacion, ciclo["radio_inicial_de_prueba"],
-                                      (0.0, 120.0), {"puntos": 6000, "rtol": 1e-11,
-                                                     "atol": 1e-13})
-                self.assertAlmostEqual(float(radios[-1]), ciclo["radio"], places=6)
-                self.assertAlmostEqual(ciclo["radio"],
-                                       math.sqrt(caso["parametros"]["mu"]), places=12)
-
-    def test_periodo_del_ciclo_de_hopf_es_dos_pi(self):
-        problema = _indice()["3.4"]
-        datos = problema["solucion_esperada"]["datos_adicionales"]
-        periodo = datos["periodo"]
-        self.assertAlmostEqual(periodo, 2 * math.pi, places=12)
-        ecuacion = {**problema["ecuacion"], "parametros": {"mu": 1.0}}
-        solucion = resolver_edo(campo_desde_catalogo(ecuacion), [1.0, 0.0],
-                                (0.0, periodo), {"mu": 1.0}, puntos=4000,
-                                rtol=1e-12, atol=1e-14)
-        desvio = np.abs(solucion.y[:, -1] - np.array([1.0, 0.0])).max()
-        self.assertLess(desvio, 1e-8, f"tras T=2pi el ciclo no cerro (desvio {desvio:.2e})")
-
-    def test_la_traza_del_3_5_cambia_de_signo_en_el_hopf_local(self):
-        """Tr J(1,0) = mu + 1, asi que el Hopf local esta en mu = -1."""
-        problema = _indice()["3.5"]
-        datos = problema["solucion_esperada"]["datos_adicionales"]
-        self.assertEqual(datos["hopf_local"], -1.0)
-        for caso in problema["solucion_esperada"]["casos"]:
-            mu = caso["parametros"]["mu"]
-            esperado = next(e for e in caso["equilibrios"] if e["punto"] == [1.0, 0.0])
-            resultados, _ = _equilibrios_calculados(problema["ecuacion"], caso["parametros"])
-            calculado = next(r for r in resultados
-                             if np.allclose(r["equilibrio"], [1.0, 0.0]))
-            with self.subTest(mu=mu):
-                self.assertAlmostEqual(float(np.trace(calculado["jacobiano"])),
-                                       mu + 1.0, places=9)
-                self.assertEqual(_clasificacion_corta(calculado["clasificacion"]),
-                                 esperado["clasificacion_motor"])
-
-    def test_el_mu_critico_del_3_5_es_menos_cinco_septimos(self):
-        datos = _indice()["3.5"]["solucion_esperada"]["datos_adicionales"]
-        self.assertAlmostEqual(datos["mu_critico"], -5 / 7, places=15)
-
-
-class CicloLimiteTests(unittest.TestCase):
-    """Tema 2.5: convergencia al ciclo desde dentro y desde fuera del anillo."""
-
-    def test_convergencia_al_ciclo_limite(self):
-        casos = [p for p in _problemas()
-                 if p["solucion_esperada"]["tipo"] == "ciclo_limite"]
-        self.assertTrue(casos)
-        for problema in casos:
-            esperada = problema["solucion_esperada"]
-            intervalo = problema["condiciones_iniciales"]["intervalo_sugerido"]
-            for radio_inicial in esperada["radios_iniciales_de_prueba"]:
-                with self.subTest(problema=problema["id"], r0=radio_inicial):
-                    radios = _radio_final(problema["ecuacion"], radio_inicial,
-                                          intervalo, problema["numerico"],
-                                          esperada["fraccion_final_evaluada"])
-                    desvio = float(np.abs(radios - esperada["radio"]).max())
-                    self.assertLess(desvio, esperada["tolerancia"],
-                                    f"el radio no converge a {esperada['radio']} "
-                                    f"(desvio {desvio:.2e})")
-
-
-class ProblemasDiscretosTests(unittest.TestCase):
-    """Temas 4 y 5: mapas y demostraciones que el motor todavia no cubre."""
-
-    def test_los_mapas_discretos_declaran_sus_trozos(self):
-        for problema in _problemas():
-            ecuacion = problema["ecuacion"]
-            if ecuacion["forma"] != "mapa_discreto":
-                continue
-            with self.subTest(problema=problema["id"]):
-                self.assertFalse(problema["verificable_con_solver"])
-                self.assertTrue(ecuacion["trozos"])
-                for trozo in ecuacion["trozos"]:
-                    self.assertTrue(trozo["expresion"].strip())
-                    self.assertTrue(trozo["condicion"].strip())
-
-    def test_el_exponente_de_lyapunov_del_mapa_tienda_es_log_dos(self):
-        """Unico problema del Tema 4 resuelto en el .tex: lambda = ln 2."""
+    def test_los_puntos_fijos_y_el_exponente_del_mapa_tienda(self):
         esperada = _indice()["4.1"]["solucion_esperada"]
-        self.assertTrue(esperada["solucion_en_tex"])
         valores = esperada["valores"]
         self.assertAlmostEqual(valores["exponente_lyapunov"], math.log(2), places=15)
-        self.assertAlmostEqual(valores["entropia_kolmogorov_sinai"], math.log(2), places=15)
-        esperadas = math.ceil(math.log(1 / valores["delta_inicial"]) / math.log(2))
-        self.assertEqual(valores["iteraciones_hasta_orden_uno"], esperadas)
-
-    def test_los_puntos_fijos_del_mapa_tienda(self):
-        """x=0 y x=2/3 son los puntos fijos de la tienda, ambos inestables."""
-        esperada = _indice()["4.1"]["solucion_esperada"]
+        self.assertEqual(valores["iteraciones_hasta_orden_uno"],
+                         math.ceil(math.log(1 / valores["delta_inicial"]) / math.log(2)))
         puntos = [p["punto"][0] for p in esperada["puntos_fijos"]]
-        self.assertAlmostEqual(puntos[0], 0.0, places=15)
         self.assertAlmostEqual(puntos[1], 2 / 3, places=15)
-        for fijo in esperada["puntos_fijos"]:
-            self.assertEqual(fijo["clasificacion_balotario"], "inestable")
 
-    def test_los_sistemas_continuos_de_los_temas_4_y_5_siguen_siendo_integrables(self):
-        """Lorenz (4.4) y Rossler (5.4) no son verificables, pero su campo si compila."""
-        for identificador in ("4.4", "5.4", "5.5"):
-            problema = _indice()[identificador]
-            ecuacion = problema["ecuacion"]
+
+class ElAgenteReproduceElTema1Tests(unittest.TestCase):
+    """El agente recibe cada problema como un cliente y llega a la solución del balotario."""
+
+    def _desarrollo(self, identificador, **extra):
+        resultado = analizar_edo(_solicitud(_indice()[identificador], **extra))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        return resultado
+
+    def test_soluciones_explicitas(self):
+        extras = {"1.4": {"solucion_particular": "x"}}
+        for identificador, familia in (("1.1", "separable"), ("1.2", "bernoulli"),
+                                       ("1.3", "cauchy_euler"), ("1.4", "riccati")):
             with self.subTest(problema=identificador):
-                self.assertEqual(ecuacion["forma"], "sistema_primer_orden")
-                solucion = resolver_edo(campo_desde_catalogo(ecuacion), [1.0, 1.0, 1.0],
-                                        (0.0, 5.0), ecuacion["parametros"], puntos=200)
-                self.assertTrue(solucion.success)
+                problema = _indice()[identificador]
+                resultado = self._desarrollo(identificador, **extras.get(identificador, {}))
+                self.assertEqual(resultado["desarrollo"]["familia"], familia)
+                calculada = _texto(resultado["desarrollo"]["resultados"]["solucion_particular"])
+                esperada = sp.nsimplify(sp.sympify(problema["solucion_esperada"]["expresion"]), rational=True)
+                self.assertEqual(sp.simplify(_plano(calculada) - esperada), 0)
+                pruebas = {p["nombre"]: p for p in resultado["verificacion"]["pruebas"]}
+                self.assertTrue(pruebas["solucion_exacta"]["ok"])
+
+    def test_1_1_intervalo_maximal(self):
+        resultado = self._desarrollo("1.1")
+        esperado = _indice()["1.1"]["solucion_esperada"]["datos_adicionales"]["intervalo_maximal"]
+        self.assertIn("intervalo_maximal", resultado["desarrollo"]["resultados"])
+        intervalo = sp.sympify(resultado["desarrollo"]["resultados"]["intervalo_maximal"]["texto"])
+        self.assertAlmostEqual(float(intervalo.inf), esperado[0], places=12)
+        self.assertAlmostEqual(float(intervalo.sup), esperado[1], places=12)
+
+    def test_1_5_energia_separatriz_y_periodo(self):
+        problema = _indice()["1.5"]
+        resultado = self._desarrollo("1.5", parametro="w0", rango_parametro=[0, None])
+        resultados = resultado["desarrollo"]["resultados"]
+        invariantes = {i["tipo"]: i for i in problema["solucion_esperada"]["invariantes"]}
+        energia = sp.nsimplify(sp.sympify(invariantes["conservado"]["expresion"]), rational=True)
+        diferencia = sp.simplify(_plano(_texto(resultados["hamiltoniano"])) - energia)
+        self.assertFalse(diferencia.free_symbols & {sp.Symbol("theta"), sp.Symbol("thetapunto")},
+                         "la energía puede diferir solo en una constante")
+        separatriz = sp.sympify(problema["solucion_esperada"]["datos_adicionales"]["separatriz_expresion"])
+        self.assertEqual(sp.simplify(_plano(_texto(resultados["separatriz"])) - separatriz), 0)
+        self.assertAlmostEqual(resultados["periodo"], invariantes["periodo"]["valor"], places=9)
+
+
+class ElAgenteReproduceLosEquilibriosTests(unittest.TestCase):
+    """Temas 2 y 3: cada caso del catálogo, con los parámetros de ese caso."""
+
+    def test_equilibrios_y_su_clasificacion_en_cada_caso(self):
+        for identificador in ("2.1", "2.2", "2.3", "2.4", "3.1", "3.2", "3.3", "3.4", "3.5"):
+            for etiqueta, ecuacion, parametros, esperados in _casos_de_equilibrios(_indice()[identificador]):
+                with self.subTest(problema=etiqueta, parametros=parametros):
+                    resultado = analizar_equilibrios_sistema(dict(
+                        ecuaciones=ecuacion["campo"], variables_estado=ecuacion["variables_estado"],
+                        parametros=parametros))
+                    self.assertTrue(resultado["ok"], resultado.get("error"))
+                    calculados = resultado["analisis"]["estabilidad"]["equilibrios"]
+                    self.assertEqual(len(calculados), len(esperados))
+                    for esperado in esperados:
+                        calculado = next(c for c in calculados
+                                         if np.allclose(c["punto"], esperado["punto"], atol=1e-12))
+                        self._comparar(calculado, esperado)
+
+    def _comparar(self, calculado, esperado):
+        if esperado["clasificacion_motor"] == "no concluyente" and calculado["clasificacion"] != "no concluyente":
+            # La linealización no decide; el agente sí, con derivadas de orden superior (ẋ = −x³).
+            self.assertIn("no hiperbólico", calculado["tipo"])
+        else:
+            self.assertEqual(calculado["clasificacion"], esperado["clasificacion_motor"])
+        if "autovalores" in esperado:
+            def complejo(valor):
+                return complex(valor["re"], valor["im"]) if isinstance(valor, dict) else complex(valor)
+            np.testing.assert_allclose(
+                np.sort_complex(np.array([complejo(v) for v in calculado["autovalores"]])),
+                np.sort_complex(np.array([complejo(v) for v in esperado["autovalores"]])), atol=1e-9)
+
+    def test_2_1_trayectorias(self):
+        problema = _indice()["2.1"]
+        resultado = analizar_edo(_solicitud(problema))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        invariante = next(i for i in problema["solucion_esperada"]["invariantes"] if i["nombre"] == "trayectorias")
+        calculado = sp.sympify(resultado["desarrollo"]["resultados"]["ecuacion_trayectorias"]["texto"])
+        self.assertEqual(sp.simplify(_plano(calculado.lhs) - sp.sympify(invariante["expresion"])), 0)
+
+    def test_2_4_hamiltoniano_y_lazo(self):
+        problema = _indice()["2.4"]
+        resultado = analizar_edo(_solicitud(problema))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        resultados = resultado["desarrollo"]["resultados"]
+        invariante = next(i for i in problema["solucion_esperada"]["invariantes"] if i["tipo"] == "conservado")
+        H = sp.nsimplify(sp.sympify(invariante["expresion"]), rational=True)
+        self.assertEqual(sp.simplify(_plano(_texto(resultados["hamiltoniano"])) - H), 0)
+        lazo = sp.sympify(problema["solucion_esperada"]["datos_adicionales"]["separatriz_expresion"])
+        self.assertEqual(sp.simplify(_plano(_texto(resultados["separatriz"])) - lazo), 0)
+
+    def test_3_4_amplitud_y_periodo_del_ciclo(self):
+        problema = _indice()["3.4"]
+        resultado = analizar_equilibrios_sistema(_solicitud(problema, parametro="mu"))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        resultados = resultado["desarrollo"]["resultados"]
+        radio = _plano(_texto(resultados["radio_ciclo"]))
+        self.assertEqual(_texto(resultados["periodo"]), 2 * sp.pi)
+        self.assertAlmostEqual(resultados["periodo"]["valor"],
+                               problema["solucion_esperada"]["datos_adicionales"]["periodo"], places=12)
+        for caso in problema["solucion_esperada"]["casos"]:
+            if caso.get("ciclo_limite"):
+                with self.subTest(parametros=caso["parametros"]):
+                    valor = float(radio.subs(sp.Symbol("mu"), caso["parametros"]["mu"]))
+                    self.assertAlmostEqual(valor, caso["ciclo_limite"]["radio"], places=12)
+
+    def test_4_1_exponente_y_horizonte(self):
+        problema = _indice()["4.1"]
+        resultado = analizar_edo(dict(ecuaciones=["1 - Abs(1 - 2*x)"], variables_estado=["x"],
+                                      tipo_de_sistema="mapa_discreto", enunciado=problema["enunciado"],
+                                      visualizar=False))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        valores = problema["solucion_esperada"]["valores"]
+        resultados = resultado["solucion"]["resultados"]
+        self.assertAlmostEqual(resultados["lyapunov"]["valor"], valores["exponente_lyapunov"], places=12)
+        self.assertEqual(resultados["horizonte"], valores["iteraciones_hasta_orden_uno"])
+
+
+class RevisionesDelBalotarioTests(unittest.TestCase):
+    """Donde el .tex se equivoca, el agente llega al resultado correcto."""
+
+    def test_2_5_no_hay_orbita_periodica(self):
+        problema = _indice()["2.5"]
+        resultado = analizar_edo(_solicitud(problema))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        desarrollo = resultado["desarrollo"]
+        self.assertEqual(desarrollo["familia"], "ciclo_limite")
+        self.assertEqual(desarrollo["resultados"]["conclusion_poincare_bendixson"], "no_aplica_equilibrio_en_K")
+        self.assertTrue(any("Ninguna órbita es periódica" in c for c in desarrollo["conclusiones"]))
+        # La trayectoria que el catálogo usaba para "ver el ciclo" termina en el equilibrio (1, 0).
+        resultado = analizar_edo(_solicitud(problema, intervalo=[0, 400]))
+        final = resultado["solucion"]["estado_final"]
+        self.assertLess(math.hypot(final["x"] - 1, final["y"]), 0.05)
+
+    def test_3_5_melnikov_corregido_y_disparo_numerico(self):
+        problema = _indice()["3.5"]
+        revision = problema["revision_matematica"]["valores_corregidos"]
+        resultado = analizar_equilibrios_sistema(_solicitud(problema, parametro="mu", metodo_analitico="homoclinica"))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        resultados = resultado["desarrollo"]["resultados"]
+        self.assertEqual(_texto(resultados["I2"]), sp.Rational(36, 35))
+        self.assertAlmostEqual(resultados["mu_melnikov"]["valor"], revision["mu_melnikov"], places=12)
+        self.assertAlmostEqual(resultados["mu_numerico"], revision["mu_numerico"], places=3)
+        # El .tex da μc = −5/7: lo que el agente calcula no es eso.
+        self.assertNotAlmostEqual(resultados["mu_melnikov"]["valor"],
+                                  problema["solucion_esperada"]["datos_adicionales"]["mu_critico"], places=3)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ entere, porque el informe no viaja en la respuesta de la herramienta:
 * que un análisis fallido también aparezca, en vez de desaparecer del relato.
 """
 
+import ast
 import json
 import os
 import re
@@ -62,11 +63,24 @@ class TestSeparacionPlantillaDatos(unittest.TestCase):
         self.assertNotIn("equilibrio", texto.split("<style>")[0])
 
     def test_el_modulo_python_no_contiene_etiquetas_html(self):
-        """Si vuelve a aparecer HTML aquí, la separación se está deshaciendo."""
+        """Si vuelve a aparecer HTML aquí, la separación se está deshaciendo.
+
+        Se mira el código, no la documentación: un docstring puede hablar del
+        `<div>` que ya no se genera. (Antes la expresión llevaba un carácter de
+        retroceso en lugar de `\\b` y no detectaba nada.)
+        """
         fuente = (Path(PLANTILLA).resolve().parents[1] / "plantilla.py").read_text(
             encoding="utf-8")
-        cuerpo = fuente.split('"""', 2)[2]          # sin el docstring del módulo
-        self.assertNotRegex(cuerpo, r"<(div|section|table|h1|h2|p|span)")
+        arbol = ast.parse(fuente)
+        for nodo in ast.walk(arbol):
+            cuerpo = getattr(nodo, "body", None)
+            if (isinstance(nodo, (ast.Module, ast.FunctionDef, ast.ClassDef)) and cuerpo
+                    and isinstance(cuerpo[0], ast.Expr) and isinstance(cuerpo[0].value, ast.Constant)
+                    and isinstance(cuerpo[0].value.value, str)):
+                nodo.body = cuerpo[1:] or [ast.Pass()]
+        codigo = ast.unparse(arbol)                  # sin comentarios ni docstrings
+        self.assertNotRegex(codigo, r"<(div|section|table|h1|h2|p|span)\b")
+        self.assertRegex("x = '<div>'", r"<(div|section|table|h1|h2|p|span)\b")
 
 
 class TestPayloadDelDocumento(unittest.TestCase):
@@ -128,10 +142,9 @@ class TestPayloadDelDocumento(unittest.TestCase):
 class TestAcumulacionDeLaSesion(unittest.TestCase):
     """El modo "acumula": varios análisis, un documento, una sola dirección.
 
-    No es el de por defecto. Se usa cuando las respuestas se comparan entre sí:
-    mientras el barrido paramétrico siga pendiente, estudiar una bifurcación es
-    llamar varias veces variando el parámetro, y la bifurcación se ve al poner
-    esas llamadas una junto a otra.
+    No es el de por defecto. Se usa cuando las respuestas se comparan entre sí,
+    por ejemplo el mismo sistema con valores distintos de un parámetro: se ven
+    poniendo esas llamadas una junto a otra.
     """
 
     def setUp(self):
@@ -175,12 +188,13 @@ class TestAcumulacionDeLaSesion(unittest.TestCase):
 
         estado = self.sesion.estado()
         self.assertEqual(estado["analisis_registrados"], 3)
+        # Sin título del cliente, la entrada lleva el nombre del procedimiento aplicado.
         self.assertEqual(estado["titulos"],
-                         ["Péndulo", "Logístico", "Equilibrios y estabilidad"])
+                         ["Péndulo", "Logístico", "Equilibrios y línea de fase"])
         entradas = self._entradas()
         self.assertEqual(len(entradas), 3)
         self.assertEqual([e["titulo"] for e in entradas],
-                         ["Péndulo", "Logístico", "Equilibrios y estabilidad"])
+                         ["Péndulo", "Logístico", "Equilibrios y línea de fase"])
 
     def test_el_html_no_viaja_en_la_respuesta_si_hay_informe(self):
         """Ocupaba el 75 % de la respuesta y el modelo no puede dibujarlo.
@@ -222,8 +236,10 @@ class TestAcumulacionDeLaSesion(unittest.TestCase):
         self.assertEqual(html.count("cdn.jsdelivr.net/npm/plotly"), 1)
 
         figuras = [f for e in self._entradas() for f in e.get("figuras", [])]
+        # Primero las del desarrollo (retrato de fase, solución analítica) y
+        # después las numéricas que no repiten lo mismo.
         self.assertEqual([f["nombre"] for f in figuras],
-                         ["series", "plano_fase", "series", "linea_fase"])
+                         ["retrato_fase", "series", "solucion", "linea_fase"])
         for figura in figuras:
             self.assertIn("data", figura["spec"])
             self.assertIn("layout", figura["spec"])
@@ -255,15 +271,14 @@ class TestAcumulacionDeLaSesion(unittest.TestCase):
         capacidades.analizar_edo(LOGISTICO)
         self.assertEqual(self.sesion.estado()["titulos"], ["Logístico"])
 
-    def test_el_informe_anterior_no_se_borra(self):
-        """Empezar de cero no es perder lo de antes: queda su archivo fechado."""
+    def test_solo_queda_el_ultimo_informe(self):
+        """La carpeta local no acumula: el informe anterior se borra."""
         capacidades.analizar_edo(PENDULO)
-        anterior = self.sesion.id
         self.sesion.empezar_de_nuevo()
         capacidades.analizar_edo(LOGISTICO)
-        nombres = sorted(p.name for p in self.directorio.glob("*.html"))
-        self.assertIn(f"informe-{anterior}.html", nombres)
-        self.assertIn(f"informe-{self.sesion.id}.html", nombres)
+        nombres = sorted(p.name for p in self.directorio.glob("informe-*"))
+        self.assertEqual(nombres, [f"informe-{self.sesion.id}.html",
+                                   f"informe-{self.sesion.id}.json"])
 
     def test_tras_mucho_silencio_se_releva_solo(self):
         """Red de seguridad para cuando el agente no llame a `nuevo_informe`."""
@@ -296,6 +311,81 @@ class TestAcumulacionDeLaSesion(unittest.TestCase):
             resultado = capacidades.analizar_edo(PENDULO)
         self.assertTrue(resultado["ok"])
         self.assertIsNone(resultado["visualizacion"].get("informe"))
+
+
+class TestDesarrolloEnElInforme(unittest.TestCase):
+    """El informe enseña el desarrollo que el servidor calculó, no solo números.
+
+    Las fórmulas viajan en LaTeX y las compone la página (KaTeX); las gráficas
+    van antes que el desarrollo, porque son lo que el usuario viene a ver.
+    """
+
+    BERNOULLI = {"ecuaciones": ["y**3 - y"], "variables_estado": ["y"], "variable_independiente": "x",
+                 "y0": [1.0], "intervalo": [0, 5], "titulo": "Bernoulli",
+                 "enunciado": "Resuelva la ecuación diferencial ordinaria de Bernoulli y' + y = y^3, y(0) = 1"}
+
+    def setUp(self):
+        self.directorio = Path(__file__).resolve().parent / "_informes_desarrollo"
+        self.sesion = InformeDeSesion("prueba")
+        self.parches = [
+            mock.patch("orquestacion.informe.CARPETA_LOCAL", self.directorio),
+            mock.patch("orquestacion.informe.storage.subir_html", return_value=None),
+            mock.patch.object(capacidades, "SESION", self.sesion),
+            mock.patch.dict(os.environ, {"EDOS_SIN_SERVIDOR_LOCAL": "1"}),
+            mock.patch.object(informe_mod, "ACUMULA", True),
+        ]
+        for parche in self.parches:
+            parche.start()
+
+    def tearDown(self):
+        for parche in self.parches:
+            parche.stop()
+        for archivo in self.directorio.glob("*"):
+            archivo.unlink()
+        if self.directorio.exists():
+            self.directorio.rmdir()
+
+    def _entradas(self):
+        return _payload(Path(self.sesion.destino).read_text(encoding="utf-8"))["entradas"]
+
+    def test_la_entrada_lleva_el_enunciado_y_el_desarrollo(self):
+        capacidades.analizar_edo(self.BERNOULLI)
+        entrada = self._entradas()[0]
+        self.assertEqual(entrada["enunciado"], self.BERNOULLI["enunciado"])
+        desarrollo = entrada["desarrollo"]
+        self.assertEqual(desarrollo["familia"], "bernoulli")
+        claves = [s["clave"] for s in desarrollo["secciones"]]
+        self.assertEqual(claves[0], "clasificacion")
+        self.assertIn("cambio_de_variable", claves)
+        formulas = [b for s in desarrollo["secciones"] for b in s["bloques"] if b["tipo"] == "formula"]
+        self.assertTrue(formulas)
+        self.assertTrue(all(b["latex"].strip() for b in formulas))
+        self.assertTrue(any(b.get("destacada") for b in formulas))
+        self.assertTrue(desarrollo["conclusiones"])
+
+    def test_la_pagina_compone_las_formulas_y_pone_primero_las_graficas(self):
+        pagina = PLANTILLA.read_text(encoding="utf-8")
+        self.assertIn("katex.min.js", pagina)
+        self.assertIn("function bloqueDesarrollo", pagina)
+        cuerpo = pagina.split("function construirAnalisis")[1]
+        self.assertLess(cuerpo.index("entrada.figuras"), cuerpo.index("bloqueDesarrollo("))
+
+    def test_las_figuras_del_desarrollo_llegan_al_informe(self):
+        capacidades.analizar_equilibrios_sistema({"ecuaciones": ["mu*x - x**3"], "variables_estado": ["x"],
+                                                  "parametro": "mu"})
+        figura = self._entradas()[0]["figuras"][0]
+        self.assertEqual(figura["nombre"], "diagrama_bifurcacion")
+        roles = {traza["meta"]["rol"] for traza in figura["spec"]["data"]}
+        self.assertTrue({"rama:estable", "rama:inestable", "critico"} <= roles)
+
+    def test_lo_fuera_de_alcance_se_avisa_en_la_entrada(self):
+        capacidades.analizar_equilibrios_sistema({
+            "ecuaciones": ["-x"], "variables_estado": ["x"],
+            "enunciado": "Calcule la dimensión de caja del conjunto de Cantor"})
+        entrada = self._entradas()[0]
+        avisos = [a for a in entrada["desarrollo"]["advertencias"] if a.startswith("FUERA DE ALCANCE")]
+        self.assertEqual(len(avisos), 1)
+        self.assertIn("function avisoDeAlcance", PLANTILLA.read_text(encoding="utf-8"))
 
 
 class TestModoUltimo(unittest.TestCase):

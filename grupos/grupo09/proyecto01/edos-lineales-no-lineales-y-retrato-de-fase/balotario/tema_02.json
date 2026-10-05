@@ -9,7 +9,7 @@
       "seccion_latex": "Tema 2: Retratos de Fase y Análisis Cualitativo en el Plano",
       "lineas": [874, 1755]
     },
-    "notas": "Los cinco problemas son sistemas autónomos 2D, el caso que el motor cubre mejor: los equilibrios se obtienen exactos con sympy y se clasifican por autovalores. `clasificacion_balotario` guarda el término fino del .tex (silla, foco, centro, nodo) y `clasificacion_motor` lo que devuelve analizar_equilibrios, que solo distingue estable / inestable / no concluyente."
+    "notas": "Los cinco problemas son sistemas autónomos 2D, el caso que el motor cubre mejor: los equilibrios se obtienen exactos con sympy y se clasifican por autovalores. `clasificacion_balotario` guarda el término fino del .tex (silla, foco, centro, nodo) y `clasificacion_motor` el veredicto de la linealización (estable / inestable / no concluyente), que es lo que trae `analisis.estabilidad`. El tipo fino lo calcula el desarrollo de cada familia. El problema 2.5 lleva una `revision_matematica`: su conclusión no es correcta."
   },
   "problemas": [
     {
@@ -301,6 +301,14 @@
       "tipo": "ciclo_limite",
       "dificultad": "avanzada",
       "verificable_con_solver": true,
+      "revision_matematica": {
+        "estado": "conclusion_del_tex_incorrecta",
+        "resumen": "El sistema no tiene ninguna órbita periódica: el anillo K contiene el equilibrio (1, 0), así que Poincaré-Bendixson no aplica.",
+        "detalle": "La forma polar del propio .tex es ṙ = r(1 − r²), θ̇ = 1 − cos θ. θ̇ se anula en θ = 0, y en r = 1 también ṙ = 0: (1, 0) es un equilibrio (en cartesianas: ẋ = 1 − 0 − 1 + 0 = 0, ẏ = 1 + 0 − 0 − 1 = 0) y está dentro de K = {1/2 ≤ r ≤ 2}. El argumento del .tex ('K no contiene equilibrios') falla. El círculo r = 1 es invariante pero no es una órbita periódica: es un lazo que sale de (1, 0) y vuelve a él. Como θ̇ ≥ 0 y solo se anula en θ = 0, toda trayectoria con r > 0 tiende a (1, 0).",
+        "por_que_las_pruebas_numericas_no_lo_detectaban": "El radio de cualquier trayectoria converge a 1 (ṙ = r(1 − r²)), así que comprobar r → 1 no distingue un ciclo límite de la convergencia a un equilibrio situado sobre el círculo.",
+        "verificado_por": "matematica.sistemas_planos.desarrollar_ciclo_limite (equilibrio en cartesianas y convergencia numérica a (1, 0)); tests/test_tema2.py",
+        "tex_modificado": false
+      },
       "ecuacion": {
         "latex": "\\dot{x} = x - y - x r^2 + \\frac{xy}{r}, \\qquad \\dot{y} = x + y - y r^2 - \\frac{x^2}{r}, \\qquad r = \\sqrt{x^2+y^2}",
         "forma": "sistema_primer_orden",

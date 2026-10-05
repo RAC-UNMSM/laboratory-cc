@@ -30,7 +30,7 @@ RUN pip install -r requirements.txt
 FROM python:3.12-slim
 
 LABEL org.opencontainers.image.title="edos-grupo09" \
-      org.opencontainers.image.description="Agente MCP de EDOs y sistemas dinámicos: integración verificada, estabilidad e informe HTML" \
+      org.opencontainers.image.description="Agente MCP de EDOs y sistemas dinámicos: desarrollo matemático del balotario, verificación e informe HTML" \
       org.opencontainers.image.source="https://github.com/RAC-UNMSM/laboratory-cc"
 
 ENV PATH="/opt/entorno/bin:$PATH" \

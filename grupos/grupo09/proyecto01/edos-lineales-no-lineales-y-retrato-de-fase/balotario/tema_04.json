@@ -9,7 +9,7 @@
       "seccion_latex": "Tema 4: Sistemas Dinámicos Caóticos",
       "lineas": [2578, 2775]
     },
-    "notas": "ATENCIÓN: en el .tex solo el problema 4.1 tiene solución desarrollada. Los problemas 4.2 a 4.5 están con enunciado únicamente, así que se registran con solucion_esperada.tipo = \"pendiente\" y solucion_en_tex = false. No se inventaron respuestas: lo que aparece en `datos_del_enunciado` son las cifras que el propio enunciado aporta.\n\nAdemás, la mayoría de este tema son MAPAS DISCRETOS (tienda, logístico) o demostraciones analíticas, no problemas de valor inicial continuos. El motor actual integra EDOs con solve_ivp y no itera mapas, de modo que verificable_con_solver = false en todos. Iterar mapas es trabajo nuevo, no una adaptación."
+    "notas": "ATENCIÓN: en el .tex solo el problema 4.1 tiene solución desarrollada. Los problemas 4.2 a 4.5 están con enunciado únicamente, así que se registran con solucion_esperada.tipo = \"pendiente\" y solucion_en_tex = false. No se inventaron respuestas: lo que aparece en `datos_del_enunciado` son las cifras que el propio enunciado aporta.\n\nAdemás, la mayoría de este tema son MAPAS DISCRETOS (tienda, logístico) o demostraciones analíticas, no problemas de valor inicial continuos. El 4.1 lo resuelve el agente con su procedimiento (matematica/analisis_caos.py: derivada a trozos, puntos fijos, exponente de Lyapunov y horizonte), declarando tipo_de_sistema = \"mapa_discreto\". Los problemas 4.2 a 4.5 quedan FUERA DE ALCANCE POR AHORA: el agente los reconoce y lo dice, sin inventar un resultado."
   },
   "problemas": [
     {
@@ -19,8 +19,7 @@
       "enunciado": "Considere el mapa tienda (Tent Map) $f: [0,1] \\to [0,1]$ definido por $f(x) = 2x$ si $0 \\le x \\le 1/2$ y $f(x) = 2(1-x)$ si $1/2 < x \\le 1$. Calcule analíticamente su exponente de Lyapunov $\\lambda$ y determine el tiempo característico en que dos condiciones iniciales separadas por $\\delta_0 = 10^{-10}$ divergen hasta una distancia de orden 1.",
       "tipo": "mapa_discreto_unidimensional",
       "dificultad": "intermedia",
-      "verificable_con_solver": false,
-      "motivo_no_verificable": "Es un mapa discreto definido a trozos. El motor integra EDOs continuas con solve_ivp y no itera mapas.",
+      "verificable_con_solver": true,
       "ecuacion": {
         "latex": "f(x) = \\begin{cases} 2x, & 0 \\le x \\le 1/2 \\\\ 2(1-x), & 1/2 < x \\le 1 \\end{cases}",
         "forma": "mapa_discreto",
@@ -60,8 +59,9 @@
         "notas": "Es el único problema del Tema 4 con solución desarrollada en el .tex. Los valores registrados son los que el .tex demuestra."
       },
       "verificacion": {
-        "no_verificable_con_el_motor_actual": true,
-        "nota": "Cuando `matematica/analisis_caos.py` se implemente, este caso es su primera prueba de aceptación: un sistema con exponente de Lyapunov conocido exactamente."
+        "exponente_exacto": true,
+        "horizonte_de_prediccion": true,
+        "nota": "Es la prueba de aceptación de `matematica/analisis_caos.py`: λ = ln 2 exacto (|f'| = 2 casi en todas partes), contrastado con un promedio numérico en precisión arbitraria, y n* = 34 para δ₀ = 10⁻¹⁰. Se pide con tipo_de_sistema = \"mapa_discreto\" y el mapa en `trozos` ([{expresion, desde, hasta}]) o como 1 - Abs(1 - 2*x)."
       }
     },
     {

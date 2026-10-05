@@ -221,10 +221,43 @@ def verificar_solucion_exacta(solucion, exacta, variable_independiente, componen
         return {"nombre": "solucion_exacta", "ok": False, "error": str(exc),
                 "descripcion": "No se pudo evaluar la solución exacta sobre la malla."}
     valores = np.broadcast_to(valores, tiempos.shape)
-    error = float(np.max(np.abs(np.asarray(solucion.y[componente], dtype=float) - valores)))
-    return {"nombre": "solucion_exacta", "ok": error <= umbral,
-            "error_maximo": error, "umbral": umbral,
+    # Criterio mixto, absoluto cerca de cero y relativo donde la solución es
+    # grande: junto a una explosión (y = 2/(2 − 3x²) cerca de x = √6/3) el error
+    # absoluto de una integración correcta crece con |y|.
+    diferencia = np.abs(np.asarray(solucion.y[componente], dtype=float) - valores)
+    relativo = float(np.max(diferencia / (1.0 + np.abs(valores))))
+    return {"nombre": "solucion_exacta", "ok": relativo <= umbral,
+            "error_maximo": float(np.max(diferencia)), "error_relativo_maximo": relativo,
+            "umbral": umbral, "criterio": "|y_num - y_exacta| <= umbral*(1 + |y_exacta|) en cada punto",
             "descripcion": "La solución numérica coincide con la analítica aportada."}
+
+
+#: Variación relativa admitida de una integral primera a lo largo de la trayectoria.
+UMBRAL_INTEGRAL_PRIMERA = 1e-6
+
+
+def verificar_integral_primera(solucion, integral, estados, independiente=None,
+                               umbral=UMBRAL_INTEGRAL_PRIMERA):
+    """Una cantidad que el desarrollo probó constante debe serlo en la trayectoria numérica.
+
+    El desarrollo demuestra dH/dt ≡ 0 de forma simbólica; esto lo contrasta con
+    lo que el integrador produjo, que es independiente de esa demostración.
+    """
+    import sympy as sp
+    variables = list(estados) + ([independiente] if independiente is not None else [])
+    try:
+        funcion = sp.lambdify(variables, integral, "numpy")
+        argumentos = [np.asarray(solucion.y[i], dtype=float) for i in range(len(estados))]
+        if independiente is not None:
+            argumentos.append(np.asarray(solucion.t, dtype=float))
+        valores = np.broadcast_to(np.asarray(funcion(*argumentos), dtype=float), solucion.t.shape)
+    except Exception as exc:
+        return {"nombre": "integral_primera", "ok": False, "concluyente": False,
+                "error": str(exc), "descripcion": "No se pudo evaluar la integral primera."}
+    deriva = float(np.max(np.abs(valores - valores[0]))) / max(1.0, abs(float(valores[0])))
+    return {"nombre": "integral_primera", "ok": deriva <= umbral, "desvio": deriva, "umbral": umbral,
+            "tipo": "numerica",
+            "descripcion": f"H = {sp.sstr(integral)} se conserva a lo largo de la trayectoria numérica."}
 
 
 def verificar(campo, solucion, y0, parametros=None, rtol=1e-8, atol=1e-10, metodo="RK45",

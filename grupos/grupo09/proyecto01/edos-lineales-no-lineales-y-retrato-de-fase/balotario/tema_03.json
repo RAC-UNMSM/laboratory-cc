@@ -12,7 +12,7 @@
         2577
       ]
     },
-    "notas": "Todos son familias paramétricas: lo que se verifica no es una trayectoria sino cómo cambian los equilibrios y su estabilidad al mover el parámetro. Por eso estos problemas no llevan `condiciones_iniciales` y no se piden con `resolver_graficar_y_analizar_edo`, que exige un PVI, sino con `analizar_equilibrios`, pasando el `parametros` de cada caso. Cada problema trae `casos` con un valor representativo de cada régimen, y los equilibrios de cada caso se obtienen exactos con sympy. Este tema es la especificación de `matematica/analisis_bifurcaciones.py`, que hoy es un stub: cuando se implemente, estos casos son su suite de aceptación."
+    "notas": "Todos son familias paramétricas: lo que se verifica no es una trayectoria sino cómo cambian los equilibrios y su estabilidad al mover el parámetro. Por eso estos problemas no llevan `condiciones_iniciales` y no se piden con `resolver_graficar_y_analizar_edo`, que exige un PVI, sino con `analizar_equilibrios`: con `parametro` declarado (p. ej. \"mu\") una sola llamada hace el análisis completo de la bifurcación, y con el `parametros` de cada caso se clasifican los equilibrios de ese régimen. Cada problema trae `casos` con un valor representativo de cada régimen, y los equilibrios de cada caso se obtienen exactos con sympy. Este tema es la especificación de `matematica/analisis_bifurcaciones.py`, y estos casos son parte de su suite de aceptación. El problema 3.5 lleva una `revision_matematica`: el .tex tiene un error en la integral de Melnikov."
   },
   "problemas": [
     {
@@ -547,7 +547,7 @@
               "equilibrios": [
                 {
                   "punto": [
-                    -1.1687708217101518
+                    -1.1687708944803676
                   ],
                   "clasificacion_motor": "estable",
                   "clasificacion_balotario": "único atractor de gran amplitud",
@@ -567,7 +567,7 @@
                 },
                 {
                   "punto": [
-                    1.1687708217101518
+                    1.1687708944803676
                   ],
                   "clasificacion_motor": "estable",
                   "clasificacion_balotario": "único atractor de gran amplitud",
@@ -770,6 +770,15 @@
       "tipo": "bifurcacion_homoclinica",
       "dificultad": "avanzada",
       "verificable_con_solver": true,
+      "revision_matematica": {
+        "estado": "error_aritmetico_en_el_tex",
+        "resumen": "La segunda integral de Melnikov es I₂ = 36/35, no 6/7: el cero de M(μ) es μ_M = −6/7, no −5/7. El valor real de la conexión homoclínica, por disparo numérico, es μ* ≈ −0.8645.",
+        "detalle": "Con el lazo y₀(x) = ±x√(1 − 2x/3), x ∈ [0, 3/2]: I₁ = 2∫₀^{3/2} x√(1 − 2x/3) dx = 6/5 (coincide con el .tex) e I₂ = 2∫₀^{3/2} x²√(1 − 2x/3) dx = 36/35. Entonces M(μ) = (6/5)μ + 36/35 y μ_M = −6/7 ≈ −0.857. Melnikov es una aproximación de primer orden y la perturbación μy + xy no es pequeña: el disparo sobre las variedades de la silla da μ* ≈ −0.86455.",
+        "mecanismo": "El ciclo límite estable nace en el Hopf supercrítico de (1, 0) en μ = −1 (primer coeficiente de Lyapunov a = −1/8), existe para −1 < μ < μ*, y al acercarse a μ* su periodo diverge como −(1/λᵤ) ln|μ − μ*| hasta convertirse en el lazo homoclínico. Para μ > μ* no hay ciclo y las órbitas escapan. El .tex dice lo contrario ('al cruzar μc nace un ciclo límite').",
+        "valores_corregidos": {"I1": 1.2, "I2": 1.0285714285714285, "mu_melnikov": -0.8571428571428571, "mu_numerico": -0.86455, "hopf_local": -1.0},
+        "verificado_por": "matematica.analisis_bifurcaciones.desarrollar_homoclinica (Melnikov exacto con sympy, disparo numérico, evidencia del ciclo a cada lado de μ* y ajuste de la divergencia del periodo); tests/test_tema3.py",
+        "tex_modificado": false
+      },
       "ecuacion": {
         "latex": "\\dot{x} = y, \\qquad \\dot{y} = \\mu y + x - x^2 + xy",
         "forma": "familia_parametrica",
