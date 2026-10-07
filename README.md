@@ -41,6 +41,22 @@ infraestructura** (`architecture-sm`, privado) — no en este repo. Resumen:
   vía PR y despliega un servidor MCP de referencia (sin necesidad de
   tokens ni cuentas pagas).
 
+## Antes de abrir o actualizar un PR: revisar la entrega
+
+Cada grupo revisa su carpeta antes de subir. El validador dice qué no debe
+subirse, qué falta para que la app despliegue y qué hay que pedirle al
+administrador:
+
+```bash
+git fetch origin
+python .claude/skills/revisar-entrega/scripts/validar_entrega.py grupoNN
+```
+
+Con Claude Code, dentro de este repo, basta con pedir `/revisar-entrega`
+(o "revisa mi entrega"): corre el validador, lee el código y propone las
+correcciones. El contrato completo de despliegue está en
+`.claude/skills/revisar-entrega/referencia-despliegue.md`.
+
 ## Reglas de todo `docker-compose.yml` de grupo
 
 Ver `grupos/TEMPLATE/README.md` para el detalle completo. Resumen:
