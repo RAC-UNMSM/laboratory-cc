@@ -94,14 +94,15 @@ def renderizar_html(metodo: Metodo, resultado: dict, datos: dict, offline: bool 
         js_base=_estatico("base.js"), js_modulo=_estatico(f"{metodo}.js"), js_arranque=_estatico("arranque.js"),
         **CONFIG[metodo])
 
-
 def guardar_html(metodo: Metodo, objeto: Any, ruta: str | Path, datos: dict | None = None,
                  resultado: dict | None = None, offline: bool = False) -> str:
     """Calcula lo que falte (JSON y datos de gráficos) y escribe la página en ``ruta``."""
     from core.visualizacion import datos_grafico
     resultado = resultado if resultado is not None else a_dict(metodo, objeto)
     datos = datos if datos is not None else datos_grafico(metodo, objeto)
-    Path(ruta).write_text(renderizar_html(metodo, resultado, datos, offline=offline), encoding="utf-8")
+    contenido = renderizar_html(metodo, resultado, datos, offline=offline)
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write(contenido)
     return str(ruta)
 
 

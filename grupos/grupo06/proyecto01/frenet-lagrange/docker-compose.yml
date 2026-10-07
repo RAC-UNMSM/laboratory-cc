@@ -1,50 +1,43 @@
-# grupo06-frenet-lagrange — despliegue en el entorno del laboratorio.
-#
-# Requisitos: la red Docker externa «lab_net» ya existe y en ella corren SeaweedFS (DNS: seaweedfs,
-# API S3 en :8333) y Caddy. Caddy publica:
-#   https://rac-unmsm.vekthos.org/img/frenet-lagrange/…  → SeaweedFS (bucket frenet-lagrange-imgs)
-#   y el endpoint MCP de este servicio                     → grupo06-frenet-lagrange:8000/mcp
-# (ver despliegue/Caddyfile.ejemplo).
-#
-#   docker compose build
-#   docker compose up -d
-#   docker compose logs -f
-#
-# Para probar TODO en tu PC (SeaweedFS + Caddy + este servidor): docker-compose.local.yml
 services:
   grupo06-frenet-lagrange:
     build: .
     image: grupo06-frenet-lagrange:latest
-    container_name: grupo06-frenet-lagrange      # nombre DNS dentro de lab_net (lo usa Caddy)
+    container_name: ${LAB_CONTAINER_NAME}
     restart: unless-stopped
-    init: true                                   # recoge los procesos de cálculo que se terminan
+    init: true
+    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     environment:
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
       MCP_PORT: "8000"
       MCP_HTTP_PATH: /mcp
-      MCP_STATELESS: "1"                         # sin sesiones en memoria: escalable a varias réplicas
+      MCP_STATELESS: "1"
       MCP_MATH_STORAGE: s3
       MCP_GRUPO: grupo06
       SEAWEEDFS_S3_URL: http://seaweedfs:8333
-      IMG_BUCKET: frenet-lagrange-imgs
-      PUBLIC_IMG_BASE_URL: https://rac-unmsm.vekthos.org/img/frenet-lagrange
-      MCP_MATH_PROCESOS: "1"                     # cálculos en procesos aparte (con límite de tiempo)
-      MCP_MATH_WORKERS: "2"                      # cálculos simultáneos por contenedor
+      IMG_BUCKET: grupo06-frenet-lagrange-imgs
+      PUBLIC_IMG_BASE_URL: https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange
+      MCP_MATH_PROCESOS: "1"
+      MCP_MATH_WORKERS: "1"
       MCP_MATH_TIMEOUT: "120"
       MCP_MATH_LOG: INFO
-      # Solo si SeaweedFS exige credenciales S3:
-      # S3_ACCESS_KEY: ...
-      # S3_SECRET_KEY: ...
+      MCP_MATH_RESULTADOS: /tmp/resultados
+      MCP_URL: http://0.0.0.0:8000/mcp
+      PUBLIC_LOCAL_BASE_URL: http://localhost:8080/img/frenet-lagrange
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434/v1"
+      S3_ACCESS_KEY: ""
+      S3_SECRET_KEY: ""
+      S3_REGION: us-east-1
+      S3_TIMEOUT: "20"
+      AGENTE_PROVEEDOR: simulado
     expose:
-      - "8000"                                   # visible para Caddy dentro de lab_net; no se publica al host
-    networks:
-      - lab_net
-    deploy:
-      resources:
-        limits:
-          memory: 2g
+      - "8000"
 
 networks:
-  lab_net:
+  default:
+    name: lab_net
     external: true

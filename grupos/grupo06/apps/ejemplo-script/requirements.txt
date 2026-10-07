@@ -1,1 +1,0 @@
-# Agregar acá las dependencias del script (ej. pandas, requests, duckdb...).

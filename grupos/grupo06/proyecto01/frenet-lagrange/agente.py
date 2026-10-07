@@ -55,13 +55,12 @@ class Proveedor:
     env_modelo: str
     modelo_por_defecto: str | None = None
 
-
 PROVEEDORES: dict[str, Proveedor] = {
     "deepseek": Proveedor("https://api.deepseek.com", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL", "deepseek-chat"),
     "gemini": Proveedor("https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY", "GEMINI_MODEL"),
     "claude": Proveedor("https://api.anthropic.com/v1/", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"),
     "openai": Proveedor(None, "OPENAI_API_KEY", "OPENAI_MODEL"),
-    "ollama": Proveedor("http://localhost:11434/v1", None, "OLLAMA_MODEL"),
+    "ollama": Proveedor(os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434/v1"), None, "OLLAMA_MODEL"),
 }
 
 

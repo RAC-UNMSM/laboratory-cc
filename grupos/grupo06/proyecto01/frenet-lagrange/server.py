@@ -546,27 +546,34 @@ async def salud(_request: Any) -> Any:
     return JSONResponse({"ok": True, "servidor": NOMBRE_SERVIDOR, "transporte": TRANSPORTE,
                          "almacen": almacen.descripcion, "trabajadores": N_TRABAJADORES})
 
-
 def main() -> None:
     ap = argparse.ArgumentParser(description=f"Servidor MCP {NOMBRE_SERVIDOR}")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--stdio", action="store_true", help="transporte STDIO (Claude Desktop, agente.py local)")
     g.add_argument("--http", action="store_true", help="transporte streamable-http en MCP_HOST:MCP_PORT (por defecto)")
-    ap.parse_args()
-    almacen.preparar()                # ensure_bucket(): tolera que SeaweedFS todavía esté arrancando
+    args = ap.parse_args()
+
+    transporte = "stdio" if args.stdio else ("streamable-http" if args.http else TRANSPORTE)
+
+    almacen.preparar()                # ensure_bucket(): tolera que SeaweedFS todavía esté arrancando[cite: 5]
     if USAR_PROCESOS:
         ejecutor.iniciar()            # arranca (y precarga SymPy) ANTES de abrir el canal
-    if TRANSPORTE == "stdio":
+    if transporte == "stdio":
         log.info("%s listo (STDIO) · almacén: %s · %d trabajador(es)", NOMBRE_SERVIDOR, almacen.descripcion,
                  N_TRABAJADORES)
     else:
         log.info("%s listo en http://%s:%d%s · almacén: %s · %d trabajador(es) · stateless=%s", NOMBRE_SERVIDOR,
                  HOST, PUERTO, RUTA_HTTP, almacen.descripcion, N_TRABAJADORES, SIN_ESTADO)
     try:
-        mcp.run(transport="stdio" if TRANSPORTE == "stdio" else "streamable-http")
+        if transporte == "stdio":
+            mcp.run(transport="stdio")
+        else:
+            # Asegura que las variables de entorno para FastMCP y el servidor ASGI tomen host y puerto
+            os.environ["FASTMCP_HOST"] = str(HOST)
+            os.environ["FASTMCP_PORT"] = str(PUERTO)
+            mcp.run(transport="streamable-http")
     finally:
         ejecutor.cerrar()
-
 
 if __name__ == "__main__":
     main()

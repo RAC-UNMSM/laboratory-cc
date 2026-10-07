@@ -90,9 +90,9 @@ def _ejecutar(metodo: str, solicitud: dict[str, Any], args: argparse.Namespace, 
         if dest == "-":
             print(texto)
         else:
-            Path(_con_sufijo(dest, suf)).write_text(texto, encoding="utf-8")
+            with open(_con_sufijo(dest, suf), "w", encoding="utf-8") as f:
+                f.write(texto)
             print("JSON guardado en:", _con_sufijo(dest, suf))
-
 
 def _salidas(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--png", help="guardar lámina PNG")

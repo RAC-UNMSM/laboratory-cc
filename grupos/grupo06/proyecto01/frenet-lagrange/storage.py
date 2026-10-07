@@ -57,6 +57,8 @@ __all__ = ["Almacen", "BackendS3", "BackendLocal", "RegistroResultado", "ErrorAl
 log = logging.getLogger("mcp_math.storage")
 
 GRUPO = os.environ.get("MCP_GRUPO", "grupo06")
+IMG_BUCKET = "grupo06-frenet-lagrange-imgs"
+PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange"
 # 8 hex (uuid4) en los ids nuevos; se aceptan 6 hex para leer resultados antiguos.
 ID_PATRON = re.compile(r"^(lagrange|hessiana|frenet)-\d{8}-\d{6}-[0-9a-f]{6}(?:[0-9a-f]{2})?$")
 ID_LOTE = re.compile(r"^lote-\d{8}-\d{6}-[0-9a-f]{6}(?:[0-9a-f]{2})?$")
@@ -127,13 +129,14 @@ class BackendS3:
 
     @classmethod
     def desde_entorno(cls) -> "BackendS3":
-        return cls(os.environ.get("SEAWEEDFS_S3_URL", "http://seaweedfs:8333"),
-                   os.environ.get("IMG_BUCKET", "frenet-lagrange-imgs"),
-                   os.environ.get("PUBLIC_IMG_BASE_URL", "https://rac-unmsm.vekthos.org/img/frenet-lagrange"),
-                   timeout=float(os.environ.get("S3_TIMEOUT", "20")),
-                   access_key=os.environ.get("S3_ACCESS_KEY") or None,
-                   secret_key=os.environ.get("S3_SECRET_KEY") or None,
-                   region=os.environ.get("S3_REGION", "us-east-1"))
+        return cls(
+            os.environ.get("SEAWEEDFS_S3_URL", "http://seaweedfs:8333"),
+            IMG_BUCKET,
+            PUBLIC_IMG_BASE_URL,
+            timeout=float(os.environ.get("S3_TIMEOUT", "20")),
+            access_key=os.environ.get("S3_ACCESS_KEY") or None,
+            secret_key=os.environ.get("S3_SECRET_KEY") or None,
+            region=os.environ.get("S3_REGION", "us-east-1"))
 
     # ── HTTP ─────────────────────────────────────────────────────────────────
     def _ruta(self, clave: str = "") -> str:
@@ -277,17 +280,15 @@ class BackendLocal:
     def subir(self, clave: str, datos: bytes, tipo: str) -> None:
         ruta = self._ruta(clave)
         ruta.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=ruta.parent, suffix=".tmp")
-        with os.fdopen(fd, "wb") as fh:
+        with open(ruta, "wb") as fh:
             fh.write(datos)
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, ruta)                         # escritura atómica
 
     def leer(self, clave: str) -> bytes:
         ruta = self._ruta(clave)
         if not ruta.is_file():
             raise KeyError(clave)
-        return ruta.read_bytes()
+        with open(ruta, "rb") as fh:
+            return fh.read()
 
     def prefijos(self, prefijo: str) -> list[str]:
         carpeta = self.base / prefijo

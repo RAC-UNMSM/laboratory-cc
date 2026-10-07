@@ -1,8 +1,8 @@
 # Caddy del entorno de prueba local (docker-compose.local.yml).
 :8080 {
-	# Archivos públicos: /img/frenet-lagrange/<clave>  →  SeaweedFS /frenet-lagrange-imgs/<clave>
-	handle_path /img/frenet-lagrange/* {
-		rewrite * /frenet-lagrange-imgs{path}
+	# Archivos públicos: /img/grupo06-frenet-lagrange/<clave>  →  SeaweedFS /grupo06-frenet-lagrange-imgs/<clave>
+	handle_path /img/grupo06-frenet-lagrange/* {
+		rewrite * /grupo06-frenet-lagrange-imgs{path}
 		reverse_proxy seaweedfs:8333
 	}
 
