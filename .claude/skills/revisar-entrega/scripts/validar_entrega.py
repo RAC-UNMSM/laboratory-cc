@@ -20,7 +20,7 @@ instalado, el docker-compose.yml se valida completo; si no, con un chequeo
 de texto más simple.
 
 Las reglas de despliegue son las mismas que aplica el repo de
-infraestructura (lab_pipelines/naming.py, app_deploy.py, compose_policy.py)
+infraestructura (lab_deploy/naming.py, apps.py, compose_policy.py)
 y el CI de este repo (.github/workflows/ci.yml). Si cambian allá, hay que
 actualizarlas acá.
 """
