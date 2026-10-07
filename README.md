@@ -2,7 +2,7 @@
 
 Repo **público** de contenido del curso: una carpeta por grupo con las apps
 que despliegan. Este repo es intencionalmente independiente del repo de
-infraestructura (Dagster, Caddy, oauth2-proxy, agente de deploy) — ver
+infraestructura (Caddy, oauth2-proxy, webhook de despliegue) — ver
 sección 1.3 del plan (`docs/plan-infraestructura.md` en el repo de
 infraestructura) para el razonamiento completo.
 
@@ -23,7 +23,6 @@ ci/
   validate_resource_limits.py   <- corre en cada PR (ver .github/workflows/ci.yml)
   compose_policy.py             <- reglas (copia del repo de infraestructura)
 .github/
-  CODEOWNERS           <- bloquea merges a main sin revisión del profesor
   workflows/ci.yml
 ```
 
@@ -71,11 +70,10 @@ red externa `lab_net`.
 2. CI (`.github/workflows/ci.yml`) valida las reglas de arriba y hace un
    "dev-run" efímero (build + up + logs + down) publicando el resultado
    como comentario en el PR.
-3. El profesor (único CODEOWNER) revisa y mergea.
-4. En la laptop del profesor, el agente de deploy del repo de
-   infraestructura detecta el merge (`git pull` de este repo) y dispara,
-   vía un sensor de Dagster, el despliegue real — nunca hay un botón de
-   "Materialize" que un alumno pueda apretar (sección 1.2 del plan).
+3. El profesor revisa y mergea (es el único que puede actualizar `main`).
+4. GitHub avisa por webhook al servidor del profesor, que hace `git pull`
+   de este repo y despliega las apps que cambiaron — nunca hay un botón de
+   despliegue que un alumno pueda apretar (sección 1.2 del plan).
 
 Este repo **nunca** ejecuta código en la laptop del profesor directamente:
 el CI corre en runners de GitHub, no en la laptop (sección 1.4 del plan) —
