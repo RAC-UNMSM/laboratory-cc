@@ -36,3 +36,13 @@ def test_es_cero_varias_variables():
     assert not es_cero(x - y)
     assert es_cero(sp.sin(x) ** 2 + sp.cos(x) ** 2 - 1)
     assert es_cero((x + y) ** 2 - x**2 - 2 * x * y - y**2)
+
+
+def test_e_minuscula_es_el_numero_de_euler():
+    """'e^t' debe ser exp(t), no una constante simbólica llamada e (antes daba τ = log(e)/…)."""
+    import sympy as sp
+    from core.utils_math import parsear_seguro, parsear_tupla
+    t, x = sp.symbols("t x")
+    assert parsear_seguro("e^t") == sp.exp(t)
+    assert parsear_seguro("x e^(-x^2)") == x * sp.exp(-x**2)
+    assert parsear_tupla("e^t cos t, e^t sin t, e^t") == [sp.exp(t) * sp.cos(t), sp.exp(t) * sp.sin(t), sp.exp(t)]

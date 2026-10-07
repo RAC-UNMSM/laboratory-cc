@@ -119,17 +119,28 @@ def herramientas_openai(tools: list[Any]) -> list[dict[str, Any]]:
 # Conexión con el servidor MCP
 # ════════════════════════════════════════════════════════════════════════════
 class ClienteMCP:
-    def __init__(self) -> None:
+    """Conecta con el servidor MCP:
+      • sin url → lo lanza como subproceso por STDIO (almacenamiento en carpeta local);
+      • con url → se conecta por streamable-http a un servidor ya desplegado (p. ej. detrás de Caddy)."""
+
+    def __init__(self, url: str | None = None) -> None:
+        self.url = url
         self._pila = AsyncExitStack()
         self.sesion: ClientSession | None = None
         self.instrucciones = ""
         self.tools: list[Any] = []
 
     async def __aenter__(self) -> "ClienteMCP":
-        params = StdioServerParameters(command=sys.executable, args=[str(RAIZ / "server.py")],
-                                       env={**os.environ, "MCP_MATH_LOG": os.environ.get("MCP_MATH_LOG", "WARNING")},
-                                       cwd=str(RAIZ))
-        lectura, escritura = await self._pila.enter_async_context(stdio_client(params))
+        if self.url:
+            from mcp.client.streamable_http import streamable_http_client
+            lectura, escritura, _ = await self._pila.enter_async_context(streamable_http_client(self.url))
+        else:
+            entorno = {**os.environ, "MCP_TRANSPORT": "stdio",
+                       "MCP_MATH_STORAGE": os.environ.get("MCP_MATH_STORAGE", "local"),
+                       "MCP_MATH_LOG": os.environ.get("MCP_MATH_LOG", "WARNING")}
+            params = StdioServerParameters(command=sys.executable, args=[str(RAIZ / "server.py"), "--stdio"],
+                                           env=entorno, cwd=str(RAIZ))
+            lectura, escritura = await self._pila.enter_async_context(stdio_client(params))
         self.sesion = await self._pila.enter_async_context(ClientSession(lectura, escritura))
         init = await self.sesion.initialize()
         self.instrucciones = init.instructions or ""
@@ -177,8 +188,9 @@ def _explicar_error(texto: str) -> str:
 
 
 def _abrir(ruta: str | None, abrir: bool) -> None:
+    """Abre el reporte: acepta una URL pública (https://…, file://…) o una ruta local."""
     if ruta and abrir:
-        webbrowser.open(Path(ruta).resolve().as_uri())
+        webbrowser.open(ruta if "://" in ruta else Path(ruta).resolve().as_uri())
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -213,6 +225,8 @@ async def responder_simulado(cli: ClienteMCP, pregunta: str, abrir: bool) -> str
     html = r["archivos"].get("html")
     if html:
         lineas += ["", f"Procedimiento completo y gráficos 3D: {html}"]
+        if r["archivos"].get("png"):
+            lineas.append(f"Gráfico (PNG): {r['archivos']['png']}")
         _abrir(html, abrir)
     lineas.append(f"(id del resultado: {r['id_resultado']})")
     return "\n".join(lineas)
@@ -287,7 +301,7 @@ class AgenteLLM:
 
 # ════════════════════════════════════════════════════════════════════════════
 async def principal(a: argparse.Namespace) -> None:
-    async with ClienteMCP() as cli:
+    async with ClienteMCP(a.url) as cli:
         _traza(f"Conectado al servidor MCP · herramientas: {', '.join(t.name for t in cli.tools)}")
         if a.simulado:
             _traza("Modo simulado (sin LLM): el ruteo lo hace diagnosticar_problema.")
@@ -332,7 +346,14 @@ def main() -> None:
     ap.add_argument("--base-url", help="URL de una API compatible con OpenAI (sobrescribe la del proveedor)")
     ap.add_argument("--clave-env", help="nombre de la variable de entorno con la API key")
     ap.add_argument("--abrir", action="store_true", help="abrir el reporte HTML en el navegador")
-    asyncio.run(principal(ap.parse_args()))
+    ap.add_argument("--url", default=os.environ.get("MCP_URL"),
+                    help="servidor MCP desplegado (streamable-http), p. ej. "
+                         "https://rac-unmsm.vekthos.org/grupo06/frenet-lagrange/mcp; sin esto se lanza server.py local")
+    args = ap.parse_args()
+    try:
+        asyncio.run(principal(args))
+    except KeyboardInterrupt:            # Ctrl + C: salir sin mostrar un traceback
+        print("\nSesión terminada (Ctrl + C). Para salir normalmente escribe 'salir'.")
 
 
 if __name__ == "__main__":

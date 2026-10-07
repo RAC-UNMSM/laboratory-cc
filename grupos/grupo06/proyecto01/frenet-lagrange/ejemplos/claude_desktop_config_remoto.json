@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "grupo06-frenet-lagrange": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://rac-unmsm.vekthos.org/grupo06/frenet-lagrange/mcp"]
+    }
+  }
+}

@@ -1,26 +1,50 @@
-# Servidor MCP por STDIO. Un cliente MCP no usa "docker compose up": lanza el contenedor
-# y le habla por stdin/stdout. Este archivo sirve para construir la imagen y probarla:
+# grupo06-frenet-lagrange — despliegue en el entorno del laboratorio.
+#
+# Requisitos: la red Docker externa «lab_net» ya existe y en ella corren SeaweedFS (DNS: seaweedfs,
+# API S3 en :8333) y Caddy. Caddy publica:
+#   https://rac-unmsm.vekthos.org/img/frenet-lagrange/…  → SeaweedFS (bucket frenet-lagrange-imgs)
+#   y el endpoint MCP de este servicio                     → grupo06-frenet-lagrange:8000/mcp
+# (ver despliegue/Caddyfile.ejemplo).
 #
 #   docker compose build
-#   docker compose run --rm mcp-math                      ← sesión STDIO interactiva (JSON-RPC)
-#   docker compose run --rm --entrypoint python mcp-math cli.py frenet --demo 1 --html /data/resultados/helice.html
+#   docker compose up -d
+#   docker compose logs -f
 #
-# Los resultados (JSON, HTML, PNG) quedan en ./resultados del equipo anfitrión.
+# Para probar TODO en tu PC (SeaweedFS + Caddy + este servidor): docker-compose.local.yml
 services:
-  mcp-math:
+  grupo06-frenet-lagrange:
     build: .
-    image: mcp-math-server:latest
-    stdin_open: true        # equivale a "docker run -i": mantiene stdin abierto (canal del protocolo)
-    tty: false              # sin TTY: el JSON-RPC debe viajar sin transformaciones
-    init: true              # reenvía señales y recoge procesos de cálculo huérfanos
+    image: grupo06-frenet-lagrange:latest
+    container_name: grupo06-frenet-lagrange      # nombre DNS dentro de lab_net (lo usa Caddy)
+    restart: unless-stopped
+    init: true                                   # recoge los procesos de cálculo que se terminan
     environment:
-      MCP_MATH_RESULTADOS: /data/resultados
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+      MCP_HTTP_PATH: /mcp
+      MCP_STATELESS: "1"                         # sin sesiones en memoria: escalable a varias réplicas
+      MCP_MATH_STORAGE: s3
+      MCP_GRUPO: grupo06
+      SEAWEEDFS_S3_URL: http://seaweedfs:8333
+      IMG_BUCKET: frenet-lagrange-imgs
+      PUBLIC_IMG_BASE_URL: https://rac-unmsm.vekthos.org/img/frenet-lagrange
+      MCP_MATH_PROCESOS: "1"                     # cálculos en procesos aparte (con límite de tiempo)
+      MCP_MATH_WORKERS: "2"                      # cálculos simultáneos por contenedor
       MCP_MATH_TIMEOUT: "120"
       MCP_MATH_LOG: INFO
-    volumes:
-      - ./resultados:/data/resultados
-    restart: "no"
+      # Solo si SeaweedFS exige credenciales S3:
+      # S3_ACCESS_KEY: ...
+      # S3_SECRET_KEY: ...
+    expose:
+      - "8000"                                   # visible para Caddy dentro de lab_net; no se publica al host
+    networks:
+      - lab_net
     deploy:
       resources:
         limits:
           memory: 2g
+
+networks:
+  lab_net:
+    external: true

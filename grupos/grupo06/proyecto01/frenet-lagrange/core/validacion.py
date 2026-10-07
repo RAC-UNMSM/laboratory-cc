@@ -26,6 +26,8 @@ _IDENT = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,15}$")
 _RESERVADOS = {"pi", "E", "I", "oo", "sin", "cos", "tan", "exp", "log", "ln", "sqrt", "abs", "Abs"}
 
 Expresion = Annotated[str, Field(min_length=1, max_length=400)]
+#: Ids de resultado: 8 hex (uuid4) en los nuevos; se aceptan 6 hex de versiones anteriores.
+_PATRON_ID = r"^(lagrange|hessiana|frenet)-\d{8}-\d{6}-[0-9a-f]{6}(?:[0-9a-f]{2})?$"
 
 
 def _expresion_valida(texto: str, campo: str) -> str:
@@ -69,7 +71,10 @@ class OpcionesSalida(BaseModel):
 
     generar_html: bool = Field(True, description="Genera la página web interactiva (procedimiento en LaTeX, "
                                                  "gráfico 3D dinámico, JSON). Devuelve su ruta.")
-    generar_png: bool = Field(False, description="Genera además una lámina PNG con los gráficos principales.")
+    generar_png: bool = Field(True, description="Genera una lámina PNG con los gráficos principales (se publica "
+                                                "como imagen Markdown y se adjunta como bloque Image).")
+    incluir_imagen: bool = Field(True, description="Adjunta en la respuesta una vista previa PNG (bloque Image) "
+                                                   "como respaldo por si el cliente no puede abrir las URLs.")
     offline: bool = Field(False, description="Incrusta Plotly.js en el HTML para verlo sin internet (~5 MB).")
     incluir_datos_grafico: bool = Field(False, description="Incluye en la respuesta los arreglos numéricos de los "
                                                            "gráficos (grandes; normalmente innecesario para el LLM).")
@@ -208,12 +213,11 @@ class SolicitudConsulta(BaseModel):
     """Identificador de un resultado guardado."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    id_resultado: str = Field(..., pattern=r"^(lagrange|hessiana|frenet)-\d{8}-\d{6}-[0-9a-f]{6}$",
+    id_resultado: str = Field(..., pattern=_PATRON_ID,
                               description="Id devuelto por una herramienta de cálculo, p. ej. "
-                                          "'hessiana-20261002-153012-a1b2c3'.")
+                                          "'hessiana-20261006-153012-a1b2c3d4'.")
 
 
-_PATRON_ID = r"^(lagrange|hessiana|frenet)-\d{8}-\d{6}-[0-9a-f]{6}$"
 
 
 class SolicitudCombinar(BaseModel):
@@ -224,7 +228,7 @@ class SolicitudCombinar(BaseModel):
         ..., min_length=1, max_length=30,
         description="id_resultado de cada ejercicio, EN EL ORDEN en que el usuario los planteó "
                     "(el primero será el «Ejercicio 1»).",
-        examples=[["lagrange-20261003-184603-938d92", "hessiana-20261003-184604-7c577c"]])
+        examples=[["lagrange-20261006-184603-938d92ab", "hessiana-20261006-184604-7c577c01"]])
     titulo: str | None = Field(None, max_length=120,
                                description="Título del reporte combinado (opcional), p. ej. 'Práctica 3 — Grupo 06'.")
     enunciados: list[Annotated[str, Field(max_length=600)]] | None = Field(

@@ -1,0 +1,15 @@
+# Caddy del entorno de prueba local (docker-compose.local.yml).
+:8080 {
+	# Archivos públicos: /img/frenet-lagrange/<clave>  →  SeaweedFS /frenet-lagrange-imgs/<clave>
+	handle_path /img/frenet-lagrange/* {
+		rewrite * /frenet-lagrange-imgs{path}
+		reverse_proxy seaweedfs:8333
+	}
+
+	# Endpoint MCP del grupo 06: /grupo06/frenet-lagrange/mcp  →  grupo06-frenet-lagrange:8000/mcp
+	handle_path /grupo06/frenet-lagrange/* {
+		reverse_proxy grupo06-frenet-lagrange:8000 {
+			flush_interval -1     # MCP responde con streaming (SSE): no acumular en búfer
+		}
+	}
+}

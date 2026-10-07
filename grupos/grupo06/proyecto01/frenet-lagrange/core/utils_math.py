@@ -66,7 +66,7 @@ FUNCIONES_PERMITIDAS: dict[str, Any] = {
     "sinh": sp.sinh, "cosh": sp.cosh, "tanh": sp.tanh, "asinh": sp.asinh, "acosh": sp.acosh, "atanh": sp.atanh,
     "exp": sp.exp, "log": sp.log, "ln": sp.log, "sqrt": sp.sqrt, "cbrt": sp.cbrt, "root": sp.root,
     "Abs": sp.Abs, "abs": sp.Abs, "sign": sp.sign, "floor": sp.floor, "ceiling": sp.ceiling,
-    "pi": sp.pi, "E": sp.E, "oo": sp.oo,
+    "pi": sp.pi, "E": sp.E, "e": sp.E, "oo": sp.oo,   # 'e^t' = exp(t): la e minúscula es el número de Euler
 }
 # nombres que necesitan las transformaciones de parse_expr internamente
 _INTERNOS: dict[str, Any] = {"Symbol": sp.Symbol, "Integer": sp.Integer, "Float": sp.Float,

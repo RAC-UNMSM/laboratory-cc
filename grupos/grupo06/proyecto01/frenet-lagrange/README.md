@@ -1,96 +1,166 @@
-# Servidor MCP «Frenet, Lagrange y Puntos Críticos» (Grupo 06 · UNMSM)
+# grupo06-frenet-lagrange — Servidor MCP «Frenet, Lagrange y Puntos Críticos» (Grupo 06 · UNMSM)
 
 Es un agente de IA para Cálculo en varias variables. El **LLM** (Claude, DeepSeek, Gemini…) entiende el
 enunciado y explica la solución. Toda la matemática la hace este **servidor MCP**, con **SymPy exacto**:
 fracciones y raíces, nunca decimales inventados.
 
+En el entorno del laboratorio el servidor corre en Docker, en la red `lab_net`, detrás de **Caddy**, y
+guarda los reportes en **SeaweedFS** (API S3). Las URLs que devuelve son públicas, así que el chat
+puede mostrar el gráfico y enlazar el reporte interactivo.
+
 ```
-Usuario ─▶ LLM ─(elige herramienta)─▶ cliente MCP ══STDIO══▶ server.py
-                                                   │
-          ┌─────────────── capa 1: core/validacion.py (Pydantic)   ¿la petición está bien formada?
-          ├─────────────── capa 2: core/verificador.py             ¿tiene sentido matemático?
-          ├─────────────── methods/metodo_*.py                     cálculo exacto (solo datos)
-          ├─────────────── core/visualizacion.py                   datos de gráficos + PNG
-          ├─────────────── core/reporte.py + templates/ (Jinja2)   página HTML interactiva
-          ├─────────────── storage.py                              resultados/<id>/…
-          └─────────────── core/combinado.py                       resultados_combinados/lote-…/ (varios ejercicios en 1 HTML)
+Cliente MCP (Claude, agente.py…)
+      │  HTTPS  https://rac-unmsm.vekthos.org/grupo06/frenet-lagrange/mcp
+      ▼
+   Caddy ──────────────▶ grupo06-frenet-lagrange:8000/mcp   (streamable-http, sin estado)
+      │                          │
+      │                          ├─ capa 1: core/validacion.py (Pydantic)   ¿la petición está bien formada?
+      │                          ├─ capa 2: core/verificador.py             ¿tiene sentido matemático?
+      │                          ├─ pool de procesos de cálculo (core/trabajador.py → core/motor.py)
+      │                          │     methods/* → core/visualizacion.py → core/reporte.py (Jinja2)
+      │                          └─ storage.py ──PUT S3──▶ seaweedfs:8333 / frenet-lagrange-imgs /
+      │                                                      grupo06/<id>/reporte.html, grafico.png, …
+      └─ /img/frenet-lagrange/grupo06/<id>/…  ◀── Caddy sirve esos objetos al navegador y al chat
 ```
+
+## Qué cambió respecto al avance anterior
+
+| Requisito | Dónde |
+|---|---|
+| Nombre del servidor `grupo06-frenet-lagrange` | `server.py` (`FastMCP(NOMBRE_SERVIDOR, …)`) |
+| Transporte **streamable-http** en `0.0.0.0:8000` (ruta `/mcp`) | `server.py`; STDIO sigue disponible con `--stdio` |
+| Almacenamiento en **SeaweedFS (S3)** con `urllib` | `storage.py` → `BackendS3` |
+| `ensure_bucket()` tolerante a que SeaweedFS aún no arranque | `BackendS3.preparar()` (alias `ensure_bucket`) |
+| Claves `grupo06/<id_resultado>/reporte.html · grafico.png · resultado.json` | `Almacen.clave()` |
+| URLs **públicas** (Caddy) en Markdown + bloque **Image** de respaldo | `server.py::_calcular` |
+| Ids con `uuid4` (8 hex) y fecha UTC | `storage.nuevo_id()` |
+| **Sin `indice.json`**: el listado se pide a S3 (`ListObjectsV2` + delimitador) | `Almacen.listar()` |
+| Varias peticiones a la vez | pool de `MCP_MATH_WORKERS` procesos + modo sin estado |
+| Dockerfile / compose en `lab_net` | `Dockerfile`, `docker-compose.yml`, `docker-compose.local.yml` |
+| Pruebas con SeaweedFS simulado | `tests/s3_simulado.py`, `tests/test_reporte_y_storage.py`, `tests/test_servidor_mcp.py` |
+
+**Nota técnica sobre `mcp.run(...)`.** En el SDK oficial (`mcp` 1.x), `FastMCP.run()` acepta **solo**
+el transporte. Escribir `mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)` da `TypeError`.
+Por eso `host` y `port` se pasan al **constructor**, `FastMCP(..., host="0.0.0.0", port=8000)`, y luego
+se llama `mcp.run(transport="streamable-http")`. El resultado es el mismo. Además, con `host="0.0.0.0"`
+el SDK no activa su protección anti DNS-rebinding de localhost, y por eso acepta el `Host` público que
+reenvía Caddy.
 
 ## Estructura
 
 ```
-mcp_math_server/
+frenet-lagrange/
 ├── methods/                 lógica matemática pura (sin gráficos ni HTML)
-│   ├── metodo_lagrange.py   multiplicadores, Hessiano orlado, puntos singulares
-│   ├── metodo_hessiana.py   ∇f = 0, Sylvester, Taylor de orden superior, extremos globales
-│   └── metodo_frenet.py     T, N, B, κ, τ, planos, verificación de Frenet–Serret
 ├── core/
 │   ├── utils_math.py        parser SEGURO, resolución exacta de sistemas, formato LaTeX
 │   ├── validacion.py        esquemas Pydantic (lo que ve el LLM)  ← capa 1
 │   ├── verificador.py       validaciones lógicas con códigos de error ← capa 2
-│   ├── diagnostico.py       lenguaje natural → método + argumentos (ruteo semántico)
-│   ├── visualizacion.py     TODO lo gráfico (Plotly/matplotlib) centralizado
+│   ├── diagnostico.py       lenguaje natural → método + argumentos
+│   ├── visualizacion.py     todo lo gráfico (Plotly/matplotlib)
 │   ├── reporte.py           inyecta resultados en las plantillas Jinja2
-│   ├── combinado.py         reúne varios reportes en UNA página con navegación (carpeta aparte)
-│   └── motor.py             orquesta un cálculo completo (se ejecuta en un proceso aparte)
-├── templates/               base.html.j2 + combinado*.html.j2 + static/ (CSS y JS por método)
-├── server.py                servidor MCP (FastMCP, STDIO)
-├── storage.py               persistencia: resultados/<id>/{entrada,resultado}.json, reporte.html, grafico.png
-├── agente.py                agente IA: LLM + cliente MCP (DeepSeek, Gemini, Claude, OpenAI, Ollama, o simulado)
+│   ├── combinado.py         varios ejercicios en UNA página (se publica en grupo06/lote-…/)
+│   ├── motor.py             un cálculo completo: verificar → resolver → graficar → reportar
+│   └── trabajador.py        proceso de cálculo (tuberías propias; se mata si excede el tiempo)
+├── templates/               base.html.j2, combinado*.html.j2, static/ (CSS y JS)
+├── server.py                servidor MCP (FastMCP) — streamable-http o STDIO
+├── storage.py               SeaweedFS S3 (o carpeta local con la misma estructura)
+├── agente.py                agente IA (DeepSeek, Gemini, Claude, OpenAI, Ollama o --simulado); local o --url
 ├── cli.py                   uso desde la terminal, sin LLM
-├── tests/                   pruebas (pytest), incluidas dos de punta a punta por STDIO
-├── ejemplos/                configuraciones para Claude Desktop (Python y Docker)
-├── legado/                  los tres metodos_*.py originales (referencia; mismos resultados)
-├── Dockerfile · docker-compose.yml · requirements*.txt
+├── tests/                   79 pruebas (pytest), con SeaweedFS simulado
+├── despliegue/              Caddyfile.ejemplo (laboratorio) y Caddyfile.local (prueba)
+├── ejemplos/                configuración de Claude Desktop (local y remota)
+├── legado/                  los tres metodos_*.py originales
+├── Dockerfile · docker-compose.yml · docker-compose.local.yml · requirements*.txt
 ```
 
-## Instalación
+## Almacenamiento: estructura en SeaweedFS
+
+```
+s3://frenet-lagrange-imgs/
+└── grupo06/
+    ├── hessiana-20261006-153012-a1b2c3d4/
+    │   ├── reporte.html      página interactiva (pestañas: resumen, procedimiento LaTeX, 3D, 2D, JSON)
+    │   ├── grafico.png       lámina estática
+    │   ├── resultado.json    resultado exacto
+    │   ├── entrada.json      solicitud validada
+    │   └── meta.json         id, método, fecha, descripción, resumen y URLs (se escribe AL FINAL)
+    └── lote-20261006-153500-9f8e7d6c/
+        ├── reporte_combinado.html
+        └── lote.json
+```
+
+**Por qué no hay índice compartido.** Con un `indice.json` único, dos réplicas que guardan a la vez
+leen la misma versión, cada una agrega su cálculo y la última en escribir borra el de la otra. Ahora
+cada cálculo escribe **solo** en su propio prefijo, con claves que nadie más usa. Para listar se le
+pregunta a S3 qué prefijos existen. `meta.json` se sube al final: si un cálculo quedó a medias, no
+aparece en el listado.
+
+## Respuesta de una herramienta de cálculo
+
+- **Texto 1 (Markdown)**, para copiarlo al chat:
+  ```
+  ![Reporte de cálculo](https://rac-unmsm.vekthos.org/img/frenet-lagrange/grupo06/<id>/reporte.html)
+  ![Gráfico — hessiana](https://rac-unmsm.vekthos.org/img/frenet-lagrange/grupo06/<id>/grafico.png)
+  [Abrir el reporte interactivo (procedimiento + gráfico 3D)](https://…/grupo06/<id>/reporte.html)
+  ```
+  Una imagen Markdown solo se dibuja si apunta a una imagen. Por eso, además del enlace al HTML que
+  pide el enunciado, se agrega la del PNG, que es la que el chat muestra. El HTML se abre con el enlace.
+- **Texto 2:** el JSON del resultado (también va como `structuredContent`).
+- **Image:** el PNG (≤1024 px, ~150–250 KB) como respaldo si el cliente no puede abrir las URLs.
+  Se desactiva con `salida.incluir_imagen = false`.
+
+Si SeaweedFS no responde, el cálculo igual se devuelve, con una advertencia y sin enlaces.
+
+## Despliegue en el laboratorio
 
 ```bash
-cd mcp_math_server
-pip install -r requirements.txt            # servidor y CLI
-pip install -r requirements-agente.txt     # además, para agente.py con un LLM real
-pip install -r requirements-dev.txt        # además, para las pruebas
+docker compose build
+docker compose up -d          # se une a la red externa lab_net; Caddy lo encuentra como grupo06-frenet-lagrange:8000
+docker compose logs -f
 ```
+Caddy necesita dos rutas: los archivos públicos hacia SeaweedFS y el endpoint MCP hacia este
+contenedor. Están en `despliegue/Caddyfile.ejemplo`. Para comprobar que el servidor responde:
+`GET /salud` (lo usa también el `HEALTHCHECK` del Dockerfile).
 
-## Uso
-
-### 1. Terminal (sin IA)
+### Prueba completa en tu PC (SeaweedFS + Caddy + servidor)
 ```bash
-python cli.py lagrange -f "x*y" -g "x^2 + y^2 = 8" --html lagrange.html
-python cli.py hessiana -f "x^4 + y^4 - 4xy + 1" --png h.png --html h.html --offline
-python cli.py frenet   -r "cos t, sin t, t" --t0 pi/4 --html helice.html
-python cli.py frenet   --demo 0 --html demo.html     # todas las demos
-python cli.py diagnostico "maximiza xy sobre la circunferencia x^2+y^2=8"
+docker compose -f docker-compose.local.yml up -d --build
+python agente.py --simulado --url http://localhost:8080/grupo06/frenet-lagrange/mcp
 ```
 
-### 2. Agente IA
+## Uso local (sin Docker)
+
 ```bash
-python agente.py --simulado                                        # sin API key: ideal para exponer
-python agente.py --proveedor deepseek                              # variable DEEPSEEK_API_KEY
-python agente.py --proveedor gemini --modelo <id-del-modelo>       # variable GEMINI_API_KEY
-python agente.py --proveedor claude --modelo <id-del-modelo>       # variable ANTHROPIC_API_KEY
-python agente.py --proveedor ollama --modelo <modelo-local>        # sin internet
-python agente.py --simulado -p "curvatura de r(t)=(cos t, sin t, t) en t=0" --abrir
-```
-Para la clave en Windows (PowerShell) usa `$env:DEEPSEEK_API_KEY="sk-..."`; en Linux/macOS, `export DEEPSEEK_API_KEY=sk-...`.
-
-### 3. Como servidor MCP de Claude Desktop (u otro cliente MCP)
-Copia `ejemplos/claude_desktop_config.json` dentro del `claude_desktop_config.json` de Claude Desktop,
-cambia `C:\RUTA\A\...` por tu ruta real y reinicia la aplicación. Aparecerán las 6 herramientas.
-Con Docker, usa `ejemplos/claude_desktop_config_docker.json`.
-
-### 4. Docker
-```bash
-docker build -t mcp-math-server .
-docker run -i --rm -v "$PWD/resultados:/data/resultados" mcp-math-server     # -i es obligatorio (STDIO)
-docker compose run --rm mcp-math                                              # equivalente con compose
+pip install -r requirements-dev.txt          # servidor, agente y pruebas
+python -m pytest -q                          # 79 pruebas
+python agente.py --simulado --abrir          # lanza server.py por STDIO con almacenamiento local
+python server.py --stdio                     # lo que ejecuta Claude Desktop (ver ejemplos/)
+python server.py                             # HTTP en 0.0.0.0:8000 (necesita SeaweedFS o MCP_MATH_STORAGE=local)
+python cli.py frenet -r "cos t, sin t, t" --t0 pi/4 --html helice.html
 ```
 
-### 5. Pruebas
-```bash
-python -m pytest -q
-```
+- **Claude Desktop con el servidor en tu PC:** `ejemplos/claude_desktop_config.json`.
+  Pasa `--stdio` y `MCP_MATH_STORAGE=local`.
+- **Claude Desktop con el servidor desplegado:** `ejemplos/claude_desktop_config_remoto.json`.
+  Usa el puente `mcp-remote` y necesita Node.js.
+
+## Variables de entorno
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `MCP_TRANSPORT` | `streamable-http` | `stdio` para Claude Desktop / agente local (o `--stdio`) |
+| `MCP_HOST` / `MCP_PORT` / `MCP_HTTP_PATH` | `0.0.0.0` / `8000` / `/mcp` | dónde escucha el servidor HTTP |
+| `MCP_STATELESS` | `1` | sin sesiones en memoria → cualquier réplica atiende cualquier petición |
+| `MCP_MATH_STORAGE` | `auto` | `s3`, `local`, o `auto` (S3 si es HTTP, local si es STDIO) |
+| `SEAWEEDFS_S3_URL` | `http://seaweedfs:8333` | API S3 (DNS interno de Docker) |
+| `IMG_BUCKET` | `frenet-lagrange-imgs` | bucket asignado |
+| `PUBLIC_IMG_BASE_URL` | `https://rac-unmsm.vekthos.org/img/frenet-lagrange` | base de las URLs públicas |
+| `MCP_GRUPO` | `grupo06` | prefijo de todas las claves |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | — | solo si SeaweedFS exige credenciales (firma AWS SigV4) |
+| `MCP_MATH_WORKERS` | `2` | cálculos simultáneos por contenedor |
+| `MCP_MATH_TIMEOUT` | `120` | segundos máximos por cálculo |
+| `MCP_MATH_PROCESOS` | `1` | `0` = calcular en el mismo proceso (depuración, sin límite de tiempo) |
+| `MCP_MATH_RESULTADOS` | `./resultados` | carpeta del modo local |
 
 ## Herramientas MCP
 
@@ -100,49 +170,34 @@ python -m pytest -q
 | `optimizar_con_restricciones` | máx/mín de f **sujeto a** igualdades g = c (Lagrange) |
 | `analizar_puntos_criticos` | máx/mín relativos, sillas, Hessiana, **sin** restricciones |
 | `analizar_curva_frenet` | curva r(t): T, N, B, curvatura, torsión, planos |
-| `listar_resultados` / `obtener_resultado` | historial guardado |
-| `combinar_reportes` | el usuario envió **varios ejercicios a la vez** → un solo HTML con navegación entre ellos |
-
-También hay recursos (`resultados://{id}`, `ayuda://metodos`) y un prompt (`resolver_problema`).
-
-## Varios ejercicios a la vez: reporte combinado
-
-Si el usuario envía dos o más ejercicios en un mismo mensaje, el LLM resuelve **cada uno** con su
-herramienta (cada ejercicio conserva su carpeta y su `reporte.html` individual en `resultados/`) y al
-final llama a `combinar_reportes` con los `id_resultado` en orden. Se crea, en una carpeta **aparte**:
-
-```
-resultados_combinados/
-└── lote-20261003-190512-a1b2c3/
-    ├── reporte_combinado.html   ← los N ejercicios, cada uno con sus 5 pestañas
-    └── lote.json                ← qué ejercicios contiene y en qué orden
-```
-
-La página tiene barra con «← Anterior / Siguiente ejercicio →», puntos numerados, un índice con el
-enunciado y el resumen de cada ejercicio, botones al final de cada reporte y atajos (`←` `→`, `I`).
-Cada reporte individual se copia completo dentro del combinado, así que este sigue funcionando aunque
-se borren las carpetas individuales. No recalcula nada ni modifica los reportes individuales.
+| `listar_resultados` / `obtener_resultado` | historial (listado directo desde S3) |
+| `combinar_reportes` | varios ejercicios en un mensaje → un solo HTML con navegación |
 
 ## Validación en dos capas
 
-1. **Estructural (Pydantic, `core/validacion.py`).** El SDK genera el JSON Schema a partir de estos modelos
-   y rechaza la llamada **antes de ejecutar nada** en estos casos: falta un campo, sobra un campo, la
-   expresión no se puede interpretar o la restricción es una desigualdad.
-2. **Lógica (`core/verificador.py`).** Cada error devuelve un `codigo`, un `mensaje` y una `sugerencia`
-   que el LLM explica al usuario. Códigos: `DIVISION_POR_CERO`, `RESTRICCION_IMPOSIBLE`
-   (p. ej. x²+y² = −1), `SOBREDETERMINADO` (más restricciones que variables), `FUNCION_CONSTANTE`,
-   `HESSIANA_NO_CUADRADA`, `CURVATURA_CERO` (la curva es una recta), `PUNTO_SINGULAR`,
-   `CURVATURA_CERO_EN_T0`, `T0_FUERA_DEL_DOMINIO`, `SIMBOLOS_NO_DECLARADOS`, entre otros.
+1. **Estructural (Pydantic, `core/validacion.py`).** El SDK rechaza la llamada antes de ejecutar nada si:
+   - falta un campo o sobra uno;
+   - una expresión no se puede interpretar;
+   - una restricción es una desigualdad.
+2. **Lógica (`core/verificador.py`).** Cada error trae `codigo`, `mensaje` y `sugerencia`. Algunos códigos:
+   - `DIVISION_POR_CERO`;
+   - `RESTRICCION_IMPOSIBLE` (p. ej. x²+y² = −1);
+   - `SOBREDETERMINADO`;
+   - `FUNCION_CONSTANTE`;
+   - `CURVATURA_CERO` (la curva es una recta);
+   - `PUNTO_SINGULAR`.
 
-## Seguridad y robustez
-- **Parser seguro.** Lista blanca de funciones, sin `__builtins__` y con caracteres filtrados. Una entrada
-  como `__import__('os')` se rechaza.
-- **Tiempo límite.** Cada cálculo corre en un proceso aparte con límite de tiempo (`MCP_MATH_TIMEOUT`,
-  120 s por defecto). Si se excede, el proceso se termina y el servidor sigue respondiendo.
-- **STDIO limpio.** Nada se imprime en stdout; los logs van a stderr.
-- **Ids validados.** Los ids de resultados se validan para impedir el acceso a rutas fuera de `resultados/`.
+## Pruebas
 
-## Variables de entorno
-`MCP_MATH_RESULTADOS` (carpeta de salida), `MCP_MATH_COMBINADOS` (reportes combinados; por defecto
-`resultados_combinados/` junto a `resultados/`), `MCP_MATH_TIMEOUT`,
-`MCP_MATH_PROCESOS=0` (calcular en el mismo proceso, para depurar), `MCP_MATH_LOG`.
+`python -m pytest -q` ejecuta 79 pruebas. Las de almacenamiento y servidor usan
+`tests/s3_simulado.py`, un SeaweedFS de mentira en un hilo que registra cada petición. Verifican:
+
+- **el bucket:** `PUT /frenet-lagrange-imgs/` al arrancar y la tolerancia a SeaweedFS caído;
+- **las claves:** que existan las de `grupo06/<id>/` y que no haya `indice.json`;
+- **la respuesta:** los Content-Type, las URLs públicas en Markdown y el bloque Image;
+- **el listado:** `ListObjectsV2` con prefijo y delimitador;
+- **la firma:** SigV4 cuando hay credenciales;
+- **la concurrencia:** 4 clientes simultáneos con ids distintos.
+
+Durante el desarrollo también se comprobó contra un **SeaweedFS 4.48 real**, en modo anónimo y con
+credenciales, y a través de **Caddy 2.10**.
