@@ -159,6 +159,26 @@ git mv "grupos/grupoNN/MI-APP" grupos/grupoNN/proyecto01/mi-app
 - **No copies código del piloto cambiándole el nombre.** Se copia el patrón
   (un módulo por rol, `server.py` como orquestador), no el tema.
 
+## El `.gitignore`: lo local nunca se sube
+
+El validador recorre la carpeta del grupo buscando lo que se instala o se
+genera en la laptop: entornos virtuales con cualquier nombre, `node_modules`,
+librerías instaladas con pip, caches, instaladores, comprimidos, modelos
+entrenados, bases de datos locales, `.env`, archivos de más de 5 MB. Para cada
+cosa comprueba si el `.gitignore` la cubre.
+
+- **Cubierto:** no hay nada que hacer.
+- **Cubierto solo por el `.gitignore` de `main`:** la rama está atrasada; se
+  arregla con `git merge origin/main`.
+- **Sin cubrir:** es error, porque un `git add .` lo subiría. El alumno agrega
+  el patrón a **`grupos/grupoNN/.gitignore`** (el suyo). El de la raíz no lo
+  toca: el validador le pasa esos patrones al administrador para que los
+  agregue al general.
+
+Lo mismo aplica a lo que la rama haya tocado fuera de `grupos/grupoNN/`: si es
+algo generado o local, se le dice al administrador qué patrón falta; si es un
+cambio real a un archivo del repo, se deshace.
+
 ## Cuándo avisar al administrador
 
 Cada grupo hace algo distinto, así que el servidor no puede adivinarlo. El
@@ -177,6 +197,13 @@ mayoría; tú completa lo que veas al leer el código:
 - Volúmenes (datos que deben sobrevivir a un reinicio) o más de 512 MB de memoria.
 - Programas del sistema instalados con `apt-get` (LaTeX, ffmpeg…): imagen
   pesada, y el build tiene un límite de 15 minutos.
+- **Algo que haya que instalar o configurar en el servidor.** El servidor solo
+  ofrece SeaweedFS. Si el proyecto usa una base de datos (PostgreSQL, MongoDB,
+  Redis…), un modelo o una API de IA (OpenAI, Anthropic, Ollama…) u otro
+  servicio, no funcionará hasta que el administrador lo instale y le pase la
+  conexión. El validador lo deduce de `requirements.txt`.
+- Librerías muy pesadas (torch, tensorflow, opencv…): disco, tiempo de build y
+  memoria.
 - Llamadas a servicios externos de internet.
 - Cualquier tipo de archivo o carpeta que no sea código, documentación o los
   archivos de despliegue.

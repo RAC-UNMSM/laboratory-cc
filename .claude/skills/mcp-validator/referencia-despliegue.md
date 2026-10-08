@@ -109,6 +109,13 @@ matplotlib
   estándar de Python. Lo que funciona en la laptop porque ya estaba instalado
   falla en el contenedor con `ModuleNotFoundError`.
 - Sin paquetes repetidos: `pip` aborta con "Double requirement given".
+- Solo lo que el proyecto importa. No la salida de `pip freeze`, que vuelca
+  todo lo instalado en la laptop.
+- Sin paquetes exclusivos de Windows (`pywin32` y similares): el servidor es
+  Linux y la imagen no se construye.
+- Sin instalaciones desde rutas locales (`-e .`, `C:\...`, `file://`).
+- Las herramientas de desarrollo (black, jupyter, pyinstaller…) van en un
+  `requirements-dev.txt` aparte.
 - `mcp==2.1.1` fijo. En la 2.x la clase es `MCPServer` y vive en
   `mcp.server.mcpserver`; en la 1.x era `FastMCP` en `mcp.server.fastmcp`.
   Sin fijar la versión, un build futuro puede romper los imports.

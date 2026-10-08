@@ -89,6 +89,62 @@ PAQUETE_PROVEE = {
     "fastapi": {"fastapi", "starlette", "pydantic"},
     "matplotlib": {"matplotlib", "mpl_toolkits", "pylab"},
 }
+# Carpetas del profesor que no siguen el formato de los grupos: no se revisan.
+APPS_EXCLUIDAS = {("g01", "apps")}
+
+# requirements.txt: paquetes que delatan algo que el servidor no trae de serie.
+REQ_SERVICIOS = {
+    "psycopg2": "una base PostgreSQL", "psycopg2-binary": "una base PostgreSQL", "psycopg": "una base PostgreSQL",
+    "asyncpg": "una base PostgreSQL", "pymongo": "una base MongoDB", "motor": "una base MongoDB",
+    "redis": "un servidor Redis", "mysqlclient": "una base MySQL", "pymysql": "una base MySQL",
+    "mysql-connector-python": "una base MySQL", "boto3": "credenciales S3", "minio": "credenciales S3",
+    "openai": "una clave de API de OpenAI", "anthropic": "una clave de API de Anthropic",
+    "google-generativeai": "una clave de API de Google", "google-genai": "una clave de API de Google",
+    "groq": "una clave de API de Groq", "cohere": "una clave de API de Cohere", "ollama": "un servidor Ollama",
+    "chromadb": "una base vectorial", "qdrant-client": "una base vectorial (Qdrant)", "pinecone": "una clave de Pinecone",
+    "celery": "un broker de colas (Redis/RabbitMQ)", "pika": "un servidor RabbitMQ", "elasticsearch": "un servidor Elasticsearch",
+}
+REQ_PESADOS = {
+    "torch", "torchvision", "tensorflow", "tensorflow-cpu", "keras", "jax", "transformers", "opencv-python",
+    "opencv-contrib-python", "playwright", "selenium", "manim", "pyspark", "easyocr", "paddlepaddle",
+    "onnxruntime", "xgboost", "lightgbm", "spacy", "sentence-transformers", "diffusers",
+}
+REQ_SOLO_LOCAL = {
+    "black", "flake8", "ruff", "mypy", "pylint", "autopep8", "isort", "ipython", "jupyter", "notebook",
+    "jupyterlab", "ipykernel", "pyinstaller", "pip", "setuptools", "wheel", "virtualenv", "pipenv", "poetry",
+    "twine", "build", "pre-commit", "debugpy", "tox", "coverage", "pytest-cov", "pip-tools", "nbconvert",
+}
+REQ_SOLO_WINDOWS = {
+    "pywin32", "pypiwin32", "pywin32-ctypes", "wmi", "winshell", "pywinpty", "comtypes", "windows-curses",
+    "pywinauto", "win32-setctime", "winrt",
+}
+
+# Lo que se genera o se instala en la laptop y nunca debe subirse:
+# (patrón de .gitignore, qué es). Se compara contra el .gitignore vigente.
+BASURA_CARPETAS = {
+    "node_modules": "dependencias de Node", "site-packages": "librerías instaladas con pip",
+    "__pycache__": "cache de Python", ".pytest_cache": "cache de pytest", ".mypy_cache": "cache de mypy",
+    ".ruff_cache": "cache de ruff", ".ipynb_checkpoints": "respaldos de Jupyter", ".idea": "configuración de PyCharm",
+    ".vscode": "configuración de VS Code", ".vs": "configuración de Visual Studio", ".tox": "entornos de tox",
+    "htmlcov": "reporte de cobertura", ".cache": "cache", ".gradle": "cache de Gradle", ".git": "otro repositorio git dentro del repo",
+    "dist": "paquetes generados", ".eggs": "paquetes descargados",
+}
+BASURA_EXT = {
+    ".pyc": "bytecode de Python", ".pyo": "bytecode de Python", ".exe": "ejecutable de Windows", ".msi": "instalador de Windows",
+    ".dll": "librería de Windows", ".so": "librería compilada", ".dylib": "librería compilada", ".whl": "paquete de pip descargado",
+    ".egg": "paquete de pip descargado", ".zip": "comprimido", ".rar": "comprimido", ".7z": "comprimido", ".tgz": "comprimido",
+    ".log": "log", ".sqlite": "base de datos local", ".sqlite3": "base de datos local", ".db": "base de datos local",
+    ".pem": "clave privada", ".key": "clave privada", ".tmp": "temporal", ".bak": "copia de respaldo", ".lnk": "acceso directo de Windows",
+    ".deb": "instalador", ".dmg": "instalador", ".jar": "binario de Java", ".class": "binario de Java", ".o": "objeto compilado",
+    ".pkl": "datos/modelo serializado", ".pt": "modelo entrenado", ".pth": "modelo entrenado", ".h5": "modelo entrenado",
+    ".onnx": "modelo entrenado", ".joblib": "modelo serializado", ".ckpt": "modelo entrenado", ".safetensors": "modelo entrenado",
+}
+BASURA_NOMBRES = {
+    ".env": "variables de entorno con posibles secretos", ".DS_Store": "archivo de macOS", "Thumbs.db": "archivo de Windows",
+    "desktop.ini": "archivo de Windows", "pyvenv.cfg": "entorno virtual", "pip-log.txt": "log de pip", ".coverage": "datos de cobertura",
+    "nohup.out": "salida de consola",
+}
+
 # Extensiones habituales en una entrega; lo demás se le menciona al administrador.
 EXT_HABITUALES = {
     ".py", ".md", ".txt", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".json",
@@ -212,7 +268,7 @@ def resumir_rutas(rutas: list[str], niveles: int = 4, tope: int = 12) -> list[st
 
 def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     rep.en("Git: qué se está subiendo")
-    ctx = {"nuevos": [], "base_ok": False, "ignorados": set()}
+    ctx = {"nuevos": [], "base_ok": False, "ignorados": set(), "base": base}
 
     code, rama = git(repo, "rev-parse", "--abbrev-ref", "HEAD")
     if code != 0:
@@ -276,6 +332,7 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
         rep.ok("No hay entornos virtuales, caches ni binarios subidos.")
 
     fuera, nuevos = [], []
+    ctx["fuera_rutas"] = []
     for linea in diff.splitlines():
         partes = linea.split("\t")
         if len(partes) < 2:
@@ -284,6 +341,7 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
         if not ruta.startswith(prefijo):
             if ruta in distinto_de_main:
                 fuera.append(f"{estado[0]}  {ruta}")
+                ctx["fuera_rutas"].append(ruta)
         elif estado.startswith("A"):
             nuevos.append(ruta)
     ctx["nuevos"] = nuevos
@@ -330,6 +388,8 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     for linea in porcelana.splitlines():
         ruta = linea[2:].strip().split(" -> ")[-1].strip('"')
         (pend_dentro if ruta.startswith(prefijo) else pend_fuera).append(f"{linea[:2].strip() or '?'}  {ruta}")
+        if not ruta.startswith(prefijo):
+            ctx["fuera_rutas"].append(ruta.rstrip("/"))
     if pend_fuera:
         rep.aviso(
             f"Tienes {len(pend_fuera)} cambio(s) sin confirmar FUERA de tu carpeta. No los agregues al commit "
@@ -354,6 +414,138 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
         rep.aviso("Archivos de más de 1 MB (¿de verdad hacen falta en el repo?):\n      " + "\n      ".join(pesados[:10]))
 
     return ctx
+
+
+def clasificar_basura(ruta: str) -> tuple[str, str] | None:
+    """(patrón de .gitignore, qué es) si la ruta parece algo generado o
+    instalado en local; None si parece parte legítima del proyecto."""
+    partes = ruta.split("/")
+    for carpeta in partes[:-1]:
+        if carpeta in BASURA_CARPETAS:
+            return f"{carpeta}/", BASURA_CARPETAS[carpeta]
+        if carpeta.endswith((".egg-info", ".dist-info")):
+            return f"*{Path(carpeta).suffix}/", "paquete instalado con pip"
+    nombre = partes[-1]
+    if nombre in BASURA_NOMBRES:
+        return nombre, BASURA_NOMBRES[nombre]
+    if nombre.startswith(".env.") and nombre != ".env.example":
+        return ".env.*", BASURA_NOMBRES[".env"]
+    if nombre.startswith("~$"):
+        return "~$*", "temporal de Office"
+    if nombre.endswith(".tar.gz"):
+        return "*.tar.gz", "comprimido"
+    ext = Path(nombre).suffix.lower()
+    if ext in BASURA_EXT:
+        return f"*{ext}", BASURA_EXT[ext]
+    return None
+
+
+def revisar_gitignore(repo: Path, grupo: str, rep: Reporte, ctx: dict) -> None:
+    """Busca en la carpeta del grupo (y en lo que la rama cambió fuera de ella)
+    cosas generadas o instaladas en local, y comprueba que el .gitignore las
+    cubra. Lo que no esté cubierto se subiría con un `git add .`."""
+    rep.en("`.gitignore`: lo que se instala o se genera en local")
+    grupo_dir = repo / "grupos" / grupo
+    prefijo = f"grupos/{grupo}/"
+
+    candidatos: dict[str, tuple[str, str]] = {}
+    venvs: list[str] = []
+    for raiz, dirs, archivos in os.walk(grupo_dir):
+        actual = Path(raiz)
+        for d in list(dirs):
+            sub_dir = actual / d
+            relativa = rel(sub_dir, repo)
+            if es_venv(sub_dir) or ((sub_dir / "Lib" / "site-packages").is_dir()) or ((sub_dir / "Scripts" / "python.exe").is_file()):
+                venvs.append(relativa)
+                candidatos[relativa + "/pyvenv.cfg"] = (f"{d}/", "entorno virtual")
+                dirs.remove(d)
+            elif d in BASURA_CARPETAS or d.endswith((".egg-info", ".dist-info")):
+                # Basta un archivo de muestra: no hace falta recorrer miles.
+                muestra = next((p for p in sub_dir.rglob("*") if p.is_file()), None)
+                clase = clasificar_basura(relativa + "/x")
+                if muestra is not None and clase:
+                    candidatos[rel(muestra, repo)] = clase
+                dirs.remove(d)
+        for a in archivos:
+            relativa = rel(actual / a, repo)
+            clase = clasificar_basura(relativa)
+            if clase:
+                candidatos[relativa] = clase
+            elif (actual / a).stat().st_size > 5_000_000:
+                candidatos[relativa] = (a, f"archivo de {(actual / a).stat().st_size / 1048576:.0f} MB")
+
+    # Lo que la rama agregó o modificó fuera de su carpeta y parece local.
+    for ruta in ctx.get("fuera_rutas", []):
+        clase = clasificar_basura(ruta)
+        if clase and (repo / ruta).exists():
+            candidatos[ruta] = clase
+
+    if not candidatos:
+        rep.ok("No encontré entornos virtuales, caches, instaladores ni archivos generados en tu carpeta.")
+        return
+
+    # ¿Cuáles cubre ya el .gitignore? Cuenta el de la rama (raíz + los de la
+    # carpeta) y también el de main: si la rama está atrasada, lo que main ya
+    # ignora queda cubierto en cuanto se actualice.
+    def cubiertos_con(extra: list[str]) -> set[str]:
+        try:
+            r = subprocess.run(
+                ["git", "-c", "core.quotepath=off", *extra, "check-ignore", "--no-index", "--stdin"], cwd=repo,
+                input="\n".join(candidatos), capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+        except FileNotFoundError:
+            return set()
+        return set(r.stdout.splitlines())
+
+    cubiertos = cubiertos_con([])
+    code_main, ignore_main = git(repo, "show", f"{ctx.get('base', 'origin/main')}:.gitignore")
+    if code_main == 0 and ignore_main:
+        with tempfile.NamedTemporaryFile("w", suffix=".gitignore", delete=False, encoding="utf-8") as fh:
+            fh.write(ignore_main + "\n")
+        try:
+            solo_main = cubiertos_con(["-c", f"core.excludesFile={fh.name}"]) - cubiertos
+        finally:
+            os.unlink(fh.name)
+        if solo_main:
+            rep.aviso(
+                f"{len(solo_main)} elemento(s) locales de tu carpeta solo quedan ignorados con el `.gitignore` actual de `main`, "
+                "que tu rama todavía no tiene. Actualiza la rama (`git merge origin/main`) antes de hacer `git add`."
+            )
+        cubiertos |= solo_main
+    _, tracked = git(repo, "ls-files", "--", prefijo, *ctx.get("fuera_rutas", []))
+    en_git = set(tracked.splitlines())
+
+    sin_cubrir: dict[str, list[str]] = {}
+    descripcion: dict[str, str] = {}
+    subidos = 0
+    for ruta, (patron, que) in sorted(candidatos.items()):
+        if ruta in cubiertos:
+            continue
+        sin_cubrir.setdefault(patron, []).append(ruta)
+        descripcion[patron] = que
+        subidos += ruta in en_git or any(t.startswith(ruta.rsplit("/", 1)[0] + "/") for t in en_git if "/pyvenv.cfg" in ruta)
+
+    cubiertos_n = len(candidatos) - sum(len(x) for x in sin_cubrir.values())
+    if not sin_cubrir:
+        rep.ok(f"Lo local que hay en tu carpeta ({cubiertos_n} elemento(s): entornos, caches, generados) ya está cubierto por el `.gitignore`.")
+        return
+
+    lineas = [f"{patron:<22} # {descripcion[patron]}  (ej. {rutas[0]})" for patron, rutas in sorted(sin_cubrir.items())]
+    propio = f"grupos/{grupo}/.gitignore"
+    rep.error(
+        f"Hay {sum(len(x) for x in sin_cubrir.values())} elemento(s) locales que el `.gitignore` NO cubre: un `git add .` los subiría"
+        + (" (y algunos ya están subidos)" if subidos else "") + ".\n      "
+        + "\n      ".join(lineas)
+        + f"\n    Agrega esos patrones a `{propio}` (el de la raíz no lo tocas tú)"
+        + (", y saca de git lo ya subido con `git rm -r --cached <ruta>`." if subidos else "."),
+        siempre=True,
+    )
+    rep.para_admin(
+        "Patrones que faltan en el `.gitignore` general de la raíz (aparecieron en esta entrega): "
+        + ", ".join(f"`{p}` ({descripcion[p]})" for p in sorted(sin_cubrir)) + "."
+    )
+    if venvs:
+        rep.info("Entornos virtuales detectados en tu carpeta: " + ", ".join(f"`{x}`" for x in venvs[:5]) + ". Son locales: nunca se suben.")
 
 
 # --- 2. Estructura ----------------------------------------------------------------
@@ -384,7 +576,9 @@ def buscar_apps(grupo_dir: Path) -> list[Path]:
     for raiz, dirs, archivos in os.walk(grupo_dir):
         actual = Path(raiz)
         dirs[:] = sorted(d for d in dirs if d not in CARPETAS_OMITIDAS and not es_venv(actual / d))
-        if actual != grupo_dir and any(m in archivos for m in MARCADORES_APP):
+        if actual == grupo_dir:
+            dirs[:] = [d for d in dirs if (grupo_dir.name, d) not in APPS_EXCLUIDAS]
+        elif any(m in archivos for m in MARCADORES_APP):
             apps.append(actual)
             dirs[:] = []  # lo que haya debajo es parte de esta app
     return apps
@@ -842,6 +1036,23 @@ def revisar_dockerfile(app: Path, repo: Path, rep: Reporte, codigo: Codigo, dato
     if copia_todo and not (app / ".dockerignore").is_file():
         rep.aviso("El Dockerfile hace `COPY . .` sin `.dockerignore`: mete en la imagen tests, caches y lo que haya en la carpeta. Copia solo lo necesario o agrega un `.dockerignore`.")
 
+    # Programas de sistema que la imagen instala: el administrador debe saberlo.
+    paquetes_so: list[str] = []
+    for l in lineas:
+        for trozo in re.split(r"&&|;", l):
+            m_inst = re.search(r"\b(?:apt-get|apt|apk|yum|dnf)\s+(?:-\S+\s+)*(?:install|add)\s+(.*)", trozo)
+            if m_inst:
+                paquetes_so += [t for t in m_inst.group(1).split() if not t.startswith("-") and re.fullmatch(r"[a-z0-9][a-z0-9.+_-]*", t)]
+    if paquetes_so:
+        datos["paquetes_so"] = sorted(set(paquetes_so))
+        rep.info(f"La imagen instala programas de sistema: {', '.join(datos['paquetes_so'])}.")
+        rep.para_admin(
+            f"La imagen instala programas de sistema con el gestor de paquetes ({', '.join(datos['paquetes_so'])}). "
+            f"Se instalan dentro del contenedor, no en el servidor, pero alargan el build (límite: {BUILD_MIN} min) y ocupan disco."
+        )
+    if re.search(r"\b(npm|yarn|pnpm)\s+(install|ci|add)\b|\bcurl\b.*\|\s*(ba)?sh|\bwget\b", texto):
+        rep.para_admin("El Dockerfile descarga o instala cosas de internet durante el build (npm/curl/wget): revisar qué trae.")
+
     arranque = [l for l in lineas if l.upper().startswith(("CMD", "ENTRYPOINT"))]
     if not arranque:
         rep.error("El Dockerfile no tiene `CMD`: el contenedor no sabe qué ejecutar. Usa `CMD [\"python\", \"server.py\"]`.")
@@ -870,6 +1081,12 @@ def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) ->
     for n, cruda in enumerate(leer(req).splitlines(), 1):
         linea = cruda.split("#", 1)[0].strip()
         if not linea:
+            continue
+        if re.match(r"^(-e\b|--editable\b|\.{0,2}[\\/]|[A-Za-z]:[\\/]|file:)", linea) or re.search(r"@\s*file:|[A-Za-z]:\\\\", linea):
+            rep.error(
+                f"`requirements.txt` línea {n} instala desde una ruta de tu laptop: `{cruda.strip()}`. En el servidor esa ruta "
+                "no existe. Pon el nombre del paquete publicado en PyPI, o incluye ese código dentro de la carpeta del proyecto."
+            )
             continue
         if linea.startswith("-"):
             continue
@@ -913,9 +1130,45 @@ def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) ->
         rep.ok("`requirements.txt` cubre todas las librerías que importa el código.")
 
     usados = {normalizar_paquete(IMPORT_A_PAQUETE.get(m, m)) for solo in (False, True) for m in codigo.terceros(solo)}
-    sobran = sorted(p for p in declarados if p not in usados and p not in {"uvicorn", "pytest", "mcp"})
-    if sobran:
+    solo_windows = sorted(p for p in declarados if p in REQ_SOLO_WINDOWS)
+    if solo_windows:
+        rep.error(
+            f"`requirements.txt` incluye paquetes que solo existen para Windows ({', '.join(solo_windows)}). El servidor es "
+            "Linux: `pip install` falla y la imagen no se construye. Quítalos (suelen colarse al hacer `pip freeze`)."
+        )
+    locales = sorted(p for p in declarados if p in REQ_SOLO_LOCAL)
+    if locales:
+        rep.aviso(
+            f"`requirements.txt` incluye herramientas de desarrollo ({', '.join(locales)}) que solo se usan en tu laptop. "
+            "No van en la imagen: muévelas a un `requirements-dev.txt`."
+        )
+    sobran = sorted(p for p in declarados if p not in usados and p not in {"uvicorn", "pytest", "mcp"} | REQ_SOLO_LOCAL | REQ_SOLO_WINDOWS)
+    if len(sobran) > 10:
+        rep.aviso(
+            f"`requirements.txt` lista {len(sobran)} paquetes que ningún archivo importa (ej. {', '.join(sobran[:6])}…). Parece la salida de "
+            "`pip freeze`, que vuelca todo lo instalado en tu laptop. Deja solo lo que el proyecto importa."
+        )
+    elif sobran:
         rep.aviso(f"`requirements.txt` lista paquetes que ningún archivo importa ({', '.join(sobran)}): quítalos si no se usan, alargan el build.")
+
+    # Lo que el servidor no trae de serie y el administrador tendría que instalar o configurar.
+    servicios: dict[str, list[str]] = {}
+    for paquete in declarados:
+        if paquete in REQ_SERVICIOS:
+            servicios.setdefault(REQ_SERVICIOS[paquete], []).append(paquete)
+    for servicio, paquetes in sorted(servicios.items()):
+        rep.aviso(
+            f"El proyecto usa {', '.join('`' + p + '`' for p in paquetes)}, que necesita {servicio}. El servidor solo ofrece "
+            "SeaweedFS: sin que el administrador lo instale o configure, la app arranca pero falla al usarlo."
+        )
+        rep.para_admin(f"El proyecto necesita {servicio} (usa {', '.join(paquetes)}): hay que instalarlo o configurarlo en el servidor antes de desplegar.")
+    pesados = sorted(p for p in declarados if p in REQ_PESADOS)
+    if pesados:
+        rep.aviso(
+            f"`requirements.txt` incluye librerías muy pesadas ({', '.join(pesados)}): la imagen puede pesar varios GB, el build "
+            f"puede pasar de {BUILD_MIN} minutos y 512m de memoria no alcanzan. Confirma con el administrador antes de subir."
+        )
+        rep.para_admin(f"Librerías pesadas en la imagen ({', '.join(pesados)}): revisar espacio en disco, tiempo de build y memoria del contenedor.")
 
     imports = set()
     for py in codigo.archivos:
@@ -1458,6 +1711,7 @@ def main() -> int:
 
     rep = Reporte()
     ctx = revisar_git(repo, grupo, args.base, rep)
+    revisar_gitignore(repo, grupo, rep, ctx)
     bien, mal = revisar_estructura(repo, grupo_dir, rep)
     apps = [revisar_app(app, repo, grupo_dir, rep, ctx["nuevos"]) for app in sorted(bien + mal)]
     cosas_nuevas(ctx["nuevos"], ctx["ignorados"], rep)
