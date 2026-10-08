@@ -65,6 +65,12 @@ networks:
   `cap_add` peligroso, `env_file` y montar rutas del host (`./algo:/algo`).
   Solo volúmenes nombrados.
 - El archivo se llama exactamente `docker-compose.yml`.
+- `restart: unless-stopped` para un servidor. Con `restart: "no"` el
+  despliegue lo trata como un script que debe terminar solo, y a un servidor
+  lo marca como fallido.
+- Variables: el despliegue solo entrega `${LAB_CONTAINER_NAME}`,
+  `${LAB_PUBLIC_PATH}` y `${LAB_DOMAIN}`. Cualquier otra `${VAR}` llega vacía
+  aunque exista en el servidor; si hace falta una, se pide al administrador.
 
 ## `Dockerfile`
 
@@ -165,8 +171,17 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
 
 1. El CI valida el compose y hace un arranque de prueba (construye, levanta,
    muestra los logs y baja). El resultado queda como comentario en el PR.
-2. El administrador revisa y fusiona.
-3. El agente de despliegue detecta el cambio en `main` y levanta la app.
-4. El administrador agrega la ruta pública (y la de imágenes) en el servidor.
-5. El grupo prueba con MCP Inspector o
+2. El administrador revisa y fusiona. Solo él puede actualizar `main`.
+3. GitHub avisa por webhook al servidor, que descarga `main` y despliega solo
+   las apps cuya carpeta cambió.
+4. Por cada app: vuelve a validar el compose, construye y levanta (límite de
+   15 minutos) y comprueba durante 60 segundos que el contenedor quede
+   corriendo. Si falla, el contenedor anterior sigue en pie y el error queda
+   en el log del servidor; el alumno no lo ve, hay que preguntarle al
+   administrador.
+5. El administrador agrega la ruta pública (y la de imágenes) en Caddy.
+6. El grupo prueba con MCP Inspector o
    `claude mcp add --transport http <nombre> <URL>/mcp`.
+
+Si una app se elimina o se renombra su carpeta, el contenedor anterior no se
+baja solo: hay que avisar al administrador.

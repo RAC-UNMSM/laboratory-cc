@@ -6,10 +6,11 @@ description: Revisa la entrega de un grupo del laboratorio antes de abrir o actu
 # Revisar la entrega de un grupo
 
 Estás ayudando a un alumno del laboratorio (repo `lab`, curso de MCP) a dejar
-su carpeta `grupos/grupoNN/` lista para un PR contra `main`. Al fusionarse, un
-agente de despliegue toma lo que haya en `main` y levanta cada app en el
-servidor del profesor. El alumno no ve ese servidor: lo que no cumpla el
-contrato de abajo simplemente no despliega, y él no sabrá por qué.
+su carpeta `grupos/grupoNN/` lista para un PR contra `main`. Solo el profesor
+fusiona a `main`; al hacerlo, GitHub avisa por webhook al servidor, que
+descarga `main` y levanta cada app que cambió. El alumno no ve ese servidor:
+lo que no cumpla el contrato de abajo simplemente no despliega, y él no sabrá
+por qué.
 
 Tu trabajo es responder tres cosas, en este orden:
 
@@ -49,9 +50,11 @@ administrador**.
 
 ## Paso 2: leer lo que el validador no puede juzgar
 
-El validador revisa forma, no sentido. Lee tú estos archivos de cada app
-(`grupos/grupoNN/<semana>/<tema>/`) y compáralos con el piloto
-`grupos/g01/semana01/derivadas1/`, que es el ejemplo a imitar:
+El validador revisa forma, no sentido. Lee tú **solo `server.py` y
+`storage.py`** de cada app (`grupos/grupoNN/<semana>/<tema>/`) y compáralos
+con los del piloto `grupos/g01/semana01/derivadas1/`, que es el ejemplo a
+imitar. No revises la parte matemática ni el resto de módulos: si el cálculo
+es correcto lo evalúa el profesor, no esta revisión.
 
 - **`server.py`**: debe ser solo el orquestador (define las tools y llama a
   los otros módulos). Revisa que el docstring de cada tool diga qué formato
@@ -61,9 +64,6 @@ El validador revisa forma, no sentido. Lee tú estos archivos de cada app
   docstring.
 - **`storage.py`**: bucket y URL pública propios del grupo, nunca los del
   piloto; que falle en silencio (devuelva `None`) si el storage no responde.
-- **Módulo de cálculo**: sin llamadas de red ni archivos; debe poder
-  probarse sin levantar el servidor.
-- **Entradas**: que se validen antes de calcular y que el error sea legible.
 
 Qué cambia y qué no respecto del piloto está en
 [referencia-despliegue.md](referencia-despliegue.md). Léelo antes de proponer
@@ -141,13 +141,17 @@ alumno debe avisar a **Julios Castillo Melchor** (en la descripción del PR)
 siempre que la entrega incluya algo de esta lista. El validador detecta la
 mayoría; tú completa lo que veas al leer el código:
 
-- Una app nueva o una carpeta de tema renombrada (hay que crear su ruta pública).
+- Una app nueva (hay que crear su ruta pública en Caddy).
 - Imágenes o archivos generados (hay que crear la ruta `/img/...` de su bucket).
 - Un puerto distinto de 8000, o más de un servicio en el compose.
-- Variables de entorno, tokens o claves de API.
+- Variables de entorno, tokens o claves de API. El despliegue solo entrega al
+  compose `LAB_CONTAINER_NAME`, `LAB_PUBLIC_PATH` y `LAB_DOMAIN`; cualquier
+  otra `${VAR}` llega vacía hasta que él la habilite.
+- Una app eliminada o una carpeta renombrada: el contenedor anterior sigue
+  corriendo hasta que él lo baje a mano.
 - Volúmenes (datos que deben sobrevivir a un reinicio) o más de 512 MB de memoria.
 - Programas del sistema instalados con `apt-get` (LaTeX, ffmpeg…): imagen
-  pesada, y el build tiene un límite de 5 minutos.
+  pesada, y el build tiene un límite de 15 minutos.
 - Llamadas a servicios externos de internet.
 - Cualquier tipo de archivo o carpeta que no sea código, documentación o los
   archivos de despliegue.

@@ -50,6 +50,9 @@ PUERTO_MCP = 8000
 MCP_PIN = "mcp==2.1.1"
 SEAWEEDFS_URL = "http://seaweedfs:8333"
 MEM_LIMIT_BASE_MB = 512
+# deployer.py del repo de infraestructura: BUILD_TIMEOUT y HEALTH_TIMEOUT.
+BUILD_MIN = 15
+SALUD_SEG = 60
 # Docker Compose exige esto para el nombre de proyecto (lab-<grupo>-<app>).
 NOMBRE_VALIDO = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 # Variables que inyecta el propio despliegue: no hay que pedirlas.
@@ -232,6 +235,15 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     else:
         rep.ok(f"La rama está al día con `{base}`.")
 
+    # Qué cambia este PR respecto de main. Fuera de la carpeta del grupo solo
+    # cuenta lo que la rama tocó Y además quedaría distinto de main: lo demás
+    # es herencia de un main antiguo y desaparece solo al actualizar la rama.
+    prefijo = f"grupos/{grupo}/"
+    _, diff = git(repo, "diff", "--name-status", "-M", f"{base}...HEAD")
+    _, distinto = git(repo, "diff", "--name-only", base, "HEAD")
+    distinto_de_main = set(distinto.splitlines())
+    tocados = {l.split("\t")[-1] for l in diff.splitlines() if "\t" in l}
+
     # Archivos ya subidos que el .gitignore de main ignora. Se usa el de main
     # (no el de la rama) porque una rama atrasada puede no tenerlo todavía.
     code, ignore_main = git(repo, "show", f"{base}:.gitignore")
@@ -246,7 +258,10 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
             os.unlink(tmp)
         _, en_main = git(repo, "ls-tree", "-r", "--name-only", base)
         ya_en_main = set(en_main.splitlines())
-        ignorados = [p for p in out.splitlines() if p and p not in ya_en_main]
+        ignorados = [
+            p for p in out.splitlines()
+            if p and p not in ya_en_main and (p.startswith(prefijo) or p in tocados)
+        ]
         ctx["ignorados"] = set(ignorados)
     if ignorados:
         rep.error(
@@ -259,20 +274,30 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     else:
         rep.ok("No hay entornos virtuales, caches ni binarios subidos.")
 
-    # Qué cambia este PR respecto de main.
-    _, diff = git(repo, "diff", "--name-status", f"{base}...HEAD")
     fuera, nuevos = [], []
-    prefijo = f"grupos/{grupo}/"
     for linea in diff.splitlines():
         partes = linea.split("\t")
         if len(partes) < 2:
             continue
         estado, ruta = partes[0], partes[-1]
         if not ruta.startswith(prefijo):
-            fuera.append(f"{estado[0]}  {ruta}")
+            if ruta in distinto_de_main:
+                fuera.append(f"{estado[0]}  {ruta}")
         elif estado.startswith("A"):
             nuevos.append(ruta)
     ctx["nuevos"] = nuevos
+    # Apps que este PR elimina o renombra: el contenedor viejo no se baja solo.
+    for linea in diff.splitlines():
+        partes = linea.split("\t")
+        if partes[0][:1] in ("D", "R") and len(partes) >= 2:
+            trozos = partes[1].split("/")
+            if len(trozos) == 5 and trozos[1] == grupo and trozos[4] == "docker-compose.yml":
+                viejo = f"{grupo}_{trozos[2]}_{trozos[3]}"
+                rep.info(f"Este PR elimina o renombra la app `{viejo}`: su contenedor seguirá corriendo en el servidor hasta que el administrador lo baje.")
+                rep.para_admin(
+                    f"La app `{viejo}` deja de existir en el repo (eliminada o renombrada). Su contenedor no se baja solo: "
+                    f"`docker compose -p lab-{grupo}-{viejo} down`, y quitar su ruta de Caddy."
+                )
     if fuera:
         rep.error(
             f"El PR toca {len(fuera)} archivos fuera de `{prefijo}` (A=agrega, M=modifica, D=borra):\n      "
@@ -524,12 +549,14 @@ def revisar_compose(app: Path, repo: Path, rep: Reporte, datos: dict) -> None:
     variables = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", texto)) - VARS_AUTOMATICAS
     if variables:
         rep.para_admin(
-            "Variables de entorno que el compose espera del servidor (hay que definirlas en el `.env` "
-            f"de infraestructura antes de desplegar): {', '.join(sorted(variables))}."
+            f"El compose interpola {', '.join('`${' + x + '}`' for x in sorted(variables))}. El despliegue solo pasa "
+            "LAB_CONTAINER_NAME, LAB_PUBLIC_PATH y LAB_DOMAIN: para que lleguen hay que agregarlas a la lista blanca "
+            "`_GROUP_ENV` de `lab_deploy/deployer.py` y definirlas en el `.env` de infraestructura."
         )
-        rep.aviso(
-            f"El compose usa variables que el despliegue no inyecta solo ({', '.join(sorted(variables))}). "
-            "Sin ellas en el servidor, quedan vacías. Nunca subas su valor al repo."
+        rep.error(
+            f"El compose usa {', '.join('`${' + x + '}`' for x in sorted(variables))}, pero el despliegue solo entrega "
+            "`${LAB_CONTAINER_NAME}`, `${LAB_PUBLIC_PATH}` y `${LAB_DOMAIN}`. Cualquier otra variable llega vacía "
+            "aunque exista en el servidor, hasta que el administrador la habilite. Nunca subas su valor al repo."
         )
 
     if yaml is None:
@@ -610,7 +637,9 @@ def revisar_compose(app: Path, repo: Path, rep: Reporte, datos: dict) -> None:
         elif svc.get("build") not in (".", "./") and not isinstance(svc.get("build"), dict):
             rep.aviso(f"Servicio `{nombre}`: `build: {svc.get('build')}`; lo habitual es `build: .`.")
 
-        if svc.get("restart") in (None, "no", False):
+        if svc.get("restart") in ("no", False):
+            datos["una_corrida"] = True
+        elif svc.get("restart") is None:
             rep.aviso(f"Servicio `{nombre}`: sin `restart: unless-stopped` el servidor MCP no vuelve a levantarse si se cae o se reinicia la máquina.")
         datos["env_compose"].update((svc.get("environment") or {}).keys() if isinstance(svc.get("environment"), dict) else
                                     {str(e).split("=", 1)[0] for e in (svc.get("environment") or [])})
@@ -653,7 +682,7 @@ def revisar_dockerfile(app: Path, repo: Path, rep: Reporte, codigo: Codigo, dato
     elif not froms[-1].startswith("python:"):
         rep.aviso(f"La imagen base es `{froms[-1]}`; el patrón del laboratorio es `python:3.11-slim`.")
     elif "slim" not in froms[-1]:
-        rep.aviso(f"Imagen base `{froms[-1]}`: usa la variante `-slim` (la completa pesa ~1 GB y el build tiene 5 minutos de límite).")
+        rep.aviso(f"Imagen base `{froms[-1]}`: usa la variante `-slim` (la completa pesa ~1 GB y alarga el build, que tiene {BUILD_MIN} minutos de límite).")
 
     if re.search(r"[A-Za-z]:\\\\?[A-Za-z]", texto):
         rep.error("El Dockerfile contiene una ruta de Windows (`C:\\...`). Dentro del contenedor todo es Linux.")
@@ -848,7 +877,8 @@ def revisar_server(app: Path, repo: Path, grupo: str, rep: Reporte, codigo: Codi
         if not http or ("streamable-http" not in fuente):
             rep.error(
                 "`server.py` no arranca por HTTP. `mcp.run()` a secas usa stdio: sirve en tu laptop, pero en el "
-                "contenedor no hay consola y termina al instante. Debe ser:\n"
+                "contenedor no hay consola y termina al instante, y el despliegue lo da por fallido porque el "
+                f"contenedor no queda corriendo (lo comprueba durante {SALUD_SEG} segundos). Debe ser:\n"
                 f"      mcp.run(transport=\"streamable-http\", host=\"0.0.0.0\", port={PUERTO_MCP})"
             )
         else:
@@ -989,7 +1019,7 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
                 )
             rep.para_admin(
                 f"La app necesita el programa de sistema `{binario}` dentro de su imagen. Si es pesado (ej. LaTeX), "
-                "el build puede superar el límite de 5 minutos del despliegue."
+                f"el build puede superar el límite de {BUILD_MIN} minutos del despliegue."
             )
 
     # Escritura en disco.
@@ -1077,6 +1107,12 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
     codigo = Codigo(app, rep, repo)
     revisar_compose(app, repo, rep, datos)
     datos["solo_imagen"] = datos.get("sin_build", False) and not codigo.fuentes
+    if datos.get("una_corrida") and (app / "server.py").is_file():
+        rep.error(
+            "El compose tiene `restart: \"no\"`, que el despliegue interpreta como un script de una sola corrida: "
+            f"espera {SALUD_SEG} segundos a que termine y, como un servidor nunca termina, lo marca como fallido. "
+            "Un servidor MCP lleva `restart: unless-stopped`."
+        )
     if datos["solo_imagen"]:
         rep.info("Es una app ya hecha (imagen externa, sin código propio): no lleva Dockerfile, requirements.txt ni server.py.")
     else:
