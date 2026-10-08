@@ -71,8 +71,8 @@ jobs:
             fi
             project="ci-${group}-${app}"
 
-            # Mismo cálculo que lab_pipelines (docker_resource.py /
-            # app_deploy.py) del repo de infraestructura: el nombre del
+            # Mismo cálculo que lab_deploy/naming.py del repo de
+            # infraestructura: el nombre del
             # contenedor y la ruta pública nunca se escriben a mano en el
             # docker-compose.yml del grupo, se inyectan acá.
             if [[ "$group" == "_referencia" ]]; then
