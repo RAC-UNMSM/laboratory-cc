@@ -13,7 +13,7 @@ Revisa la carpeta de un grupo ANTES de abrir o actualizar un PR contra
 
 Uso (desde cualquier carpeta del repo):
 
-    python .claude/skills/revisar-entrega/scripts/validar_entrega.py [grupoNN]
+    python .claude/skills/mcp-validator/scripts/validar_entrega.py [grupoNN]
 
 Sin dependencias obligatorias: solo la librería estándar. Si PyYAML está
 instalado, el docker-compose.yml se valida completo; si no, con un chequeo
@@ -32,6 +32,7 @@ import ast
 import fnmatch
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,9 @@ PUERTO_MCP = 8000
 MCP_PIN = "mcp==2.1.1"
 SEAWEEDFS_URL = "http://seaweedfs:8333"
 MEM_LIMIT_BASE_MB = 512
+# deployer.py del repo de infraestructura: BUILD_TIMEOUT y HEALTH_TIMEOUT.
+BUILD_MIN = 15
+SALUD_SEG = 60
 # Docker Compose exige esto para el nombre de proyecto (lab-<grupo>-<app>).
 NOMBRE_VALIDO = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 # Variables que inyecta el propio despliegue: no hay que pedirlas.
@@ -85,6 +89,62 @@ PAQUETE_PROVEE = {
     "fastapi": {"fastapi", "starlette", "pydantic"},
     "matplotlib": {"matplotlib", "mpl_toolkits", "pylab"},
 }
+# Carpetas del profesor que no siguen el formato de los grupos: no se revisan.
+APPS_EXCLUIDAS = {("g01", "apps")}
+
+# requirements.txt: paquetes que delatan algo que el servidor no trae de serie.
+REQ_SERVICIOS = {
+    "psycopg2": "una base PostgreSQL", "psycopg2-binary": "una base PostgreSQL", "psycopg": "una base PostgreSQL",
+    "asyncpg": "una base PostgreSQL", "pymongo": "una base MongoDB", "motor": "una base MongoDB",
+    "redis": "un servidor Redis", "mysqlclient": "una base MySQL", "pymysql": "una base MySQL",
+    "mysql-connector-python": "una base MySQL", "boto3": "credenciales S3", "minio": "credenciales S3",
+    "openai": "una clave de API de OpenAI", "anthropic": "una clave de API de Anthropic",
+    "google-generativeai": "una clave de API de Google", "google-genai": "una clave de API de Google",
+    "groq": "una clave de API de Groq", "cohere": "una clave de API de Cohere", "ollama": "un servidor Ollama",
+    "chromadb": "una base vectorial", "qdrant-client": "una base vectorial (Qdrant)", "pinecone": "una clave de Pinecone",
+    "celery": "un broker de colas (Redis/RabbitMQ)", "pika": "un servidor RabbitMQ", "elasticsearch": "un servidor Elasticsearch",
+}
+REQ_PESADOS = {
+    "torch", "torchvision", "tensorflow", "tensorflow-cpu", "keras", "jax", "transformers", "opencv-python",
+    "opencv-contrib-python", "playwright", "selenium", "manim", "pyspark", "easyocr", "paddlepaddle",
+    "onnxruntime", "xgboost", "lightgbm", "spacy", "sentence-transformers", "diffusers",
+}
+REQ_SOLO_LOCAL = {
+    "black", "flake8", "ruff", "mypy", "pylint", "autopep8", "isort", "ipython", "jupyter", "notebook",
+    "jupyterlab", "ipykernel", "pyinstaller", "pip", "setuptools", "wheel", "virtualenv", "pipenv", "poetry",
+    "twine", "build", "pre-commit", "debugpy", "tox", "coverage", "pytest-cov", "pip-tools", "nbconvert",
+}
+REQ_SOLO_WINDOWS = {
+    "pywin32", "pypiwin32", "pywin32-ctypes", "wmi", "winshell", "pywinpty", "comtypes", "windows-curses",
+    "pywinauto", "win32-setctime", "winrt",
+}
+
+# Lo que se genera o se instala en la laptop y nunca debe subirse:
+# (patrón de .gitignore, qué es). Se compara contra el .gitignore vigente.
+BASURA_CARPETAS = {
+    "node_modules": "dependencias de Node", "site-packages": "librerías instaladas con pip",
+    "__pycache__": "cache de Python", ".pytest_cache": "cache de pytest", ".mypy_cache": "cache de mypy",
+    ".ruff_cache": "cache de ruff", ".ipynb_checkpoints": "respaldos de Jupyter", ".idea": "configuración de PyCharm",
+    ".vscode": "configuración de VS Code", ".vs": "configuración de Visual Studio", ".tox": "entornos de tox",
+    "htmlcov": "reporte de cobertura", ".cache": "cache", ".gradle": "cache de Gradle", ".git": "otro repositorio git dentro del repo",
+    "dist": "paquetes generados", ".eggs": "paquetes descargados",
+}
+BASURA_EXT = {
+    ".pyc": "bytecode de Python", ".pyo": "bytecode de Python", ".exe": "ejecutable de Windows", ".msi": "instalador de Windows",
+    ".dll": "librería de Windows", ".so": "librería compilada", ".dylib": "librería compilada", ".whl": "paquete de pip descargado",
+    ".egg": "paquete de pip descargado", ".zip": "comprimido", ".rar": "comprimido", ".7z": "comprimido", ".tgz": "comprimido",
+    ".log": "log", ".sqlite": "base de datos local", ".sqlite3": "base de datos local", ".db": "base de datos local",
+    ".pem": "clave privada", ".key": "clave privada", ".tmp": "temporal", ".bak": "copia de respaldo", ".lnk": "acceso directo de Windows",
+    ".deb": "instalador", ".dmg": "instalador", ".jar": "binario de Java", ".class": "binario de Java", ".o": "objeto compilado",
+    ".pkl": "datos/modelo serializado", ".pt": "modelo entrenado", ".pth": "modelo entrenado", ".h5": "modelo entrenado",
+    ".onnx": "modelo entrenado", ".joblib": "modelo serializado", ".ckpt": "modelo entrenado", ".safetensors": "modelo entrenado",
+}
+BASURA_NOMBRES = {
+    ".env": "variables de entorno con posibles secretos", ".DS_Store": "archivo de macOS", "Thumbs.db": "archivo de Windows",
+    "desktop.ini": "archivo de Windows", "pyvenv.cfg": "entorno virtual", "pip-log.txt": "log de pip", ".coverage": "datos de cobertura",
+    "nohup.out": "salida de consola",
+}
+
 # Extensiones habituales en una entrega; lo demás se le menciona al administrador.
 EXT_HABITUALES = {
     ".py", ".md", ".txt", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".json",
@@ -208,7 +268,7 @@ def resumir_rutas(rutas: list[str], niveles: int = 4, tope: int = 12) -> list[st
 
 def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     rep.en("Git: qué se está subiendo")
-    ctx = {"nuevos": [], "base_ok": False, "ignorados": set()}
+    ctx = {"nuevos": [], "base_ok": False, "ignorados": set(), "base": base}
 
     code, rama = git(repo, "rev-parse", "--abbrev-ref", "HEAD")
     if code != 0:
@@ -232,6 +292,15 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     else:
         rep.ok(f"La rama está al día con `{base}`.")
 
+    # Qué cambia este PR respecto de main. Fuera de la carpeta del grupo solo
+    # cuenta lo que la rama tocó Y además quedaría distinto de main: lo demás
+    # es herencia de un main antiguo y desaparece solo al actualizar la rama.
+    prefijo = f"grupos/{grupo}/"
+    _, diff = git(repo, "diff", "--name-status", "-M", f"{base}...HEAD")
+    _, distinto = git(repo, "diff", "--name-only", base, "HEAD")
+    distinto_de_main = set(distinto.splitlines())
+    tocados = {l.split("\t")[-1] for l in diff.splitlines() if "\t" in l}
+
     # Archivos ya subidos que el .gitignore de main ignora. Se usa el de main
     # (no el de la rama) porque una rama atrasada puede no tenerlo todavía.
     code, ignore_main = git(repo, "show", f"{base}:.gitignore")
@@ -246,7 +315,10 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
             os.unlink(tmp)
         _, en_main = git(repo, "ls-tree", "-r", "--name-only", base)
         ya_en_main = set(en_main.splitlines())
-        ignorados = [p for p in out.splitlines() if p and p not in ya_en_main]
+        ignorados = [
+            p for p in out.splitlines()
+            if p and p not in ya_en_main and (p.startswith(prefijo) or p in tocados)
+        ]
         ctx["ignorados"] = set(ignorados)
     if ignorados:
         rep.error(
@@ -259,20 +331,32 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     else:
         rep.ok("No hay entornos virtuales, caches ni binarios subidos.")
 
-    # Qué cambia este PR respecto de main.
-    _, diff = git(repo, "diff", "--name-status", f"{base}...HEAD")
     fuera, nuevos = [], []
-    prefijo = f"grupos/{grupo}/"
+    ctx["fuera_rutas"] = []
     for linea in diff.splitlines():
         partes = linea.split("\t")
         if len(partes) < 2:
             continue
         estado, ruta = partes[0], partes[-1]
         if not ruta.startswith(prefijo):
-            fuera.append(f"{estado[0]}  {ruta}")
+            if ruta in distinto_de_main:
+                fuera.append(f"{estado[0]}  {ruta}")
+                ctx["fuera_rutas"].append(ruta)
         elif estado.startswith("A"):
             nuevos.append(ruta)
     ctx["nuevos"] = nuevos
+    # Apps que este PR elimina o renombra: el contenedor viejo no se baja solo.
+    for linea in diff.splitlines():
+        partes = linea.split("\t")
+        if partes[0][:1] in ("D", "R") and len(partes) >= 2:
+            trozos = partes[1].split("/")
+            if len(trozos) == 5 and trozos[1] == grupo and trozos[4] == "docker-compose.yml":
+                viejo = f"{grupo}_{trozos[2]}_{trozos[3]}"
+                rep.info(f"Este PR elimina o renombra la app `{viejo}`: su contenedor seguirá corriendo en el servidor hasta que el administrador lo baje.")
+                rep.para_admin(
+                    f"La app `{viejo}` deja de existir en el repo (eliminada o renombrada). Su contenedor no se baja solo: "
+                    f"`docker compose -p lab-{grupo}-{viejo} down`, y quitar su ruta de Caddy."
+                )
     if fuera:
         rep.error(
             f"El PR toca {len(fuera)} archivos fuera de `{prefijo}` (A=agrega, M=modifica, D=borra):\n      "
@@ -283,6 +367,39 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
         )
     else:
         rep.ok(f"El PR solo toca `{prefijo}`.")
+
+    # ¿Se podrá fusionar? Simula el merge con main sin tocar nada.
+    code_mt, salida_mt = git(repo, "merge-tree", "--write-tree", "--name-only", base, "HEAD")
+    if code_mt == 1:
+        en_conflicto = [l for l in salida_mt.splitlines()[1:] if l.strip()]
+        en_conflicto = en_conflicto[: en_conflicto.index("")] if "" in en_conflicto else en_conflicto
+        archivos = [l for l in en_conflicto if "/" in l or "." in l][:10]
+        rep.error(
+            f"Tu rama tiene conflictos con `{base}`: el PR no se podrá fusionar tal cual.\n      "
+            + "\n      ".join(archivos)
+            + f"\n    Ejecuta `git merge {base}`, resuelve esos archivos y confirma."
+        )
+    elif code_mt == 0:
+        rep.ok(f"La rama se puede fusionar con `{base}` sin conflictos.")
+
+    # Cambios hechos pero todavía sin confirmar (commit).
+    _, porcelana = git(repo, "status", "--porcelain")
+    pend_fuera, pend_dentro = [], []
+    for linea in porcelana.splitlines():
+        ruta = linea[2:].strip().split(" -> ")[-1].strip('"')
+        (pend_dentro if ruta.startswith(prefijo) else pend_fuera).append(f"{linea[:2].strip() or '?'}  {ruta}")
+        if not ruta.startswith(prefijo):
+            ctx["fuera_rutas"].append(ruta.rstrip("/"))
+    if pend_fuera:
+        rep.aviso(
+            f"Tienes {len(pend_fuera)} cambio(s) sin confirmar FUERA de tu carpeta. No los agregues al commit "
+            "(revisa con `git status` antes de `git add`):\n      " + "\n      ".join(pend_fuera[:10])
+        )
+    if pend_dentro:
+        rep.info(
+            f"Tienes {len(pend_dentro)} cambio(s) en tu carpeta sin confirmar: todavía no forman parte del PR.\n      "
+            + "\n      ".join(pend_dentro[:8]) + ("\n      …" if len(pend_dentro) > 8 else "")
+        )
 
     # Archivos pesados dentro de la carpeta del grupo.
     _, tracked = git(repo, "ls-files", "--", prefijo)
@@ -296,14 +413,139 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     if pesados:
         rep.aviso("Archivos de más de 1 MB (¿de verdad hacen falta en el repo?):\n      " + "\n      ".join(pesados[:10]))
 
-    _, sin_agregar = git(repo, "ls-files", "--others", "--exclude-standard", "--", prefijo)
-    if sin_agregar:
-        lista = sin_agregar.splitlines()
-        rep.info(
-            f"{len(lista)} archivos de tu carpeta todavía no están en git (no irán en el PR hasta que hagas `git add`):\n      "
-            + "\n      ".join(resumir_rutas(lista, niveles=5, tope=8))
-        )
     return ctx
+
+
+def clasificar_basura(ruta: str) -> tuple[str, str] | None:
+    """(patrón de .gitignore, qué es) si la ruta parece algo generado o
+    instalado en local; None si parece parte legítima del proyecto."""
+    partes = ruta.split("/")
+    for carpeta in partes[:-1]:
+        if carpeta in BASURA_CARPETAS:
+            return f"{carpeta}/", BASURA_CARPETAS[carpeta]
+        if carpeta.endswith((".egg-info", ".dist-info")):
+            return f"*{Path(carpeta).suffix}/", "paquete instalado con pip"
+    nombre = partes[-1]
+    if nombre in BASURA_NOMBRES:
+        return nombre, BASURA_NOMBRES[nombre]
+    if nombre.startswith(".env.") and nombre != ".env.example":
+        return ".env.*", BASURA_NOMBRES[".env"]
+    if nombre.startswith("~$"):
+        return "~$*", "temporal de Office"
+    if nombre.endswith(".tar.gz"):
+        return "*.tar.gz", "comprimido"
+    ext = Path(nombre).suffix.lower()
+    if ext in BASURA_EXT:
+        return f"*{ext}", BASURA_EXT[ext]
+    return None
+
+
+def revisar_gitignore(repo: Path, grupo: str, rep: Reporte, ctx: dict) -> None:
+    """Busca en la carpeta del grupo (y en lo que la rama cambió fuera de ella)
+    cosas generadas o instaladas en local, y comprueba que el .gitignore las
+    cubra. Lo que no esté cubierto se subiría con un `git add .`."""
+    rep.en("`.gitignore`: lo que se instala o se genera en local")
+    grupo_dir = repo / "grupos" / grupo
+    prefijo = f"grupos/{grupo}/"
+
+    candidatos: dict[str, tuple[str, str]] = {}
+    venvs: list[str] = []
+    for raiz, dirs, archivos in os.walk(grupo_dir):
+        actual = Path(raiz)
+        for d in list(dirs):
+            sub_dir = actual / d
+            relativa = rel(sub_dir, repo)
+            if es_venv(sub_dir) or ((sub_dir / "Lib" / "site-packages").is_dir()) or ((sub_dir / "Scripts" / "python.exe").is_file()):
+                venvs.append(relativa)
+                candidatos[relativa + "/pyvenv.cfg"] = (f"{d}/", "entorno virtual")
+                dirs.remove(d)
+            elif d in BASURA_CARPETAS or d.endswith((".egg-info", ".dist-info")):
+                # Basta un archivo de muestra: no hace falta recorrer miles.
+                muestra = next((p for p in sub_dir.rglob("*") if p.is_file()), None)
+                clase = clasificar_basura(relativa + "/x")
+                if muestra is not None and clase:
+                    candidatos[rel(muestra, repo)] = clase
+                dirs.remove(d)
+        for a in archivos:
+            relativa = rel(actual / a, repo)
+            clase = clasificar_basura(relativa)
+            if clase:
+                candidatos[relativa] = clase
+            elif (actual / a).stat().st_size > 5_000_000:
+                candidatos[relativa] = (a, f"archivo de {(actual / a).stat().st_size / 1048576:.0f} MB")
+
+    # Lo que la rama agregó o modificó fuera de su carpeta y parece local.
+    for ruta in ctx.get("fuera_rutas", []):
+        clase = clasificar_basura(ruta)
+        if clase and (repo / ruta).exists():
+            candidatos[ruta] = clase
+
+    if not candidatos:
+        rep.ok("No encontré entornos virtuales, caches, instaladores ni archivos generados en tu carpeta.")
+        return
+
+    # ¿Cuáles cubre ya el .gitignore? Cuenta el de la rama (raíz + los de la
+    # carpeta) y también el de main: si la rama está atrasada, lo que main ya
+    # ignora queda cubierto en cuanto se actualice.
+    def cubiertos_con(extra: list[str]) -> set[str]:
+        try:
+            r = subprocess.run(
+                ["git", "-c", "core.quotepath=off", *extra, "check-ignore", "--no-index", "--stdin"], cwd=repo,
+                input="\n".join(candidatos), capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+        except FileNotFoundError:
+            return set()
+        return set(r.stdout.splitlines())
+
+    cubiertos = cubiertos_con([])
+    code_main, ignore_main = git(repo, "show", f"{ctx.get('base', 'origin/main')}:.gitignore")
+    if code_main == 0 and ignore_main:
+        with tempfile.NamedTemporaryFile("w", suffix=".gitignore", delete=False, encoding="utf-8") as fh:
+            fh.write(ignore_main + "\n")
+        try:
+            solo_main = cubiertos_con(["-c", f"core.excludesFile={fh.name}"]) - cubiertos
+        finally:
+            os.unlink(fh.name)
+        if solo_main:
+            rep.aviso(
+                f"{len(solo_main)} elemento(s) locales de tu carpeta solo quedan ignorados con el `.gitignore` actual de `main`, "
+                "que tu rama todavía no tiene. Actualiza la rama (`git merge origin/main`) antes de hacer `git add`."
+            )
+        cubiertos |= solo_main
+    _, tracked = git(repo, "ls-files", "--", prefijo, *ctx.get("fuera_rutas", []))
+    en_git = set(tracked.splitlines())
+
+    sin_cubrir: dict[str, list[str]] = {}
+    descripcion: dict[str, str] = {}
+    subidos = 0
+    for ruta, (patron, que) in sorted(candidatos.items()):
+        if ruta in cubiertos:
+            continue
+        sin_cubrir.setdefault(patron, []).append(ruta)
+        descripcion[patron] = que
+        subidos += ruta in en_git or any(t.startswith(ruta.rsplit("/", 1)[0] + "/") for t in en_git if "/pyvenv.cfg" in ruta)
+
+    cubiertos_n = len(candidatos) - sum(len(x) for x in sin_cubrir.values())
+    if not sin_cubrir:
+        rep.ok(f"Lo local que hay en tu carpeta ({cubiertos_n} elemento(s): entornos, caches, generados) ya está cubierto por el `.gitignore`.")
+        return
+
+    lineas = [f"{patron:<22} # {descripcion[patron]}  (ej. {rutas[0]})" for patron, rutas in sorted(sin_cubrir.items())]
+    propio = f"grupos/{grupo}/.gitignore"
+    rep.error(
+        f"Hay {sum(len(x) for x in sin_cubrir.values())} elemento(s) locales que el `.gitignore` NO cubre: un `git add .` los subiría"
+        + (" (y algunos ya están subidos)" if subidos else "") + ".\n      "
+        + "\n      ".join(lineas)
+        + f"\n    Agrega esos patrones a `{propio}` (el de la raíz no lo tocas tú)"
+        + (", y saca de git lo ya subido con `git rm -r --cached <ruta>`." if subidos else "."),
+        siempre=True,
+    )
+    rep.para_admin(
+        "Patrones que faltan en el `.gitignore` general de la raíz (aparecieron en esta entrega): "
+        + ", ".join(f"`{p}` ({descripcion[p]})" for p in sorted(sin_cubrir)) + "."
+    )
+    if venvs:
+        rep.info("Entornos virtuales detectados en tu carpeta: " + ", ".join(f"`{x}`" for x in venvs[:5]) + ". Son locales: nunca se suben.")
 
 
 # --- 2. Estructura ----------------------------------------------------------------
@@ -334,7 +576,9 @@ def buscar_apps(grupo_dir: Path) -> list[Path]:
     for raiz, dirs, archivos in os.walk(grupo_dir):
         actual = Path(raiz)
         dirs[:] = sorted(d for d in dirs if d not in CARPETAS_OMITIDAS and not es_venv(actual / d))
-        if actual != grupo_dir and any(m in archivos for m in MARCADORES_APP):
+        if actual == grupo_dir:
+            dirs[:] = [d for d in dirs if (grupo_dir.name, d) not in APPS_EXCLUIDAS]
+        elif any(m in archivos for m in MARCADORES_APP):
             apps.append(actual)
             dirs[:] = []  # lo que haya debajo es parte de esta app
     return apps
@@ -377,12 +621,25 @@ def revisar_estructura(repo: Path, grupo_dir: Path, rep: Reporte) -> tuple[list[
     for py in archivos_py(grupo_dir):
         if not any(app == py.parent or app in py.parents for app in apps):
             sueltos.append(rel(py, repo))
+    # También cuentan los archivos que no son documentación dejados en la
+    # carpeta del grupo o en la del proyecto, fuera de la carpeta del tema.
+    niveles = [grupo_dir] + [d for d in sorted(grupo_dir.iterdir()) if d.is_dir() and d.name.lower() != "integrantes" and not es_venv(d)]
+    for nivel in niveles:
+        if nivel in apps:
+            continue
+        for f in sorted(nivel.iterdir()):
+            if f.is_file() and f.suffix.lower() not in {".md", ".py"} and f.name not in {".gitignore", ".gitkeep"}:
+                sueltos.append(rel(f, repo))
     if sueltos:
-        rep.aviso(
-            "Código fuera de una carpeta de tema (no entra en ninguna imagen ni se despliega):\n      "
-            + "\n      ".join(sueltos[:10])
-            + f"\n    Va dentro de `grupos/{grupo}/<semana>/<tema>/`."
+        rep.falta(
+            "Archivos del proyecto fuera de su carpeta (no entran en ninguna imagen ni se despliegan):\n      "
+            + "\n      ".join(sorted(set(sueltos))[:12])
+            + f"\n    Todo el proyecto va dentro de `grupos/{grupo}/proyecto01/<nombre-del-proyecto>/`."
         )
+    for app in bien_ubicadas:
+        semana = app.relative_to(grupo_dir).parts[0]
+        if grupo != "g01" and not re.fullmatch(r"(proyecto|semana)\d{2}", semana):
+            rep.aviso(f"La carpeta `{semana}` debería llamarse `proyectoNN` (ej. `proyecto01`), como en el resto del repo.")
 
     if not apps:
         rep.info(
@@ -498,6 +755,81 @@ class Codigo:
         ]
 
 
+class Resolver:
+    """Averigua el valor que tendrá una expresión simple cuando el código
+    corra en el contenedor: constantes, variables del módulo, f-strings y
+    `os.getenv("X", "defecto")` (con lo que definan el compose y el Dockerfile)."""
+
+    _GETENV = {"os.getenv", "os.environ.get", "environ.get", "getenv"}
+
+    def __init__(self, arbol: ast.Module, env: dict[str, str]) -> None:
+        self.env = env
+        self.vars_usadas: list[str] = []
+        self.asign: dict[str, ast.AST] = {}
+        for nodo in ast.walk(arbol):
+            if isinstance(nodo, ast.Assign) and len(nodo.targets) == 1 and isinstance(nodo.targets[0], ast.Name):
+                self.asign.setdefault(nodo.targets[0].id, nodo.value)
+            elif isinstance(nodo, ast.AnnAssign) and isinstance(nodo.target, ast.Name) and nodo.value is not None:
+                self.asign.setdefault(nodo.target.id, nodo.value)
+
+    def valor(self, nodo: ast.AST | None, prof: int = 0):
+        if nodo is None or prof > 8:
+            return None
+        if isinstance(nodo, ast.Constant):
+            return nodo.value
+        if isinstance(nodo, ast.Name):
+            return self.valor(self.asign.get(nodo.id), prof + 1)
+        if isinstance(nodo, ast.Subscript) and nombre_llamada(nodo.value) in {"os.environ", "environ"}:
+            if isinstance(nodo.slice, ast.Constant):
+                self.vars_usadas.append(str(nodo.slice.value))
+                return self.env.get(str(nodo.slice.value))
+            return None
+        if isinstance(nodo, ast.Call):
+            fn = nombre_llamada(nodo.func)
+            if fn in self._GETENV and nodo.args and isinstance(nodo.args[0], ast.Constant):
+                clave = str(nodo.args[0].value)
+                self.vars_usadas.append(clave)
+                if clave in self.env:
+                    return self.env[clave]
+                defecto = nodo.args[1] if len(nodo.args) > 1 else next((k.value for k in nodo.keywords if k.arg == "default"), None)
+                return self.valor(defecto, prof + 1)
+            if fn in {"int", "str", "float"} and nodo.args:
+                interno = self.valor(nodo.args[0], prof + 1)
+                try:
+                    return {"int": int, "str": str, "float": float}[fn](interno) if interno is not None else None
+                except (TypeError, ValueError):
+                    return None
+            if isinstance(nodo.func, ast.Attribute) and nodo.func.attr in {"strip", "lower", "rstrip", "lstrip"}:
+                interno = self.valor(nodo.func.value, prof + 1)
+                return getattr(interno, nodo.func.attr)() if isinstance(interno, str) and not nodo.args else interno
+            return None
+        if isinstance(nodo, ast.JoinedStr):
+            partes = []
+            for parte in nodo.values:
+                trozo = self.valor(parte.value if isinstance(parte, ast.FormattedValue) else parte, prof + 1)
+                if trozo is None:
+                    return None
+                partes.append(str(trozo))
+            return "".join(partes)
+        if isinstance(nodo, ast.BinOp) and isinstance(nodo.op, ast.Add):
+            izq, der = self.valor(nodo.left, prof + 1), self.valor(nodo.right, prof + 1)
+            return izq + der if isinstance(izq, str) and isinstance(der, str) else None
+        if isinstance(nodo, ast.BoolOp) and isinstance(nodo.op, ast.Or):
+            for opcion in nodo.values:
+                valor = self.valor(opcion, prof + 1)
+                if valor:
+                    return valor
+        return None
+
+    def resolver(self, nodo: ast.AST | None) -> tuple[object, str]:
+        """(valor, nota): la nota dice si el valor viene de una variable de entorno."""
+        self.vars_usadas = []
+        valor = self.valor(nodo)
+        definidas = [x for x in self.vars_usadas if x in self.env]
+        nota = f" (valor de la variable `{definidas[0]}` del compose/Dockerfile)" if definidas else ""
+        return valor, nota
+
+
 def nombre_llamada(nodo: ast.AST) -> str:
     if isinstance(nodo, ast.Name):
         return nodo.id
@@ -524,12 +856,14 @@ def revisar_compose(app: Path, repo: Path, rep: Reporte, datos: dict) -> None:
     variables = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", texto)) - VARS_AUTOMATICAS
     if variables:
         rep.para_admin(
-            "Variables de entorno que el compose espera del servidor (hay que definirlas en el `.env` "
-            f"de infraestructura antes de desplegar): {', '.join(sorted(variables))}."
+            f"El compose interpola {', '.join('`${' + x + '}`' for x in sorted(variables))}. El despliegue solo pasa "
+            "LAB_CONTAINER_NAME, LAB_PUBLIC_PATH y LAB_DOMAIN: para que lleguen hay que agregarlas a la lista blanca "
+            "`_GROUP_ENV` de `lab_deploy/deployer.py` y definirlas en el `.env` de infraestructura."
         )
-        rep.aviso(
-            f"El compose usa variables que el despliegue no inyecta solo ({', '.join(sorted(variables))}). "
-            "Sin ellas en el servidor, quedan vacías. Nunca subas su valor al repo."
+        rep.error(
+            f"El compose usa {', '.join('`${' + x + '}`' for x in sorted(variables))}, pero el despliegue solo entrega "
+            "`${LAB_CONTAINER_NAME}`, `${LAB_PUBLIC_PATH}` y `${LAB_DOMAIN}`. Cualquier otra variable llega vacía "
+            "aunque exista en el servidor, hasta que el administrador la habilite. Nunca subas su valor al repo."
         )
 
     if yaml is None:
@@ -610,10 +944,15 @@ def revisar_compose(app: Path, repo: Path, rep: Reporte, datos: dict) -> None:
         elif svc.get("build") not in (".", "./") and not isinstance(svc.get("build"), dict):
             rep.aviso(f"Servicio `{nombre}`: `build: {svc.get('build')}`; lo habitual es `build: .`.")
 
-        if svc.get("restart") in (None, "no", False):
+        if svc.get("restart") in ("no", False):
+            datos["una_corrida"] = True
+        elif svc.get("restart") is None:
             rep.aviso(f"Servicio `{nombre}`: sin `restart: unless-stopped` el servidor MCP no vuelve a levantarse si se cae o se reinicia la máquina.")
-        datos["env_compose"].update((svc.get("environment") or {}).keys() if isinstance(svc.get("environment"), dict) else
-                                    {str(e).split("=", 1)[0] for e in (svc.get("environment") or [])})
+        entorno = svc.get("environment") or {}
+        if isinstance(entorno, list):
+            entorno = dict((str(e).split("=", 1) + [""])[:2] for e in entorno)
+        datos["env_compose"].update(entorno.keys())
+        datos["envv_compose"].update({str(k): "" if val is None else str(val) for k, val in entorno.items()})
 
     if con_nombre_auto == 0:
         rep.error("Ningún servicio tiene `container_name: ${LAB_CONTAINER_NAME}`: sin eso Caddy no encuentra el contenedor.")
@@ -653,7 +992,7 @@ def revisar_dockerfile(app: Path, repo: Path, rep: Reporte, codigo: Codigo, dato
     elif not froms[-1].startswith("python:"):
         rep.aviso(f"La imagen base es `{froms[-1]}`; el patrón del laboratorio es `python:3.11-slim`.")
     elif "slim" not in froms[-1]:
-        rep.aviso(f"Imagen base `{froms[-1]}`: usa la variante `-slim` (la completa pesa ~1 GB y el build tiene 5 minutos de límite).")
+        rep.aviso(f"Imagen base `{froms[-1]}`: usa la variante `-slim` (la completa pesa ~1 GB y alarga el build, que tiene {BUILD_MIN} minutos de límite).")
 
     if re.search(r"[A-Za-z]:\\\\?[A-Za-z]", texto):
         rep.error("El Dockerfile contiene una ruta de Windows (`C:\\...`). Dentro del contenedor todo es Linux.")
@@ -697,14 +1036,40 @@ def revisar_dockerfile(app: Path, repo: Path, rep: Reporte, codigo: Codigo, dato
     if copia_todo and not (app / ".dockerignore").is_file():
         rep.aviso("El Dockerfile hace `COPY . .` sin `.dockerignore`: mete en la imagen tests, caches y lo que haya en la carpeta. Copia solo lo necesario o agrega un `.dockerignore`.")
 
+    # Programas de sistema que la imagen instala: el administrador debe saberlo.
+    paquetes_so: list[str] = []
+    for l in lineas:
+        for trozo in re.split(r"&&|;", l):
+            m_inst = re.search(r"\b(?:apt-get|apt|apk|yum|dnf)\s+(?:-\S+\s+)*(?:install|add)\s+(.*)", trozo)
+            if m_inst:
+                paquetes_so += [t for t in m_inst.group(1).split() if not t.startswith("-") and re.fullmatch(r"[a-z0-9][a-z0-9.+_-]*", t)]
+    if paquetes_so:
+        datos["paquetes_so"] = sorted(set(paquetes_so))
+        rep.info(f"La imagen instala programas de sistema: {', '.join(datos['paquetes_so'])}.")
+        rep.para_admin(
+            f"La imagen instala programas de sistema con el gestor de paquetes ({', '.join(datos['paquetes_so'])}). "
+            f"Se instalan dentro del contenedor, no en el servidor, pero alargan el build (límite: {BUILD_MIN} min) y ocupan disco."
+        )
+    if re.search(r"\b(npm|yarn|pnpm)\s+(install|ci|add)\b|\bcurl\b.*\|\s*(ba)?sh|\bwget\b", texto):
+        rep.para_admin("El Dockerfile descarga o instala cosas de internet durante el build (npm/curl/wget): revisar qué trae.")
+
     arranque = [l for l in lineas if l.upper().startswith(("CMD", "ENTRYPOINT"))]
     if not arranque:
         rep.error("El Dockerfile no tiene `CMD`: el contenedor no sabe qué ejecutar. Usa `CMD [\"python\", \"server.py\"]`.")
     elif "server.py" not in arranque[-1] and server.is_file():
         rep.aviso(f"El `CMD` no arranca `server.py`: `{arranque[-1]}`.")
-    datos["env_dockerfile"] = set(re.findall(r"^\s*ENV\s+([A-Za-z_][A-Za-z0-9_]*)", texto, re.M)) | set(
-        re.findall(r"\s([A-Za-z_][A-Za-z0-9_]*)=", " ".join(l for l in lineas if l.upper().startswith("ENV ")))
-    )
+    for l in lineas:
+        if not l.upper().startswith("ENV "):
+            continue
+        try:
+            fichas = shlex.split(l[4:])
+        except ValueError:
+            fichas = l[4:].split()
+        if fichas and "=" not in fichas[0] and len(fichas) > 1:
+            datos["envv_docker"][fichas[0]] = " ".join(fichas[1:])
+        else:
+            datos["envv_docker"].update(f.split("=", 1) for f in fichas if "=" in f)
+    datos["env_dockerfile"] = set(datos["envv_docker"])
 
 
 def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) -> None:
@@ -716,6 +1081,12 @@ def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) ->
     for n, cruda in enumerate(leer(req).splitlines(), 1):
         linea = cruda.split("#", 1)[0].strip()
         if not linea:
+            continue
+        if re.match(r"^(-e\b|--editable\b|\.{0,2}[\\/]|[A-Za-z]:[\\/]|file:)", linea) or re.search(r"@\s*file:|[A-Za-z]:\\\\", linea):
+            rep.error(
+                f"`requirements.txt` línea {n} instala desde una ruta de tu laptop: `{cruda.strip()}`. En el servidor esa ruta "
+                "no existe. Pon el nombre del paquete publicado en PyPI, o incluye ese código dentro de la carpeta del proyecto."
+            )
             continue
         if linea.startswith("-"):
             continue
@@ -759,9 +1130,45 @@ def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) ->
         rep.ok("`requirements.txt` cubre todas las librerías que importa el código.")
 
     usados = {normalizar_paquete(IMPORT_A_PAQUETE.get(m, m)) for solo in (False, True) for m in codigo.terceros(solo)}
-    sobran = sorted(p for p in declarados if p not in usados and p not in {"uvicorn", "pytest", "mcp"})
-    if sobran:
+    solo_windows = sorted(p for p in declarados if p in REQ_SOLO_WINDOWS)
+    if solo_windows:
+        rep.error(
+            f"`requirements.txt` incluye paquetes que solo existen para Windows ({', '.join(solo_windows)}). El servidor es "
+            "Linux: `pip install` falla y la imagen no se construye. Quítalos (suelen colarse al hacer `pip freeze`)."
+        )
+    locales = sorted(p for p in declarados if p in REQ_SOLO_LOCAL)
+    if locales:
+        rep.aviso(
+            f"`requirements.txt` incluye herramientas de desarrollo ({', '.join(locales)}) que solo se usan en tu laptop. "
+            "No van en la imagen: muévelas a un `requirements-dev.txt`."
+        )
+    sobran = sorted(p for p in declarados if p not in usados and p not in {"uvicorn", "pytest", "mcp"} | REQ_SOLO_LOCAL | REQ_SOLO_WINDOWS)
+    if len(sobran) > 10:
+        rep.aviso(
+            f"`requirements.txt` lista {len(sobran)} paquetes que ningún archivo importa (ej. {', '.join(sobran[:6])}…). Parece la salida de "
+            "`pip freeze`, que vuelca todo lo instalado en tu laptop. Deja solo lo que el proyecto importa."
+        )
+    elif sobran:
         rep.aviso(f"`requirements.txt` lista paquetes que ningún archivo importa ({', '.join(sobran)}): quítalos si no se usan, alargan el build.")
+
+    # Lo que el servidor no trae de serie y el administrador tendría que instalar o configurar.
+    servicios: dict[str, list[str]] = {}
+    for paquete in declarados:
+        if paquete in REQ_SERVICIOS:
+            servicios.setdefault(REQ_SERVICIOS[paquete], []).append(paquete)
+    for servicio, paquetes in sorted(servicios.items()):
+        rep.aviso(
+            f"El proyecto usa {', '.join('`' + p + '`' for p in paquetes)}, que necesita {servicio}. El servidor solo ofrece "
+            "SeaweedFS: sin que el administrador lo instale o configure, la app arranca pero falla al usarlo."
+        )
+        rep.para_admin(f"El proyecto necesita {servicio} (usa {', '.join(paquetes)}): hay que instalarlo o configurarlo en el servidor antes de desplegar.")
+    pesados = sorted(p for p in declarados if p in REQ_PESADOS)
+    if pesados:
+        rep.aviso(
+            f"`requirements.txt` incluye librerías muy pesadas ({', '.join(pesados)}): la imagen puede pesar varios GB, el build "
+            f"puede pasar de {BUILD_MIN} minutos y 512m de memoria no alcanzan. Confirma con el administrador antes de subir."
+        )
+        rep.para_admin(f"Librerías pesadas en la imagen ({', '.join(pesados)}): revisar espacio en disco, tiempo de build y memoria del contenedor.")
 
     imports = set()
     for py in codigo.archivos:
@@ -796,7 +1203,7 @@ def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) ->
 # --- 5. server.py y storage.py ----------------------------------------------------
 
 
-def revisar_server(app: Path, repo: Path, grupo: str, rep: Reporte, codigo: Codigo, datos: dict) -> None:
+def revisar_server(app: Path, repo: Path, grupo: str, tema: str, rep: Reporte, codigo: Codigo, datos: dict) -> None:
     server = app / "server.py"
     if not server.is_file():
         candidatos = sorted(p.name for p, f in codigo.fuentes.items() if re.search(r"\b(MCPServer|FastMCP)\(", f) and not codigo.es_test(p))
@@ -808,63 +1215,84 @@ def revisar_server(app: Path, repo: Path, grupo: str, rep: Reporte, codigo: Codi
         return
     fuente = codigo.fuentes[server]
 
-    # Nombre del servidor MCP.
-    nombres = []
-    for nodo in ast.walk(arbol):
-        if isinstance(nodo, ast.Call) and nombre_llamada(nodo.func).split(".")[-1] in {"MCPServer", "FastMCP", "Server"}:
-            if nodo.args and isinstance(nodo.args[0], ast.Constant) and isinstance(nodo.args[0].value, str):
-                nombres.append(nodo.args[0].value)
-            elif nodo.args or nodo.keywords:
-                nombres.append("")
-    if not nombres:
-        rep.error("`server.py` no crea el servidor (`mcp = MCPServer(\"grupoNN-<tema>\")`).")
-    else:
-        nombre = nombres[0]
-        if nombre == PILOTO_NOMBRE and grupo != "g01":
-            rep.error(f"El servidor se llama `{PILOTO_NOMBRE}`: es el nombre del piloto copiado tal cual. Cámbialo a `{grupo}-<tema>`.")
-        elif nombre and not nombre.startswith(f"{grupo}-"):
-            rep.aviso(f"El servidor MCP se llama `{nombre}`; debe empezar con el grupo: `{grupo}-<tema>` (es lo que ve quien se conecta).")
-        elif nombre:
-            rep.ok(f"Nombre del servidor MCP: `{nombre}`.")
-        if len(nombres) > 1:
-            rep.aviso(f"`server.py` crea el servidor {len(nombres)} veces: parece código pegado dos veces. Deja una sola definición.")
+    res = Resolver(arbol, datos.get("env", {}))
+    esperado = re.sub(r"[^a-z0-9]+", "-", f"{grupo}-{tema}".lower()).strip("-")
 
-    # Arranque: transporte, host y puerto.
+    def arg(llamada: ast.Call, clave: str) -> ast.AST | None:
+        return next((k.value for k in llamada.keywords if k.arg == clave), None)
+
+    # Nombre del servidor MCP: lo que ve quien se conecta. Debe identificar al
+    # grupo y al proyecto, igual que el piloto se llama "g01-derivadas1".
+    creaciones = [n for n in ast.walk(arbol) if isinstance(n, ast.Call)
+                  and nombre_llamada(n.func).split(".")[-1] in {"MCPServer", "FastMCP"}]
+    if not creaciones:
+        rep.error(f"`server.py` no crea el servidor. Debe tener `mcp = MCPServer(\"{esperado}\")`.")
+    else:
+        crea = creaciones[0]
+        nombre, nota = res.resolver(crea.args[0] if crea.args else arg(crea, "name"))
+        if not isinstance(nombre, str) or not nombre:
+            rep.aviso(f"No pude determinar el nombre del servidor MCP en `server.py:{crea.lineno}`. Debe ser `{esperado}`: revísalo a mano.")
+        elif grupo != "g01" and (nombre == PILOTO_NOMBRE or "derivadas1" in nombre or nombre.startswith("g01")):
+            rep.error(f"`server.py:{crea.lineno}`: el servidor se llama `{nombre}`{nota}, que es el nombre del piloto. Cámbialo a `{esperado}`.")
+        elif not nombre.lower().startswith(f"{grupo}-"):
+            rep.error(
+                f"`server.py:{crea.lineno}`: el servidor MCP se llama `{nombre}`{nota}. Debe llevar el grupo y el proyecto, "
+                f"como el piloto (`{PILOTO_NOMBRE}`): `{esperado}`."
+            )
+        elif nombre != esperado:
+            rep.aviso(f"`server.py:{crea.lineno}`: el servidor se llama `{nombre}`{nota}; para que coincida con la carpeta del proyecto debería ser `{esperado}`.")
+        else:
+            rep.ok(f"Nombre del servidor MCP: `{nombre}`.")
+        if len(creaciones) > 1:
+            rep.aviso(f"`server.py` crea el servidor {len(creaciones)} veces: parece código pegado dos veces. Deja una sola definición.")
+
+    # Arranque: transporte, host y puerto (en `mcp.run(...)` o en el constructor).
     corridas = [n for n in ast.walk(arbol) if isinstance(n, ast.Call) and nombre_llamada(n.func).endswith(".run")
                 and not nombre_llamada(n.func).startswith(("subprocess", "asyncio", "uvicorn"))]
     if not corridas:
         rep.error("`server.py` nunca llama a `mcp.run(...)`: el contenedor arrancaría y terminaría sin servir nada.")
     else:
-        def kw(llamada: ast.Call, clave: str):
-            for k in llamada.keywords:
-                if k.arg == clave:
-                    return k.value.value if isinstance(k.value, ast.Constant) else "<variable>"
-            return None
-
-        transportes = [kw(c, "transport") for c in corridas]
-        http = [c for c in corridas if kw(c, "transport") in ("streamable-http", "<variable>")]
-        if "sse" in transportes:
+        transportes = []
+        for c in corridas:
+            nodo_t = arg(c, "transport") or (c.args[0] if c.args else None)
+            valor_t, _ = res.resolver(nodo_t)
+            transportes.append((c, nodo_t, valor_t))
+        if any(t == "sse" for _, _, t in transportes):
             rep.error("`transport=\"sse\"` no funciona en este laboratorio (se queda colgado). Usa `transport=\"streamable-http\"`.")
-        if not http or ("streamable-http" not in fuente):
+        # Sirve una llamada con streamable-http, o una cuyo transporte no se
+        # pudo resolver si el archivo al menos contempla streamable-http.
+        http = [c for c, nodo_t, t in transportes if t == "streamable-http" or (nodo_t is not None and t is None and "streamable-http" in fuente)]
+        if not http:
             rep.error(
                 "`server.py` no arranca por HTTP. `mcp.run()` a secas usa stdio: sirve en tu laptop, pero en el "
-                "contenedor no hay consola y termina al instante. Debe ser:\n"
+                "contenedor no hay consola y termina al instante, y el despliegue lo da por fallido porque el "
+                f"contenedor no queda corriendo (lo comprueba durante {SALUD_SEG} segundos). Debe ser:\n"
                 f"      mcp.run(transport=\"streamable-http\", host=\"0.0.0.0\", port={PUERTO_MCP})"
             )
         else:
             llamada = http[-1]
-            host, puerto = kw(llamada, "host"), kw(llamada, "port")
-            if host in (None, "127.0.0.1", "localhost"):
-                rep.error("`mcp.run(...)` debe llevar `host=\"0.0.0.0\"`: con `127.0.0.1` (o sin host) Caddy no puede llegar al contenedor.")
-            if puerto is None:
-                rep.aviso(f"`mcp.run(...)` no indica `port={PUERTO_MCP}`; ponlo explícito.")
-            elif isinstance(puerto, int) and puerto != PUERTO_MCP:
+            fuentes_kw = [llamada] + creaciones[:1]
+            nodo_h = next((arg(c, "host") for c in fuentes_kw if arg(c, "host") is not None), None)
+            nodo_p = next((arg(c, "port") for c in fuentes_kw if arg(c, "port") is not None), None)
+            host, nota_h = res.resolver(nodo_h)
+            puerto, nota_p = res.resolver(nodo_p)
+            try:
+                puerto = int(puerto) if puerto is not None else None
+            except (TypeError, ValueError):
+                puerto = None
+            if nodo_h is None or host in ("127.0.0.1", "localhost"):
+                rep.error(f"El servidor debe escuchar en `host=\"0.0.0.0\"`{nota_h}: con `127.0.0.1` (o sin host) Caddy no puede llegar al contenedor.")
+            elif host is None:
+                rep.aviso("No pude determinar en qué `host` escucha el servidor. En el contenedor debe ser `0.0.0.0`: revísalo a mano.")
+            if nodo_p is None:
+                rep.aviso(f"El servidor no indica `port={PUERTO_MCP}`; ponlo explícito.")
+            elif puerto is None:
+                rep.aviso(f"No pude determinar en qué puerto escucha el servidor. Debe ser {PUERTO_MCP}: revísalo a mano.")
+            elif puerto != PUERTO_MCP:
                 datos["puerto"] = puerto
-                rep.aviso(f"El servidor escucha en el puerto {puerto}; el estándar del laboratorio es {PUERTO_MCP}. Si lo mantienes, avísale al administrador.")
-            if host == "0.0.0.0" and puerto in (PUERTO_MCP, "<variable>"):
+                rep.aviso(f"El servidor escucha en el puerto {puerto}{nota_p}; el estándar del laboratorio es {PUERTO_MCP}. Si lo mantienes, avísale al administrador.")
+            if host == "0.0.0.0" and puerto == PUERTO_MCP:
                 rep.ok(f"Arranque correcto: streamable-http en 0.0.0.0:{PUERTO_MCP}.")
-        if len(corridas) > 1 and all(t in (None,) for t in transportes):
-            rep.aviso("Hay varias llamadas a `mcp.run()` en `server.py`; solo se ejecuta la primera.")
     if "__main__" not in fuente:
         rep.aviso("Falta `if __name__ == \"__main__\":` alrededor de `mcp.run(...)`: sin él, importar `server` (ej. desde un test) arranca el servidor.")
 
@@ -938,6 +1366,27 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
         rep.info(f"El código menciona servicios externos: {lista}. Si el servidor los llama, necesita salida a internet.")
         rep.para_admin(f"El código hace referencia a servicios externos: {', '.join(sorted(externos))}. Confirmar que el contenedor puede (y debe) salir a ellos.")
 
+    # Restos del piloto: nombres de g01/derivadas1 copiados sin cambiar.
+    if grupo != "g01":
+        restos: list[str] = []
+        for py in codigo.archivos:
+            if py.name not in {"server.py", "storage.py"}:
+                continue
+            for cadena, linea in codigo.cadenas(py):
+                ya_reportado = cadena in {PILOTO_NOMBRE, PILOTO_BUCKET} or "/img/derivadas1" in cadena
+                if re.search(r"derivadas1|\bg01\b", cadena) and not ya_reportado:
+                    restos.append(f"{py.name}:{linea}")
+        for nombre_archivo in ("docker-compose.yml", "Dockerfile"):
+            for n, linea_txt in enumerate(leer(app / nombre_archivo).splitlines(), 1):
+                sin_comentario = linea_txt.split("#", 1)[0]
+                if re.search(r"derivadas1|\bg01\b", sin_comentario):
+                    restos.append(f"{nombre_archivo}:{n}")
+        if restos:
+            rep.error(
+                "Quedan nombres del piloto (`g01` / `derivadas1`) sin cambiar en: " + ", ".join(sorted(set(restos)))
+                + f". Cada grupo usa los suyos: `{grupo}` y el nombre de su proyecto."
+            )
+
     # Variables de entorno que lee el código.
     variables: dict[str, bool] = {}
     for py, arb in codigo.archivos.items():
@@ -989,7 +1438,7 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
                 )
             rep.para_admin(
                 f"La app necesita el programa de sistema `{binario}` dentro de su imagen. Si es pesado (ej. LaTeX), "
-                "el build puede superar el límite de 5 minutos del despliegue."
+                f"el build puede superar el límite de {BUILD_MIN} minutos del despliegue."
             )
 
     # Escritura en disco.
@@ -1015,40 +1464,62 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
                 "el cliente de chat no la muestra sola. Copia el `storage.py` del piloto y cambia bucket y URL."
             )
         return
-    constantes: dict[str, tuple[str, int]] = {}
-    for nodo in ast.walk(codigo.archivos[storage]):
-        if isinstance(nodo, ast.Assign) and isinstance(nodo.value, ast.Constant) and isinstance(nodo.value.value, str):
-            for objetivo in nodo.targets:
-                if isinstance(objetivo, ast.Name):
-                    constantes[objetivo.id] = (nodo.value.value, nodo.lineno)
-    bucket = next((v for k, v in constantes.items() if "BUCKET" in k.upper()), None)
-    publica = next((v for k, v in constantes.items() if "PUBLIC" in k.upper() and "URL" in k.upper()), None)
+    res = Resolver(codigo.archivos[storage], datos.get("env", {}))
+    url_esperada = f"https://{DOMINIO}/img/{slug}"
 
-    if bucket is None:
-        rep.aviso(f"`storage.py` no define el bucket como constante (`IMG_BUCKET = \"{bucket_sugerido}\"`); revisa a mano que no use el del piloto.")
+    def constante(*claves: str) -> tuple[object, str, int] | None:
+        for nombre_var, nodo in res.asign.items():
+            if all(c in nombre_var.upper() for c in claves):
+                valor, nota = res.resolver(nodo)
+                return valor, nota, getattr(nodo, "lineno", 0)
+        return None
+
+    bucket = constante("BUCKET")
+    publica = constante("PUBLIC", "URL")
+    seaweed = constante("SEAWEED")
+    es_piloto = grupo == "g01"
+    bucket_ok = None
+
+    if bucket is None or not isinstance(bucket[0], str):
+        rep.aviso(f"No pude determinar el bucket en `storage.py`. Debe ser `IMG_BUCKET = \"{bucket_sugerido}\"`: revísalo a mano.")
     else:
-        valor, linea = bucket
-        if valor == PILOTO_BUCKET and grupo != "g01":
-            rep.error(f"`storage.py:{linea}` usa el bucket `{PILOTO_BUCKET}`, que es del piloto de g01: sus imágenes se mezclarían con las de ustedes. Cámbialo a `IMG_BUCKET = \"{bucket_sugerido}\"`.")
+        valor, nota, linea = bucket
+        if not es_piloto and (valor == PILOTO_BUCKET or "derivadas1" in valor):
+            rep.error(f"`storage.py:{linea}`: el bucket es `{valor}`{nota}, el del piloto de g01: sus imágenes se mezclarían con las de ustedes. Cámbialo a `{bucket_sugerido}`.")
         elif not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", valor):
-            rep.error(f"`storage.py:{linea}`: el bucket `{valor}` no es un nombre S3 válido (solo minúsculas, dígitos y `-`, de 3 a 63 caracteres). Usa `{bucket_sugerido}`.")
-        elif grupo not in valor and grupo != "g01":
-            rep.aviso(f"`storage.py:{linea}`: el bucket `{valor}` no incluye el grupo; otro grupo podría elegir el mismo. Recomendado: `{bucket_sugerido}`.")
-    if publica is None:
-        rep.aviso(f"`storage.py` no define `PUBLIC_IMG_BASE_URL`. Debe ser `https://{DOMINIO}/img/{slug}`.")
+            rep.error(f"`storage.py:{linea}`: el bucket `{valor}`{nota} no es un nombre S3 válido (solo minúsculas, dígitos y `-`, de 3 a 63 caracteres). Usa `{bucket_sugerido}`.")
+        elif not es_piloto and not valor.startswith(f"{grupo}-"):
+            rep.error(
+                f"`storage.py:{linea}`: el bucket es `{valor}`{nota} y no lleva el nombre del grupo. Debe empezar con "
+                f"`{grupo}-` para no chocar con otro grupo: `{bucket_sugerido}`."
+            )
+        else:
+            bucket_ok = valor
+            if not es_piloto and valor != bucket_sugerido:
+                rep.aviso(f"`storage.py:{linea}`: el bucket es `{valor}`{nota}; para que coincida con la carpeta del proyecto debería ser `{bucket_sugerido}`.")
+
+    if publica is None or not isinstance(publica[0], str):
+        rep.aviso(f"No pude determinar `PUBLIC_IMG_BASE_URL` en `storage.py`. Debe ser `{url_esperada}`: revísalo a mano.")
     else:
-        valor, linea = publica
+        valor, nota, linea = publica
         m = re.fullmatch(rf"https://{re.escape(DOMINIO)}/img/([a-z0-9-]+)/?", valor)
-        if "derivadas1" in valor and grupo != "g01":
-            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` sigue apuntando a la ruta del piloto. Cámbiala a `https://{DOMINIO}/img/{slug}`.")
+        if not es_piloto and "derivadas1" in valor:
+            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` es `{valor}`{nota}, la ruta del piloto. Cámbiala a `{url_esperada}`.")
         elif not m:
-            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL = \"{valor}\"` no sirve en el servidor. Debe ser `https://{DOMINIO}/img/{slug}`.")
-        elif bucket:
+            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` es `{valor}`{nota} y no sirve en el servidor. Debe ser `{url_esperada}`.")
+        elif not es_piloto and not m.group(1).startswith(f"{grupo}-"):
+            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` es `{valor}`{nota} y no lleva el nombre del grupo. Debe ser `{url_esperada}`.")
+        elif bucket_ok:
+            if not es_piloto and bucket_ok != f"{m.group(1)}-imgs":
+                rep.aviso(f"El bucket (`{bucket_ok}`) y la URL pública (`/img/{m.group(1)}`) no siguen el mismo nombre. Lo esperado: bucket `{m.group(1)}-imgs`.")
             rep.para_admin(
-                f"Ruta pública de imágenes en Caddy (solo GET): `/img/{m.group(1)}/*` → bucket `{bucket[0]}` en `seaweedfs:8333` "
+                f"Ruta pública de imágenes en Caddy (solo GET): `/img/{m.group(1)}/*` → bucket `{bucket_ok}` en `seaweedfs:8333` "
                 "(mismo bloque que `/img/derivadas1/*`)."
             )
-            rep.ok(f"Storage: bucket `{bucket[0]}`, URL pública `/img/{m.group(1)}`.")
+            rep.ok(f"Storage: bucket `{bucket_ok}`, URL pública `/img/{m.group(1)}`.")
+
+    if seaweed is not None and isinstance(seaweed[0], str) and seaweed[0].rstrip("/") != SEAWEEDFS_URL and seaweed[1]:
+        rep.error(f"`storage.py:{seaweed[2]}`: la URL del storage queda en `{seaweed[0]}`{seaweed[1]}. En el servidor debe ser `{SEAWEEDFS_URL}`.")
     fuente = codigo.fuentes[storage]
     if "seaweedfs" not in fuente:
         rep.error(f"`storage.py` no apunta a SeaweedFS. La URL interna es `{SEAWEEDFS_URL}` (el nombre `seaweedfs` se resuelve dentro de la red `lab_net`).")
@@ -1072,17 +1543,31 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
     seccion = f"App `{rel(app, repo)}`"
     rep.en(seccion)
     datos = {"id": app_id, "compose": False, "env_compose": set(), "puerto": PUERTO_MCP, "dir": app,
-             "ubicada": ubicada, "solo_imagen": False}
+             "ubicada": ubicada, "solo_imagen": False, "envv_compose": {}, "envv_docker": {}}
 
     codigo = Codigo(app, rep, repo)
     revisar_compose(app, repo, rep, datos)
     datos["solo_imagen"] = datos.get("sin_build", False) and not codigo.fuentes
+    if datos.get("una_corrida") and (app / "server.py").is_file():
+        rep.error(
+            "El compose tiene `restart: \"no\"`, que el despliegue interpreta como un script de una sola corrida: "
+            f"espera {SALUD_SEG} segundos a que termine y, como un servidor nunca termina, lo marca como fallido. "
+            "Un servidor MCP lleva `restart: unless-stopped`."
+        )
     if datos["solo_imagen"]:
         rep.info("Es una app ya hecha (imagen externa, sin código propio): no lleva Dockerfile, requirements.txt ni server.py.")
     else:
         revisar_dockerfile(app, repo, rep, codigo, datos)
         revisar_requirements(app, repo, rep, codigo)
-        revisar_server(app, repo, grupo, rep, codigo, datos)
+        # Lo que vale en el contenedor: el compose pisa al Dockerfile.
+        datos["env"] = {**datos["envv_docker"], **datos["envv_compose"]}
+        pisadas = sorted(k for k in datos["envv_docker"] if k in datos["envv_compose"] and datos["envv_docker"][k] != datos["envv_compose"][k])
+        if pisadas:
+            rep.aviso(
+                "El Dockerfile y el compose definen con valores distintos: " + ", ".join(f"`{k}`" for k in pisadas)
+                + ". En el servidor gana el compose; deja un solo lugar para no confundirte."
+            )
+        revisar_server(app, repo, grupo, tema, rep, codigo, datos)
         revisar_red_y_storage(app, repo, grupo, tema, rep, codigo, datos)
     if not (datos["compose"] and ubicada):
         rep.degradar(seccion)
@@ -1226,6 +1711,7 @@ def main() -> int:
 
     rep = Reporte()
     ctx = revisar_git(repo, grupo, args.base, rep)
+    revisar_gitignore(repo, grupo, rep, ctx)
     bien, mal = revisar_estructura(repo, grupo_dir, rep)
     apps = [revisar_app(app, repo, grupo_dir, rep, ctx["nuevos"]) for app in sorted(bien + mal)]
     cosas_nuevas(ctx["nuevos"], ctx["ignorados"], rep)
