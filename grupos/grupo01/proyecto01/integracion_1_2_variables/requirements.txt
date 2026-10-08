@@ -3,3 +3,4 @@ sympy
 matplotlib
 numpy
 requests
+fastmcp
