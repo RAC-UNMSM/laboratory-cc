@@ -17,7 +17,7 @@ from reporte_html import generar_reporte_html
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORTE_PATH = os.path.join(BASE_DIR, "reporte_integral.html")
 
-mcp = FastMCP("Calculadora Integrales")
+mcp = FastMCP("grupo01-integracion-1-2-variables")
 
 def abrir_reporte_en_mac(ruta):
     """Fuerza la apertura del archivo HTML en el navegador predeterminado de macOS."""
@@ -150,4 +150,4 @@ def integra_doble_general(
         return f"Error durante la integración: {e}"
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
