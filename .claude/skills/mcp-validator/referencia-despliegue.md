@@ -11,8 +11,10 @@ El despliegue solo busca este patrón, exactamente dos niveles bajo el grupo:
 grupos/grupoNN/<semana>/<tema>/docker-compose.yml
 ```
 
-`<semana>` es `semanaNN` o `proyectoNN`. Una app en otro nivel
-(`grupos/grupoNN/mi-app/` o más profunda) no se despliega.
+`<semana>` es `proyectoNN` (o `semanaNN`). Una app en otro nivel
+(`grupos/grupoNN/mi-app/` o más profunda) no se despliega. Todo el proyecto
+(código, archivos de despliegue, datos) va dentro de la carpeta del tema;
+en `grupos/grupoNN/` y en `proyectoNN/` solo queda documentación.
 
 Los nombres de `<semana>` y `<tema>` solo pueden llevar minúsculas, dígitos,
 `-` y `_`. Sin espacios, mayúsculas ni tildes: forman el nombre de proyecto
@@ -65,6 +67,12 @@ networks:
   `cap_add` peligroso, `env_file` y montar rutas del host (`./algo:/algo`).
   Solo volúmenes nombrados.
 - El archivo se llama exactamente `docker-compose.yml`.
+- `restart: unless-stopped` para un servidor. Con `restart: "no"` el
+  despliegue lo trata como un script que debe terminar solo, y a un servidor
+  lo marca como fallido.
+- Variables: el despliegue solo entrega `${LAB_CONTAINER_NAME}`,
+  `${LAB_PUBLIC_PATH}` y `${LAB_DOMAIN}`. Cualquier otra `${VAR}` llega vacía
+  aunque exista en el servidor; si hace falta una, se pide al administrador.
 
 ## `Dockerfile`
 
@@ -101,6 +109,13 @@ matplotlib
   estándar de Python. Lo que funciona en la laptop porque ya estaba instalado
   falla en el contenedor con `ModuleNotFoundError`.
 - Sin paquetes repetidos: `pip` aborta con "Double requirement given".
+- Solo lo que el proyecto importa. No la salida de `pip freeze`, que vuelca
+  todo lo instalado en la laptop.
+- Sin paquetes exclusivos de Windows (`pywin32` y similares): el servidor es
+  Linux y la imagen no se construye.
+- Sin instalaciones desde rutas locales (`-e .`, `C:\...`, `file://`).
+- Las herramientas de desarrollo (black, jupyter, pyinstaller…) van en un
+  `requirements-dev.txt` aparte.
 - `mcp==2.1.1` fijo. En la 2.x la clase es `MCPServer` y vive en
   `mcp.server.mcpserver`; en la 1.x era `FastMCP` en `mcp.server.fastmcp`.
   Sin fijar la versión, un build futuro puede romper los imports.
@@ -128,7 +143,9 @@ if __name__ == "__main__":
     mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
 ```
 
-- Nombre del servidor: `grupoNN-<tema>`.
+- Nombre del servidor: `grupoNN-<tema>`, con el grupo y el nombre de la
+  carpeta del proyecto (el piloto es `g01-derivadas1`). Sin el grupo delante,
+  o con el nombre del piloto, es error.
 - `transport="streamable-http"`: sin él, `mcp.run()` usa stdio y el
   contenedor termina al instante. `"sse"` no funciona en este laboratorio.
 - `host="0.0.0.0"`: con `127.0.0.1` Caddy no puede llegar al contenedor.
@@ -150,8 +167,13 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
 
 - `seaweedfs:8333` es la API S3 dentro de la red `lab_net`. No `localhost`
   (dentro del contenedor es el propio contenedor) ni el puerto 8888.
-- El bucket solo admite minúsculas, dígitos y `-` (de 3 a 63 caracteres), e
-  incluye el grupo para no chocar con otro.
+- El bucket solo admite minúsculas, dígitos y `-` (de 3 a 63 caracteres) y
+  empieza con el grupo, igual que la URL pública: `grupoNN-<tema>-imgs` y
+  `/img/grupoNN-<tema>`. El piloto usa `derivadas1` a secas porque es el
+  ejemplo; los grupos no.
+- Si esos valores se pasan por variables de entorno (`os.getenv`), cuenta el
+  valor que definan el compose o el Dockerfile, no el valor por defecto del
+  código. El compose gana sobre el Dockerfile.
 - La ruta `/img/grupoNN-<tema>/*` la crea el administrador en Caddy apuntando
   al bucket. Hasta entonces las imágenes se suben pero no se ven: hay que
   pedírsela.
@@ -165,8 +187,17 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
 
 1. El CI valida el compose y hace un arranque de prueba (construye, levanta,
    muestra los logs y baja). El resultado queda como comentario en el PR.
-2. El administrador revisa y fusiona.
-3. El agente de despliegue detecta el cambio en `main` y levanta la app.
-4. El administrador agrega la ruta pública (y la de imágenes) en el servidor.
-5. El grupo prueba con MCP Inspector o
+2. El administrador revisa y fusiona. Solo él puede actualizar `main`.
+3. GitHub avisa por webhook al servidor, que descarga `main` y despliega solo
+   las apps cuya carpeta cambió.
+4. Por cada app: vuelve a validar el compose, construye y levanta (límite de
+   15 minutos) y comprueba durante 60 segundos que el contenedor quede
+   corriendo. Si falla, el contenedor anterior sigue en pie y el error queda
+   en el log del servidor; el alumno no lo ve, hay que preguntarle al
+   administrador.
+5. El administrador agrega la ruta pública (y la de imágenes) en Caddy.
+6. El grupo prueba con MCP Inspector o
    `claude mcp add --transport http <nombre> <URL>/mcp`.
+
+Si una app se elimina o se renombra su carpeta, el contenedor anterior no se
+baja solo: hay que avisar al administrador.

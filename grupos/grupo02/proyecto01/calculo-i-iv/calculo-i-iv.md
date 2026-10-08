@@ -65,39 +65,25 @@ Este módulo funciona con una ventana de contexto (*skill*) independiente, dise�
 
 ## 3. Estructura Modular de Archivos y Componentes
 
-> **Nota:** esta sección se actualizó para reflejar la estructura que se
-> construyó finalmente. La partición inicial era de 7 módulos (uno por tema);
-> se cambió a **4 módulos, uno por área y por persona**, que es como quedó
-> repartido el trabajo y lo que hace que 5 personas puedan escribir en paralelo
-> sin pisarse. La carpeta también cambió de nombre: el profesor pidió que el
-> proyecto viva dentro de `proyecto01/`.
-
-El repositorio del Grupo 02 se organiza bajo la siguiente arquitectura de directorios:
+El repositorio del Grupo 02 se organizará bajo la siguiente arquitectura de directorios:
 
 ```text
-calculo-i-iv/
-|-- server.py               # Servidor principal MCP (orquestador)
-|-- requirements.txt        # mcp==2.1.1 (pinned), sympy, numpy
-|-- Dockerfile
-|-- docker-compose.yml
-|-- skill/                  # Contextos de comportamiento (Markdown)
+mcp-calculo-g02/
+|-- server.py                      # Servidor principal MCP
+|-- tools/                         # Motores matemáticos (SymPy / NumPy)
+|   |-- limites_continuidad.py     # Cálculo I
+|   |-- derivadas_optimizacion.py  # Cálculo I
+|   |-- integrales.py              # Cálculo II
+|   |-- integrales_aplicaciones.py # Cálculo II
+|   |-- calculo_multivariable.py   # Cálculo III
+|   |-- integrales_multiples.py    # Cálculo IV
+|   `-- campos_vectoriales.py      # Cálculo IV
+|-- skills/                        # Contextos de comportamiento (Markdown)
 |   |-- skill_resolver_examen.md   # Instrucciones de examen formal
 |   |-- skill_paso_a_paso.md       # Instrucciones de paso a paso
 |   `-- skill_tutor_interactivo.md # Contexto del tutor
-|-- tools/                  # Motores matemáticos (SymPy / NumPy)
-|   |-- README.md           # El contrato que debe cumplir cada módulo
-|   |-- _plantilla.py       # Plantilla a copiar por cada integrante
-|   |-- calculo1.py         # Cálculo I   (Saico Cristhian)
-|   |-- calculo2.py         # Cálculo II  (Rosales Yhin)
-|   |-- calculo3.py         # Cálculo III (Vilcapoma Jefferson)
-|   `-- calculo4.py         # Cálculo IV  (Meza Angel)
-`-- tests/                  # Pruebas de estructura
+`-- tests/                         # Pruebas unitarias para scripts .py
 ```
-
-`server.py` carga los módulos de `tools/` **de forma dinámica al arrancar**:
-recorre `calculo1.py` … `calculo4.py`, registra sus funciones públicas como
-tools MCP con el prefijo del módulo (`calculo4_green`, `calculo1_limite`…) y
-no hay que tocar el servidor para agregar una función nueva.
 
 ## 4. Organización de Tareas para el Grupo 02
 
