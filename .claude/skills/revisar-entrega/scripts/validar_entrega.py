@@ -32,6 +32,7 @@ import ast
 import fnmatch
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -309,6 +310,37 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     else:
         rep.ok(f"El PR solo toca `{prefijo}`.")
 
+    # ¿Se podrá fusionar? Simula el merge con main sin tocar nada.
+    code_mt, salida_mt = git(repo, "merge-tree", "--write-tree", "--name-only", base, "HEAD")
+    if code_mt == 1:
+        en_conflicto = [l for l in salida_mt.splitlines()[1:] if l.strip()]
+        en_conflicto = en_conflicto[: en_conflicto.index("")] if "" in en_conflicto else en_conflicto
+        archivos = [l for l in en_conflicto if "/" in l or "." in l][:10]
+        rep.error(
+            f"Tu rama tiene conflictos con `{base}`: el PR no se podrá fusionar tal cual.\n      "
+            + "\n      ".join(archivos)
+            + f"\n    Ejecuta `git merge {base}`, resuelve esos archivos y confirma."
+        )
+    elif code_mt == 0:
+        rep.ok(f"La rama se puede fusionar con `{base}` sin conflictos.")
+
+    # Cambios hechos pero todavía sin confirmar (commit).
+    _, porcelana = git(repo, "status", "--porcelain")
+    pend_fuera, pend_dentro = [], []
+    for linea in porcelana.splitlines():
+        ruta = linea[2:].strip().split(" -> ")[-1].strip('"')
+        (pend_dentro if ruta.startswith(prefijo) else pend_fuera).append(f"{linea[:2].strip() or '?'}  {ruta}")
+    if pend_fuera:
+        rep.aviso(
+            f"Tienes {len(pend_fuera)} cambio(s) sin confirmar FUERA de tu carpeta. No los agregues al commit "
+            "(revisa con `git status` antes de `git add`):\n      " + "\n      ".join(pend_fuera[:10])
+        )
+    if pend_dentro:
+        rep.info(
+            f"Tienes {len(pend_dentro)} cambio(s) en tu carpeta sin confirmar: todavía no forman parte del PR.\n      "
+            + "\n      ".join(pend_dentro[:8]) + ("\n      …" if len(pend_dentro) > 8 else "")
+        )
+
     # Archivos pesados dentro de la carpeta del grupo.
     _, tracked = git(repo, "ls-files", "--", prefijo)
     pesados = []
@@ -321,13 +353,6 @@ def revisar_git(repo: Path, grupo: str, base: str, rep: Reporte) -> dict:
     if pesados:
         rep.aviso("Archivos de más de 1 MB (¿de verdad hacen falta en el repo?):\n      " + "\n      ".join(pesados[:10]))
 
-    _, sin_agregar = git(repo, "ls-files", "--others", "--exclude-standard", "--", prefijo)
-    if sin_agregar:
-        lista = sin_agregar.splitlines()
-        rep.info(
-            f"{len(lista)} archivos de tu carpeta todavía no están en git (no irán en el PR hasta que hagas `git add`):\n      "
-            + "\n      ".join(resumir_rutas(lista, niveles=5, tope=8))
-        )
     return ctx
 
 
@@ -402,12 +427,25 @@ def revisar_estructura(repo: Path, grupo_dir: Path, rep: Reporte) -> tuple[list[
     for py in archivos_py(grupo_dir):
         if not any(app == py.parent or app in py.parents for app in apps):
             sueltos.append(rel(py, repo))
+    # También cuentan los archivos que no son documentación dejados en la
+    # carpeta del grupo o en la del proyecto, fuera de la carpeta del tema.
+    niveles = [grupo_dir] + [d for d in sorted(grupo_dir.iterdir()) if d.is_dir() and d.name.lower() != "integrantes" and not es_venv(d)]
+    for nivel in niveles:
+        if nivel in apps:
+            continue
+        for f in sorted(nivel.iterdir()):
+            if f.is_file() and f.suffix.lower() not in {".md", ".py"} and f.name not in {".gitignore", ".gitkeep"}:
+                sueltos.append(rel(f, repo))
     if sueltos:
-        rep.aviso(
-            "Código fuera de una carpeta de tema (no entra en ninguna imagen ni se despliega):\n      "
-            + "\n      ".join(sueltos[:10])
-            + f"\n    Va dentro de `grupos/{grupo}/<semana>/<tema>/`."
+        rep.falta(
+            "Archivos del proyecto fuera de su carpeta (no entran en ninguna imagen ni se despliegan):\n      "
+            + "\n      ".join(sorted(set(sueltos))[:12])
+            + f"\n    Todo el proyecto va dentro de `grupos/{grupo}/proyecto01/<nombre-del-proyecto>/`."
         )
+    for app in bien_ubicadas:
+        semana = app.relative_to(grupo_dir).parts[0]
+        if grupo != "g01" and not re.fullmatch(r"(proyecto|semana)\d{2}", semana):
+            rep.aviso(f"La carpeta `{semana}` debería llamarse `proyectoNN` (ej. `proyecto01`), como en el resto del repo.")
 
     if not apps:
         rep.info(
@@ -521,6 +559,81 @@ class Codigo:
             (n.value, n.lineno) for n in ast.walk(arbol)
             if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings
         ]
+
+
+class Resolver:
+    """Averigua el valor que tendrá una expresión simple cuando el código
+    corra en el contenedor: constantes, variables del módulo, f-strings y
+    `os.getenv("X", "defecto")` (con lo que definan el compose y el Dockerfile)."""
+
+    _GETENV = {"os.getenv", "os.environ.get", "environ.get", "getenv"}
+
+    def __init__(self, arbol: ast.Module, env: dict[str, str]) -> None:
+        self.env = env
+        self.vars_usadas: list[str] = []
+        self.asign: dict[str, ast.AST] = {}
+        for nodo in ast.walk(arbol):
+            if isinstance(nodo, ast.Assign) and len(nodo.targets) == 1 and isinstance(nodo.targets[0], ast.Name):
+                self.asign.setdefault(nodo.targets[0].id, nodo.value)
+            elif isinstance(nodo, ast.AnnAssign) and isinstance(nodo.target, ast.Name) and nodo.value is not None:
+                self.asign.setdefault(nodo.target.id, nodo.value)
+
+    def valor(self, nodo: ast.AST | None, prof: int = 0):
+        if nodo is None or prof > 8:
+            return None
+        if isinstance(nodo, ast.Constant):
+            return nodo.value
+        if isinstance(nodo, ast.Name):
+            return self.valor(self.asign.get(nodo.id), prof + 1)
+        if isinstance(nodo, ast.Subscript) and nombre_llamada(nodo.value) in {"os.environ", "environ"}:
+            if isinstance(nodo.slice, ast.Constant):
+                self.vars_usadas.append(str(nodo.slice.value))
+                return self.env.get(str(nodo.slice.value))
+            return None
+        if isinstance(nodo, ast.Call):
+            fn = nombre_llamada(nodo.func)
+            if fn in self._GETENV and nodo.args and isinstance(nodo.args[0], ast.Constant):
+                clave = str(nodo.args[0].value)
+                self.vars_usadas.append(clave)
+                if clave in self.env:
+                    return self.env[clave]
+                defecto = nodo.args[1] if len(nodo.args) > 1 else next((k.value for k in nodo.keywords if k.arg == "default"), None)
+                return self.valor(defecto, prof + 1)
+            if fn in {"int", "str", "float"} and nodo.args:
+                interno = self.valor(nodo.args[0], prof + 1)
+                try:
+                    return {"int": int, "str": str, "float": float}[fn](interno) if interno is not None else None
+                except (TypeError, ValueError):
+                    return None
+            if isinstance(nodo.func, ast.Attribute) and nodo.func.attr in {"strip", "lower", "rstrip", "lstrip"}:
+                interno = self.valor(nodo.func.value, prof + 1)
+                return getattr(interno, nodo.func.attr)() if isinstance(interno, str) and not nodo.args else interno
+            return None
+        if isinstance(nodo, ast.JoinedStr):
+            partes = []
+            for parte in nodo.values:
+                trozo = self.valor(parte.value if isinstance(parte, ast.FormattedValue) else parte, prof + 1)
+                if trozo is None:
+                    return None
+                partes.append(str(trozo))
+            return "".join(partes)
+        if isinstance(nodo, ast.BinOp) and isinstance(nodo.op, ast.Add):
+            izq, der = self.valor(nodo.left, prof + 1), self.valor(nodo.right, prof + 1)
+            return izq + der if isinstance(izq, str) and isinstance(der, str) else None
+        if isinstance(nodo, ast.BoolOp) and isinstance(nodo.op, ast.Or):
+            for opcion in nodo.values:
+                valor = self.valor(opcion, prof + 1)
+                if valor:
+                    return valor
+        return None
+
+    def resolver(self, nodo: ast.AST | None) -> tuple[object, str]:
+        """(valor, nota): la nota dice si el valor viene de una variable de entorno."""
+        self.vars_usadas = []
+        valor = self.valor(nodo)
+        definidas = [x for x in self.vars_usadas if x in self.env]
+        nota = f" (valor de la variable `{definidas[0]}` del compose/Dockerfile)" if definidas else ""
+        return valor, nota
 
 
 def nombre_llamada(nodo: ast.AST) -> str:
@@ -641,8 +754,11 @@ def revisar_compose(app: Path, repo: Path, rep: Reporte, datos: dict) -> None:
             datos["una_corrida"] = True
         elif svc.get("restart") is None:
             rep.aviso(f"Servicio `{nombre}`: sin `restart: unless-stopped` el servidor MCP no vuelve a levantarse si se cae o se reinicia la máquina.")
-        datos["env_compose"].update((svc.get("environment") or {}).keys() if isinstance(svc.get("environment"), dict) else
-                                    {str(e).split("=", 1)[0] for e in (svc.get("environment") or [])})
+        entorno = svc.get("environment") or {}
+        if isinstance(entorno, list):
+            entorno = dict((str(e).split("=", 1) + [""])[:2] for e in entorno)
+        datos["env_compose"].update(entorno.keys())
+        datos["envv_compose"].update({str(k): "" if val is None else str(val) for k, val in entorno.items()})
 
     if con_nombre_auto == 0:
         rep.error("Ningún servicio tiene `container_name: ${LAB_CONTAINER_NAME}`: sin eso Caddy no encuentra el contenedor.")
@@ -731,9 +847,18 @@ def revisar_dockerfile(app: Path, repo: Path, rep: Reporte, codigo: Codigo, dato
         rep.error("El Dockerfile no tiene `CMD`: el contenedor no sabe qué ejecutar. Usa `CMD [\"python\", \"server.py\"]`.")
     elif "server.py" not in arranque[-1] and server.is_file():
         rep.aviso(f"El `CMD` no arranca `server.py`: `{arranque[-1]}`.")
-    datos["env_dockerfile"] = set(re.findall(r"^\s*ENV\s+([A-Za-z_][A-Za-z0-9_]*)", texto, re.M)) | set(
-        re.findall(r"\s([A-Za-z_][A-Za-z0-9_]*)=", " ".join(l for l in lineas if l.upper().startswith("ENV ")))
-    )
+    for l in lineas:
+        if not l.upper().startswith("ENV "):
+            continue
+        try:
+            fichas = shlex.split(l[4:])
+        except ValueError:
+            fichas = l[4:].split()
+        if fichas and "=" not in fichas[0] and len(fichas) > 1:
+            datos["envv_docker"][fichas[0]] = " ".join(fichas[1:])
+        else:
+            datos["envv_docker"].update(f.split("=", 1) for f in fichas if "=" in f)
+    datos["env_dockerfile"] = set(datos["envv_docker"])
 
 
 def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) -> None:
@@ -825,7 +950,7 @@ def revisar_requirements(app: Path, repo: Path, rep: Reporte, codigo: Codigo) ->
 # --- 5. server.py y storage.py ----------------------------------------------------
 
 
-def revisar_server(app: Path, repo: Path, grupo: str, rep: Reporte, codigo: Codigo, datos: dict) -> None:
+def revisar_server(app: Path, repo: Path, grupo: str, tema: str, rep: Reporte, codigo: Codigo, datos: dict) -> None:
     server = app / "server.py"
     if not server.is_file():
         candidatos = sorted(p.name for p, f in codigo.fuentes.items() if re.search(r"\b(MCPServer|FastMCP)\(", f) and not codigo.es_test(p))
@@ -837,44 +962,54 @@ def revisar_server(app: Path, repo: Path, grupo: str, rep: Reporte, codigo: Codi
         return
     fuente = codigo.fuentes[server]
 
-    # Nombre del servidor MCP.
-    nombres = []
-    for nodo in ast.walk(arbol):
-        if isinstance(nodo, ast.Call) and nombre_llamada(nodo.func).split(".")[-1] in {"MCPServer", "FastMCP", "Server"}:
-            if nodo.args and isinstance(nodo.args[0], ast.Constant) and isinstance(nodo.args[0].value, str):
-                nombres.append(nodo.args[0].value)
-            elif nodo.args or nodo.keywords:
-                nombres.append("")
-    if not nombres:
-        rep.error("`server.py` no crea el servidor (`mcp = MCPServer(\"grupoNN-<tema>\")`).")
-    else:
-        nombre = nombres[0]
-        if nombre == PILOTO_NOMBRE and grupo != "g01":
-            rep.error(f"El servidor se llama `{PILOTO_NOMBRE}`: es el nombre del piloto copiado tal cual. Cámbialo a `{grupo}-<tema>`.")
-        elif nombre and not nombre.startswith(f"{grupo}-"):
-            rep.aviso(f"El servidor MCP se llama `{nombre}`; debe empezar con el grupo: `{grupo}-<tema>` (es lo que ve quien se conecta).")
-        elif nombre:
-            rep.ok(f"Nombre del servidor MCP: `{nombre}`.")
-        if len(nombres) > 1:
-            rep.aviso(f"`server.py` crea el servidor {len(nombres)} veces: parece código pegado dos veces. Deja una sola definición.")
+    res = Resolver(arbol, datos.get("env", {}))
+    esperado = re.sub(r"[^a-z0-9]+", "-", f"{grupo}-{tema}".lower()).strip("-")
 
-    # Arranque: transporte, host y puerto.
+    def arg(llamada: ast.Call, clave: str) -> ast.AST | None:
+        return next((k.value for k in llamada.keywords if k.arg == clave), None)
+
+    # Nombre del servidor MCP: lo que ve quien se conecta. Debe identificar al
+    # grupo y al proyecto, igual que el piloto se llama "g01-derivadas1".
+    creaciones = [n for n in ast.walk(arbol) if isinstance(n, ast.Call)
+                  and nombre_llamada(n.func).split(".")[-1] in {"MCPServer", "FastMCP"}]
+    if not creaciones:
+        rep.error(f"`server.py` no crea el servidor. Debe tener `mcp = MCPServer(\"{esperado}\")`.")
+    else:
+        crea = creaciones[0]
+        nombre, nota = res.resolver(crea.args[0] if crea.args else arg(crea, "name"))
+        if not isinstance(nombre, str) or not nombre:
+            rep.aviso(f"No pude determinar el nombre del servidor MCP en `server.py:{crea.lineno}`. Debe ser `{esperado}`: revísalo a mano.")
+        elif grupo != "g01" and (nombre == PILOTO_NOMBRE or "derivadas1" in nombre or nombre.startswith("g01")):
+            rep.error(f"`server.py:{crea.lineno}`: el servidor se llama `{nombre}`{nota}, que es el nombre del piloto. Cámbialo a `{esperado}`.")
+        elif not nombre.lower().startswith(f"{grupo}-"):
+            rep.error(
+                f"`server.py:{crea.lineno}`: el servidor MCP se llama `{nombre}`{nota}. Debe llevar el grupo y el proyecto, "
+                f"como el piloto (`{PILOTO_NOMBRE}`): `{esperado}`."
+            )
+        elif nombre != esperado:
+            rep.aviso(f"`server.py:{crea.lineno}`: el servidor se llama `{nombre}`{nota}; para que coincida con la carpeta del proyecto debería ser `{esperado}`.")
+        else:
+            rep.ok(f"Nombre del servidor MCP: `{nombre}`.")
+        if len(creaciones) > 1:
+            rep.aviso(f"`server.py` crea el servidor {len(creaciones)} veces: parece código pegado dos veces. Deja una sola definición.")
+
+    # Arranque: transporte, host y puerto (en `mcp.run(...)` o en el constructor).
     corridas = [n for n in ast.walk(arbol) if isinstance(n, ast.Call) and nombre_llamada(n.func).endswith(".run")
                 and not nombre_llamada(n.func).startswith(("subprocess", "asyncio", "uvicorn"))]
     if not corridas:
         rep.error("`server.py` nunca llama a `mcp.run(...)`: el contenedor arrancaría y terminaría sin servir nada.")
     else:
-        def kw(llamada: ast.Call, clave: str):
-            for k in llamada.keywords:
-                if k.arg == clave:
-                    return k.value.value if isinstance(k.value, ast.Constant) else "<variable>"
-            return None
-
-        transportes = [kw(c, "transport") for c in corridas]
-        http = [c for c in corridas if kw(c, "transport") in ("streamable-http", "<variable>")]
-        if "sse" in transportes:
+        transportes = []
+        for c in corridas:
+            nodo_t = arg(c, "transport") or (c.args[0] if c.args else None)
+            valor_t, _ = res.resolver(nodo_t)
+            transportes.append((c, nodo_t, valor_t))
+        if any(t == "sse" for _, _, t in transportes):
             rep.error("`transport=\"sse\"` no funciona en este laboratorio (se queda colgado). Usa `transport=\"streamable-http\"`.")
-        if not http or ("streamable-http" not in fuente):
+        # Sirve una llamada con streamable-http, o una cuyo transporte no se
+        # pudo resolver si el archivo al menos contempla streamable-http.
+        http = [c for c, nodo_t, t in transportes if t == "streamable-http" or (nodo_t is not None and t is None and "streamable-http" in fuente)]
+        if not http:
             rep.error(
                 "`server.py` no arranca por HTTP. `mcp.run()` a secas usa stdio: sirve en tu laptop, pero en el "
                 "contenedor no hay consola y termina al instante, y el despliegue lo da por fallido porque el "
@@ -883,18 +1018,28 @@ def revisar_server(app: Path, repo: Path, grupo: str, rep: Reporte, codigo: Codi
             )
         else:
             llamada = http[-1]
-            host, puerto = kw(llamada, "host"), kw(llamada, "port")
-            if host in (None, "127.0.0.1", "localhost"):
-                rep.error("`mcp.run(...)` debe llevar `host=\"0.0.0.0\"`: con `127.0.0.1` (o sin host) Caddy no puede llegar al contenedor.")
-            if puerto is None:
-                rep.aviso(f"`mcp.run(...)` no indica `port={PUERTO_MCP}`; ponlo explícito.")
-            elif isinstance(puerto, int) and puerto != PUERTO_MCP:
+            fuentes_kw = [llamada] + creaciones[:1]
+            nodo_h = next((arg(c, "host") for c in fuentes_kw if arg(c, "host") is not None), None)
+            nodo_p = next((arg(c, "port") for c in fuentes_kw if arg(c, "port") is not None), None)
+            host, nota_h = res.resolver(nodo_h)
+            puerto, nota_p = res.resolver(nodo_p)
+            try:
+                puerto = int(puerto) if puerto is not None else None
+            except (TypeError, ValueError):
+                puerto = None
+            if nodo_h is None or host in ("127.0.0.1", "localhost"):
+                rep.error(f"El servidor debe escuchar en `host=\"0.0.0.0\"`{nota_h}: con `127.0.0.1` (o sin host) Caddy no puede llegar al contenedor.")
+            elif host is None:
+                rep.aviso("No pude determinar en qué `host` escucha el servidor. En el contenedor debe ser `0.0.0.0`: revísalo a mano.")
+            if nodo_p is None:
+                rep.aviso(f"El servidor no indica `port={PUERTO_MCP}`; ponlo explícito.")
+            elif puerto is None:
+                rep.aviso(f"No pude determinar en qué puerto escucha el servidor. Debe ser {PUERTO_MCP}: revísalo a mano.")
+            elif puerto != PUERTO_MCP:
                 datos["puerto"] = puerto
-                rep.aviso(f"El servidor escucha en el puerto {puerto}; el estándar del laboratorio es {PUERTO_MCP}. Si lo mantienes, avísale al administrador.")
-            if host == "0.0.0.0" and puerto in (PUERTO_MCP, "<variable>"):
+                rep.aviso(f"El servidor escucha en el puerto {puerto}{nota_p}; el estándar del laboratorio es {PUERTO_MCP}. Si lo mantienes, avísale al administrador.")
+            if host == "0.0.0.0" and puerto == PUERTO_MCP:
                 rep.ok(f"Arranque correcto: streamable-http en 0.0.0.0:{PUERTO_MCP}.")
-        if len(corridas) > 1 and all(t in (None,) for t in transportes):
-            rep.aviso("Hay varias llamadas a `mcp.run()` en `server.py`; solo se ejecuta la primera.")
     if "__main__" not in fuente:
         rep.aviso("Falta `if __name__ == \"__main__\":` alrededor de `mcp.run(...)`: sin él, importar `server` (ej. desde un test) arranca el servidor.")
 
@@ -967,6 +1112,27 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
         lista = ", ".join(f"`{h}` ({d})" for h, d in sorted(externos.items()))
         rep.info(f"El código menciona servicios externos: {lista}. Si el servidor los llama, necesita salida a internet.")
         rep.para_admin(f"El código hace referencia a servicios externos: {', '.join(sorted(externos))}. Confirmar que el contenedor puede (y debe) salir a ellos.")
+
+    # Restos del piloto: nombres de g01/derivadas1 copiados sin cambiar.
+    if grupo != "g01":
+        restos: list[str] = []
+        for py in codigo.archivos:
+            if py.name not in {"server.py", "storage.py"}:
+                continue
+            for cadena, linea in codigo.cadenas(py):
+                ya_reportado = cadena in {PILOTO_NOMBRE, PILOTO_BUCKET} or "/img/derivadas1" in cadena
+                if re.search(r"derivadas1|\bg01\b", cadena) and not ya_reportado:
+                    restos.append(f"{py.name}:{linea}")
+        for nombre_archivo in ("docker-compose.yml", "Dockerfile"):
+            for n, linea_txt in enumerate(leer(app / nombre_archivo).splitlines(), 1):
+                sin_comentario = linea_txt.split("#", 1)[0]
+                if re.search(r"derivadas1|\bg01\b", sin_comentario):
+                    restos.append(f"{nombre_archivo}:{n}")
+        if restos:
+            rep.error(
+                "Quedan nombres del piloto (`g01` / `derivadas1`) sin cambiar en: " + ", ".join(sorted(set(restos)))
+                + f". Cada grupo usa los suyos: `{grupo}` y el nombre de su proyecto."
+            )
 
     # Variables de entorno que lee el código.
     variables: dict[str, bool] = {}
@@ -1045,40 +1211,62 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
                 "el cliente de chat no la muestra sola. Copia el `storage.py` del piloto y cambia bucket y URL."
             )
         return
-    constantes: dict[str, tuple[str, int]] = {}
-    for nodo in ast.walk(codigo.archivos[storage]):
-        if isinstance(nodo, ast.Assign) and isinstance(nodo.value, ast.Constant) and isinstance(nodo.value.value, str):
-            for objetivo in nodo.targets:
-                if isinstance(objetivo, ast.Name):
-                    constantes[objetivo.id] = (nodo.value.value, nodo.lineno)
-    bucket = next((v for k, v in constantes.items() if "BUCKET" in k.upper()), None)
-    publica = next((v for k, v in constantes.items() if "PUBLIC" in k.upper() and "URL" in k.upper()), None)
+    res = Resolver(codigo.archivos[storage], datos.get("env", {}))
+    url_esperada = f"https://{DOMINIO}/img/{slug}"
 
-    if bucket is None:
-        rep.aviso(f"`storage.py` no define el bucket como constante (`IMG_BUCKET = \"{bucket_sugerido}\"`); revisa a mano que no use el del piloto.")
+    def constante(*claves: str) -> tuple[object, str, int] | None:
+        for nombre_var, nodo in res.asign.items():
+            if all(c in nombre_var.upper() for c in claves):
+                valor, nota = res.resolver(nodo)
+                return valor, nota, getattr(nodo, "lineno", 0)
+        return None
+
+    bucket = constante("BUCKET")
+    publica = constante("PUBLIC", "URL")
+    seaweed = constante("SEAWEED")
+    es_piloto = grupo == "g01"
+    bucket_ok = None
+
+    if bucket is None or not isinstance(bucket[0], str):
+        rep.aviso(f"No pude determinar el bucket en `storage.py`. Debe ser `IMG_BUCKET = \"{bucket_sugerido}\"`: revísalo a mano.")
     else:
-        valor, linea = bucket
-        if valor == PILOTO_BUCKET and grupo != "g01":
-            rep.error(f"`storage.py:{linea}` usa el bucket `{PILOTO_BUCKET}`, que es del piloto de g01: sus imágenes se mezclarían con las de ustedes. Cámbialo a `IMG_BUCKET = \"{bucket_sugerido}\"`.")
+        valor, nota, linea = bucket
+        if not es_piloto and (valor == PILOTO_BUCKET or "derivadas1" in valor):
+            rep.error(f"`storage.py:{linea}`: el bucket es `{valor}`{nota}, el del piloto de g01: sus imágenes se mezclarían con las de ustedes. Cámbialo a `{bucket_sugerido}`.")
         elif not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", valor):
-            rep.error(f"`storage.py:{linea}`: el bucket `{valor}` no es un nombre S3 válido (solo minúsculas, dígitos y `-`, de 3 a 63 caracteres). Usa `{bucket_sugerido}`.")
-        elif grupo not in valor and grupo != "g01":
-            rep.aviso(f"`storage.py:{linea}`: el bucket `{valor}` no incluye el grupo; otro grupo podría elegir el mismo. Recomendado: `{bucket_sugerido}`.")
-    if publica is None:
-        rep.aviso(f"`storage.py` no define `PUBLIC_IMG_BASE_URL`. Debe ser `https://{DOMINIO}/img/{slug}`.")
+            rep.error(f"`storage.py:{linea}`: el bucket `{valor}`{nota} no es un nombre S3 válido (solo minúsculas, dígitos y `-`, de 3 a 63 caracteres). Usa `{bucket_sugerido}`.")
+        elif not es_piloto and not valor.startswith(f"{grupo}-"):
+            rep.error(
+                f"`storage.py:{linea}`: el bucket es `{valor}`{nota} y no lleva el nombre del grupo. Debe empezar con "
+                f"`{grupo}-` para no chocar con otro grupo: `{bucket_sugerido}`."
+            )
+        else:
+            bucket_ok = valor
+            if not es_piloto and valor != bucket_sugerido:
+                rep.aviso(f"`storage.py:{linea}`: el bucket es `{valor}`{nota}; para que coincida con la carpeta del proyecto debería ser `{bucket_sugerido}`.")
+
+    if publica is None or not isinstance(publica[0], str):
+        rep.aviso(f"No pude determinar `PUBLIC_IMG_BASE_URL` en `storage.py`. Debe ser `{url_esperada}`: revísalo a mano.")
     else:
-        valor, linea = publica
+        valor, nota, linea = publica
         m = re.fullmatch(rf"https://{re.escape(DOMINIO)}/img/([a-z0-9-]+)/?", valor)
-        if "derivadas1" in valor and grupo != "g01":
-            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` sigue apuntando a la ruta del piloto. Cámbiala a `https://{DOMINIO}/img/{slug}`.")
+        if not es_piloto and "derivadas1" in valor:
+            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` es `{valor}`{nota}, la ruta del piloto. Cámbiala a `{url_esperada}`.")
         elif not m:
-            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL = \"{valor}\"` no sirve en el servidor. Debe ser `https://{DOMINIO}/img/{slug}`.")
-        elif bucket:
+            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` es `{valor}`{nota} y no sirve en el servidor. Debe ser `{url_esperada}`.")
+        elif not es_piloto and not m.group(1).startswith(f"{grupo}-"):
+            rep.error(f"`storage.py:{linea}`: `PUBLIC_IMG_BASE_URL` es `{valor}`{nota} y no lleva el nombre del grupo. Debe ser `{url_esperada}`.")
+        elif bucket_ok:
+            if not es_piloto and bucket_ok != f"{m.group(1)}-imgs":
+                rep.aviso(f"El bucket (`{bucket_ok}`) y la URL pública (`/img/{m.group(1)}`) no siguen el mismo nombre. Lo esperado: bucket `{m.group(1)}-imgs`.")
             rep.para_admin(
-                f"Ruta pública de imágenes en Caddy (solo GET): `/img/{m.group(1)}/*` → bucket `{bucket[0]}` en `seaweedfs:8333` "
+                f"Ruta pública de imágenes en Caddy (solo GET): `/img/{m.group(1)}/*` → bucket `{bucket_ok}` en `seaweedfs:8333` "
                 "(mismo bloque que `/img/derivadas1/*`)."
             )
-            rep.ok(f"Storage: bucket `{bucket[0]}`, URL pública `/img/{m.group(1)}`.")
+            rep.ok(f"Storage: bucket `{bucket_ok}`, URL pública `/img/{m.group(1)}`.")
+
+    if seaweed is not None and isinstance(seaweed[0], str) and seaweed[0].rstrip("/") != SEAWEEDFS_URL and seaweed[1]:
+        rep.error(f"`storage.py:{seaweed[2]}`: la URL del storage queda en `{seaweed[0]}`{seaweed[1]}. En el servidor debe ser `{SEAWEEDFS_URL}`.")
     fuente = codigo.fuentes[storage]
     if "seaweedfs" not in fuente:
         rep.error(f"`storage.py` no apunta a SeaweedFS. La URL interna es `{SEAWEEDFS_URL}` (el nombre `seaweedfs` se resuelve dentro de la red `lab_net`).")
@@ -1102,7 +1290,7 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
     seccion = f"App `{rel(app, repo)}`"
     rep.en(seccion)
     datos = {"id": app_id, "compose": False, "env_compose": set(), "puerto": PUERTO_MCP, "dir": app,
-             "ubicada": ubicada, "solo_imagen": False}
+             "ubicada": ubicada, "solo_imagen": False, "envv_compose": {}, "envv_docker": {}}
 
     codigo = Codigo(app, rep, repo)
     revisar_compose(app, repo, rep, datos)
@@ -1118,7 +1306,15 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
     else:
         revisar_dockerfile(app, repo, rep, codigo, datos)
         revisar_requirements(app, repo, rep, codigo)
-        revisar_server(app, repo, grupo, rep, codigo, datos)
+        # Lo que vale en el contenedor: el compose pisa al Dockerfile.
+        datos["env"] = {**datos["envv_docker"], **datos["envv_compose"]}
+        pisadas = sorted(k for k in datos["envv_docker"] if k in datos["envv_compose"] and datos["envv_docker"][k] != datos["envv_compose"][k])
+        if pisadas:
+            rep.aviso(
+                "El Dockerfile y el compose definen con valores distintos: " + ", ".join(f"`{k}`" for k in pisadas)
+                + ". En el servidor gana el compose; deja un solo lugar para no confundirte."
+            )
+        revisar_server(app, repo, grupo, tema, rep, codigo, datos)
         revisar_red_y_storage(app, repo, grupo, tema, rep, codigo, datos)
     if not (datos["compose"] and ubicada):
         rep.degradar(seccion)

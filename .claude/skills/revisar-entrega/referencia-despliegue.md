@@ -11,8 +11,10 @@ El despliegue solo busca este patrón, exactamente dos niveles bajo el grupo:
 grupos/grupoNN/<semana>/<tema>/docker-compose.yml
 ```
 
-`<semana>` es `semanaNN` o `proyectoNN`. Una app en otro nivel
-(`grupos/grupoNN/mi-app/` o más profunda) no se despliega.
+`<semana>` es `proyectoNN` (o `semanaNN`). Una app en otro nivel
+(`grupos/grupoNN/mi-app/` o más profunda) no se despliega. Todo el proyecto
+(código, archivos de despliegue, datos) va dentro de la carpeta del tema;
+en `grupos/grupoNN/` y en `proyectoNN/` solo queda documentación.
 
 Los nombres de `<semana>` y `<tema>` solo pueden llevar minúsculas, dígitos,
 `-` y `_`. Sin espacios, mayúsculas ni tildes: forman el nombre de proyecto
@@ -134,7 +136,9 @@ if __name__ == "__main__":
     mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
 ```
 
-- Nombre del servidor: `grupoNN-<tema>`.
+- Nombre del servidor: `grupoNN-<tema>`, con el grupo y el nombre de la
+  carpeta del proyecto (el piloto es `g01-derivadas1`). Sin el grupo delante,
+  o con el nombre del piloto, es error.
 - `transport="streamable-http"`: sin él, `mcp.run()` usa stdio y el
   contenedor termina al instante. `"sse"` no funciona en este laboratorio.
 - `host="0.0.0.0"`: con `127.0.0.1` Caddy no puede llegar al contenedor.
@@ -156,8 +160,13 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
 
 - `seaweedfs:8333` es la API S3 dentro de la red `lab_net`. No `localhost`
   (dentro del contenedor es el propio contenedor) ni el puerto 8888.
-- El bucket solo admite minúsculas, dígitos y `-` (de 3 a 63 caracteres), e
-  incluye el grupo para no chocar con otro.
+- El bucket solo admite minúsculas, dígitos y `-` (de 3 a 63 caracteres) y
+  empieza con el grupo, igual que la URL pública: `grupoNN-<tema>-imgs` y
+  `/img/grupoNN-<tema>`. El piloto usa `derivadas1` a secas porque es el
+  ejemplo; los grupos no.
+- Si esos valores se pasan por variables de entorno (`os.getenv`), cuenta el
+  valor que definan el compose o el Dockerfile, no el valor por defecto del
+  código. El compose gana sobre el Dockerfile.
 - La ruta `/img/grupoNN-<tema>/*` la crea el administrador en Caddy apuntando
   al bucket. Hasta entonces las imágenes se suben pero no se ven: hay que
   pedírsela.
