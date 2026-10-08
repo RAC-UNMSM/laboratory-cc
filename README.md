@@ -48,13 +48,13 @@ administrador:
 
 ```bash
 git fetch origin
-python .claude/skills/revisar-entrega/scripts/validar_entrega.py grupoNN
+python .claude/skills/mcp-validator/scripts/validar_entrega.py grupoNN
 ```
 
-Con Claude Code, dentro de este repo, basta con pedir `/revisar-entrega`
+Con Claude Code, dentro de este repo, basta con pedir `/mcp-validator`
 (o "revisa mi entrega"): corre el validador, lee el código y propone las
 correcciones. El contrato completo de despliegue está en
-`.claude/skills/revisar-entrega/referencia-despliegue.md`.
+`.claude/skills/mcp-validator/referencia-despliegue.md`.
 
 ## Reglas de todo `docker-compose.yml` de grupo
 

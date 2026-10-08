@@ -1,5 +1,5 @@
 ---
-name: revisar-entrega
+name: mcp-validator
 description: Revisa la entrega de un grupo del laboratorio antes de abrir o actualizar un PR contra main. Úsala cuando un alumno diga "revisa mi entrega", "voy a subir mi PR", "actualicé mi rama", "¿está listo para desplegar?", "¿por qué no despliega?", o pida validar su carpeta grupos/grupoNN, su docker-compose.yml, Dockerfile, requirements.txt, server.py o storage.py. Detecta lo que no debe subirse (entornos virtuales, binarios, archivos fuera de su carpeta), dice qué falta para que la app despliegue y arma el mensaje con lo que el administrador debe configurar en el servidor.
 ---
 
@@ -52,7 +52,7 @@ Desde la raíz del repo:
 
 ```bash
 git fetch origin
-python .claude/skills/revisar-entrega/scripts/validar_entrega.py grupoNN
+python .claude/skills/mcp-validator/scripts/validar_entrega.py grupoNN
 ```
 
 - En Linux/macOS puede ser `python3`. No necesita instalar nada.

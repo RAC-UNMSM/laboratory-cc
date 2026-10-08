@@ -13,7 +13,7 @@ Revisa la carpeta de un grupo ANTES de abrir o actualizar un PR contra
 
 Uso (desde cualquier carpeta del repo):
 
-    python .claude/skills/revisar-entrega/scripts/validar_entrega.py [grupoNN]
+    python .claude/skills/mcp-validator/scripts/validar_entrega.py [grupoNN]
 
 Sin dependencias obligatorias: solo la librería estándar. Si PyYAML está
 instalado, el docker-compose.yml se valida completo; si no, con un chequeo

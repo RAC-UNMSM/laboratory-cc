@@ -100,7 +100,7 @@ id_ed25519*
 *.toc
 
 # --- Herramientas locales ----------------------------------------------------
-# De .claude/ solo se versionan las skills del repo (ej. revisar-entrega);
+# De .claude/ solo se versionan las skills del repo (ej. mcp-validator);
 # la configuración local de cada quien se queda fuera.
 **/.claude/*
 !**/.claude/skills/
