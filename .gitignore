@@ -50,6 +50,13 @@ __pycache__/
 .coverage.*
 htmlcov/
 *.egg-info/
+*.dist-info/
+.eggs/
+*.egg
+*.whl
+dist/
+.cache/
+pip-log.txt
 .ipynb_checkpoints/
 
 # --- Node (por si algún grupo usa JS) ----------------------------------------
@@ -64,6 +71,12 @@ node_modules/
 *.dylib
 *.msi
 *.chm
+*.deb
+*.dmg
+*.o
+*.jar
+*.class
+.gradle/
 
 # --- Comprimidos -------------------------------------------------------------
 # El código se sube como archivos, no como .zip del proyecto.
@@ -86,11 +99,24 @@ id_ed25519*
 # --- Datos y salidas generadas en ejecución ---------------------------------
 # Los datos persistentes viven en volúmenes nombrados de Docker, no en el repo.
 *.log
+nohup.out
 *.sqlite
 *.sqlite3
 *.db
 *.tmp
 *.bak
+
+# --- Modelos entrenados y datos serializados -------------------------------
+# Pesan mucho y se regeneran: se entrenan fuera y, si la app los necesita, se
+# acuerda con el administrador cómo llegan al servidor (no por git).
+*.pt
+*.pth
+*.h5
+*.onnx
+*.ckpt
+*.safetensors
+*.pkl
+*.joblib
 
 # --- Intermedios de LaTeX (reportes generados con pdflatex) ------------------
 *.aux
