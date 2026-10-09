@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Historia completa: el validador de entregas compara contra main.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -25,34 +28,169 @@ jobs:
       - name: Validar docker-compose.yml de cada grupo/app
         run: python3 ci/validate_resource_limits.py
 
+      # Mismo validador que usan los alumnos antes de subir (skill
+      # mcp-validator): un script de Python, sin IA ni tokens. Revisa lo que
+      # no debe subirse, la estructura de carpetas y que compose, Dockerfile,
+      # requirements.txt, server.py y storage.py estén bien armados.
+      # Se ejecuta la copia de main, no la del PR, para que un PR no pueda
+      # modificar el validador que lo revisa.
+      - name: Validar la entrega de cada grupo (mcp-validator)
+        id: entrega
+        run: |
+          set +e
+          REPORTE="$RUNNER_TEMP/entrega.md"
+          VALIDADOR="$RUNNER_TEMP/validar_entrega.py"
+          echo "### Revisión de la entrega (mcp-validator)" > "$REPORTE"
+          echo "summary_file=$REPORTE" >> "$GITHUB_OUTPUT"
+
+          if ! git show origin/main:.claude/skills/mcp-validator/scripts/validar_entrega.py > "$VALIDADOR" 2>/dev/null; then
+            echo "El validador no está en main: se omite esta revisión." | tee -a "$REPORTE"
+            exit 0
+          fi
+
+          # Grupos cuya carpeta toca este PR.
+          mapfile -t grupos < <(git diff --name-only origin/main...HEAD \
+            | awk -F/ '$1 == "grupos" && $2 ~ /^grupo[0-9][0-9]$/ {print $2}' | sort -u)
+          if [ ${#grupos[@]} -eq 0 ]; then
+            echo "" >> "$REPORTE"
+            echo "Este PR no toca la carpeta de ningún grupo: no hay entrega que revisar." | tee -a "$REPORTE"
+            cat "$REPORTE" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          estado=0
+          for grupo in "${grupos[@]}"; do
+            salida="$RUNNER_TEMP/entrega_${grupo}.txt"
+            python3 "$VALIDADOR" "$grupo" --repo "$GITHUB_WORKSPACE" --base origin/main > "$salida" 2>&1
+            rc=$?
+            cat "$salida"
+            veredicto=$(awk '/^## Veredicto/{f=1;next} f&&NF{print;exit}' "$salida" | sed 's/^ *//')
+            if [ $rc -ne 0 ]; then
+              estado=1
+              icono="❌"
+              [ -n "$veredicto" ] || veredicto="el validador no pudo completar la revisión"
+            else
+              icono="✅"
+            fi
+            {
+              echo ""
+              echo "<details open><summary><b>${icono} ${grupo}</b>: ${veredicto}</summary>"
+              echo ""
+              echo '```'
+              cut -c1-600 "$salida"
+              echo '```'
+              echo "</details>"
+            } >> "$REPORTE"
+          done
+
+          {
+            echo ""
+            echo "Para revisar antes de subir, desde la raíz del repo:"
+            echo "\`python .claude/skills/mcp-validator/scripts/validar_entrega.py grupoNN\`"
+            echo "(con Claude Code: \`/mcp-validator\`). \`[ERROR]\` bloquea el PR; \`[FALTA]\` es lo que falta para desplegar y no bloquea."
+          } >> "$REPORTE"
+          cat "$REPORTE" >> "$GITHUB_STEP_SUMMARY"
+          exit $estado
+
+      - name: Publicar la revisión de la entrega en el PR
+        if: always() && steps.entrega.outputs.summary_file != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = "${{ steps.entrega.outputs.summary_file }}";
+            if (!path || !fs.existsSync(path)) return;
+            let body = fs.readFileSync(path, "utf8");
+            if (body.length > 60000) {
+              body = body.slice(0, 60000) + "\n\n...(truncado)";
+            }
+            const marker = "<!-- mcp-validator -->";
+            body = marker + "\n" + body;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
   dev-run:
     name: Dev-run efímero (build + up + logs + down)
     needs: validate-resource-limits
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 2 commits: el merge del PR y su padre (main), para saber qué
+          # carpetas toca este PR (git diff HEAD^1 HEAD).
+          fetch-depth: 2
 
       - name: Crear red externa lab_net (la esperan los compose de grupo)
         run: docker network create lab_net
 
-      - name: Levantar cada app de grupo, capturar logs, y bajarla
+      - name: Levantar cada app de grupo, comprobar que funciona, y bajarla
         id: devrun
         run: |
           set +e
           SUMMARY_FILE="$RUNNER_TEMP/devrun_summary.md"
-          echo "### Dev-run efímero — resultado por app" > "$SUMMARY_FILE"
+          TABLA="$RUNNER_TEMP/devrun_tabla.md"
+          DETALLE="$RUNNER_TEMP/devrun_detalle.md"
+          SALIDA="$RUNNER_TEMP/devrun_app_salida.txt"
+          LOGS="$RUNNER_TEMP/devrun_app_logs.txt"
+          : > "$DETALLE"
+          { echo "| App | Resultado |"; echo "|---|---|"; } > "$TABLA"
           OVERALL_STATUS=0
+
+          # Carpetas que toca este PR: sus apps van primero y con el log completo;
+          # el resto solo se resume, para que el comentario no se corte (GitHub
+          # limita un comentario a 65 536 caracteres).
+          CAMBIADOS=$(git diff --name-only HEAD^1 HEAD 2>/dev/null)
 
           # _referencia: 2 niveles (apps/<app>). Grupos de alumnos: 3 niveles
           # (<semana>/<tema>) -- el identificador de app pasa a ser
-          # "<grupo>_<semana>_<tema>" completo, igual que en discover_apps()
+          # "<grupo>_<semana>_<tema>" completo, igual que en lab_deploy/apps.py
           # del repo de infraestructura.
           # sort -u: _referencia/apps/<app>/docker-compose.yml calza con los
           # dos patrones del glob (es, de casualidad, también 3 niveles) y
           # quedaría procesado dos veces si no se deduplica.
-          mapfile -t compose_files < <(printf '%s\n' grupos/_referencia/apps/*/docker-compose.yml grupos/*/*/*/docker-compose.yml | sort -u)
+          mapfile -t todos < <(printf '%s\n' grupos/_referencia/apps/*/docker-compose.yml grupos/*/*/*/docker-compose.yml | sort -u)
+          del_pr=(); resto=()
+          for f in "${todos[@]}"; do
+            [ -e "$f" ] || continue
+            if grep -q "^$(dirname "$f")/" <<<"$CAMBIADOS"; then del_pr+=("$f"); else resto+=("$f"); fi
+          done
+          compose_files=("${del_pr[@]}" "${resto[@]}")
+
+          contenedores() { docker ps -aq --filter "label=com.docker.compose.project=$project"; }
+          todos_en() {
+            # 0 si hay al menos un contenedor y todos están en el estado $1.
+            local ids id
+            ids=$(contenedores)
+            [ -n "$ids" ] || return 1
+            for id in $ids; do
+              [ "$(docker inspect -f '{{.State.Status}}' "$id")" = "$1" ] || return 1
+            done
+          }
+          estados() {
+            contenedores | xargs -r docker inspect -f '{{.Name}}={{.State.Status}} (código {{.State.ExitCode}})' | tr '\n' ' '
+          }
+
           for compose_file in "${compose_files[@]}"; do
-            [ -e "$compose_file" ] || continue
             dir=$(dirname "$compose_file")
             if [[ "$compose_file" == grupos/_referencia/apps/* ]]; then
               group="_referencia"
@@ -71,8 +209,8 @@ jobs:
             fi
             project="ci-${group}-${app}"
 
-            # Mismo cálculo que lab_pipelines (docker_resource.py /
-            # app_deploy.py) del repo de infraestructura: el nombre del
+            # Mismo cálculo que lab_deploy/naming.py del repo de
+            # infraestructura: el nombre del
             # contenedor y la ruta pública nunca se escriben a mano en el
             # docker-compose.yml del grupo, se inyectan acá.
             if [[ "$group" == "_referencia" ]]; then
@@ -83,11 +221,15 @@ jobs:
               public_path="/${group}/${app}"
             fi
 
-            echo "--- Dev-run: ${group}/${app} ---"
-            echo "" >> "$SUMMARY_FILE"
-            echo "<details><summary><b>${group}/${app}</b></summary>" >> "$SUMMARY_FILE"
-            echo '' >> "$SUMMARY_FILE"
-            echo '```' >> "$SUMMARY_FILE"
+            # Mismo cálculo que lab_deploy/naming.py (img_slug): grupo + carpeta
+            # del proyecto, solo [a-z0-9-], recortado a 58 caracteres.
+            img_slug=$(printf '%s' "${group}-$(basename "$dir")" | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-58 | sed -E 's/-+$//')
+
+            tocada=no
+            if grep -q "^${dir}/" <<<"$CAMBIADOS"; then tocada=si; fi
+
+            echo "--- Dev-run: ${group}/${app} (de este PR: ${tocada}) ---"
 
             (
               cd "$dir"
@@ -95,22 +237,105 @@ jobs:
               LAB_DOMAIN="ci.localhost" \
               LAB_CONTAINER_NAME="$container_name" \
               LAB_PUBLIC_PATH="$public_path" \
+              LAB_IMG_BUCKET="${img_slug}-imgs" \
+              LAB_PUBLIC_IMG_URL="https://ci.localhost/img/${img_slug}" \
                 docker compose -p "$project" up -d --build --quiet-pull 2>&1
-            ) >> "$SUMMARY_FILE" 2>&1
+            ) > "$SALIDA" 2>&1
             up_status=$?
 
-            sleep 5
-            (cd "$dir" && docker compose -p "$project" logs --no-color --tail=50) >> "$SUMMARY_FILE" 2>&1
-            (cd "$dir" && docker compose -p "$project" down -v --remove-orphans) >> "$SUMMARY_FILE" 2>&1
-
-            echo '```' >> "$SUMMARY_FILE"
+            # Misma comprobación que el despliegue real (lab_deploy/deployer.py):
+            # que `docker compose up` no falle NO basta. Un servicio debe quedar
+            # corriendo; un script de una sola corrida (restart: "no") debe
+            # terminar con código 0.
+            fallo=""
+            detalle_ok="quedó corriendo"
             if [ $up_status -ne 0 ]; then
-              echo "" >> "$SUMMARY_FILE"
-              echo "**FALLÓ** \`docker compose up\` (código $up_status)" >> "$SUMMARY_FILE"
-              OVERALL_STATUS=1
+              fallo="\`docker compose up\` falló (código $up_status)"
+            elif grep -Eq '^\s*restart:\s*"?no"?\s*$' "$compose_file" \
+                 && ! grep -Eq '^\s*restart:\s*"?(always|unless-stopped|on-failure)' "$compose_file"; then
+              for _ in $(seq 1 20); do todos_en exited && break; sleep 3; done
+              if ! todos_en exited; then
+                fallo="es de una sola corrida (\`restart: \"no\"\`) y no terminó en 60 s: $(estados)"
+              elif contenedores | xargs -r docker inspect -f '{{.State.ExitCode}}' | grep -qv '^0$'; then
+                fallo="terminó con error: $(estados)"
+              else
+                detalle_ok="corrió y terminó bien"
+              fi
+            else
+              sleep 8
+              if todos_en running; then sleep 5; fi
+              if ! todos_en running; then
+                fallo="el contenedor no quedó corriendo: $(estados)"
+              elif [[ "$group" != "_referencia" && -f "$dir/server.py" ]]; then
+                # Servidor MCP propio: tiene que responder en el puerto 8000,
+                # ruta /mcp (transporte streamable-http), que es a donde apunta
+                # el reverse proxy del servidor.
+                cid=$(docker ps -q --filter "label=com.docker.compose.project=$project" | head -1)
+                ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$cid" | awk '{print $1}')
+                code=000
+                for _ in $(seq 1 10); do
+                  code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST "http://${ip}:8000/mcp" \
+                    -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+                    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}')
+                  [ "$code" != "000" ] && break
+                  sleep 3
+                done
+                if [ "$code" = "000" ]; then
+                  fallo="el servidor MCP no responde en el puerto 8000. Debe arrancar con \`mcp.run(transport=\"streamable-http\", host=\"0.0.0.0\", port=8000)\`"
+                elif [ "$code" = "404" ]; then
+                  fallo="el servidor responde pero no tiene la ruta \`/mcp\` (HTTP 404): no está en \`streamable-http\`. Revisa el \`CMD\` del Dockerfile (debe ser \`python server.py\`) y que no use \`sse\`"
+                else
+                  detalle_ok="quedó corriendo y el MCP responde en \`/mcp\` (HTTP $code)"
+                fi
+              fi
             fi
-            echo "</details>" >> "$SUMMARY_FILE"
+
+            contenedores | xargs -r -n1 docker logs --tail 80 > "$LOGS" 2>&1
+            (cd "$dir" && docker compose -p "$project" down -v --remove-orphans) > /dev/null 2>&1
+
+            if [ -n "$fallo" ]; then
+              OVERALL_STATUS=1
+              echo "| \`${group}/${app}\` | ❌ **FALLÓ**: ${fallo} |" >> "$TABLA"
+            else
+              echo "| \`${group}/${app}\` | ✅ ${detalle_ok} |" >> "$TABLA"
+            fi
+
+            # Log completo solo para lo que toca este PR o lo que falló.
+            if [ "$tocada" = "si" ] || [ -n "$fallo" ]; then
+              lineas_build=120; lineas_logs=80; abierto=" open"
+            else
+              lineas_build=0; lineas_logs=12; abierto=""
+            fi
+            {
+              echo ""
+              echo "<details${abierto}><summary><b>${group}/${app}</b></summary>"
+              echo ""
+              if [ "$lineas_build" -gt 0 ]; then
+                echo "Construcción y arranque (últimas ${lineas_build} líneas):"
+                echo '```'
+                tail -n "$lineas_build" "$SALIDA" | cut -c1-300
+                echo '```'
+              fi
+              echo "Logs del contenedor:"
+              echo '```'
+              tail -n "$lineas_logs" "$LOGS" | cut -c1-300
+              echo '```'
+              echo "</details>"
+            } >> "$DETALLE"
           done
+
+          {
+            echo "### Dev-run efímero — resultado por app"
+            echo ""
+            if [ $OVERALL_STATUS -ne 0 ]; then
+              echo "**Hay apps que no arrancan bien.** No se puede fusionar hasta corregirlas."
+            else
+              echo "Todas las apps construyen, arrancan y quedan funcionando."
+            fi
+            echo ""
+            cat "$TABLA"
+            cat "$DETALLE"
+          } > "$SUMMARY_FILE"
 
           cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
           echo "summary_file=$SUMMARY_FILE" >> "$GITHUB_OUTPUT"

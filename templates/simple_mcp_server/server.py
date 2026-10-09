@@ -2,8 +2,8 @@
 
 Misma plantilla para todos los grupos, para que la dificultad sea pareja
 (sección 1.6 del plan). Cada grupo la copia, le agrega 1-2 tools propias, y
-la despliega con el mismo patrón de asset de Fase 5 (docker compose vía
-Dagster, nunca a mano).
+la despliega con el mismo patrón de Fase 5 (docker compose automático al
+mergear a main, nunca a mano).
 
 Corre en transporte SSE directamente (sin necesitar supergateway, a
 diferencia de los MCP servers de referencia de Fase 6 que ya venían

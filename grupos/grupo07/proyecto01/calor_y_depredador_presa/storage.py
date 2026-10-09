@@ -11,23 +11,16 @@ por DNS interno de Docker porque este contenedor comparte la red "lab_net"
 con él.
 """
 
-import os
 import urllib.error
 import urllib.request
 import uuid
 
 SEAWEEDFS_S3_URL = "http://seaweedfs:8333"
-# El bucket y su URL pública NO se escriben a mano: el despliegue los calcula
-# de la carpeta del proyecto (grupo + nombre de la carpeta, ej.
-# "grupo04-interpolacion-imgs") y se los entrega al contenedor en estas dos
-# variables -- ver el bloque `environment:` de docker-compose.yml. Con ese
-# mismo nombre el servidor crea solo la ruta pública /img/<grupo>-<carpeta>/
-# (solo lectura, sin login: el fetch de la imagen lo hace el cliente de chat
-# de forma anónima, sin la cookie de sesión del usuario).
-# En local (`python server.py`, sin esas variables) quedan vacías y este
-# módulo simplemente no sube nada.
-IMG_BUCKET = os.environ.get("LAB_IMG_BUCKET", "")
-PUBLIC_IMG_BASE_URL = os.environ.get("LAB_PUBLIC_IMG_URL", "")
+IMG_BUCKET = "derivadas1-imgs"
+# Ruta pública en Caddy (ver caddy/Caddyfile), solo lectura, sin login --
+# un login de GitHub no sirve acá: el fetch de la imagen lo hace el cliente
+# de chat de forma anónima, sin la cookie de sesión del usuario.
+PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/derivadas1"
 
 
 def ensure_bucket() -> None:
@@ -35,8 +28,6 @@ def ensure_bucket() -> None:
     listo todavía (orden de arranque de contenedores) o el bucket ya existe,
     no es motivo para tumbar el servidor -- subir_imagen() reintenta la
     conexión de todos modos en cada llamada."""
-    if not IMG_BUCKET:
-        return
     try:
         req = urllib.request.Request(f"{SEAWEEDFS_S3_URL}/{IMG_BUCKET}/", method="PUT")
         urllib.request.urlopen(req, timeout=5)
@@ -49,8 +40,6 @@ def subir_imagen(png_bytes: bytes) -> str | None:
     secuencial) y devuelve la URL pública, o None si el storage no
     respondió -- en ese caso derivar() sigue funcionando igual, solo sin
     link (el ImageContent de respaldo todavía llega al modelo)."""
-    if not IMG_BUCKET or not PUBLIC_IMG_BASE_URL:
-        return None
     key = f"{uuid.uuid4().hex}.png"
     try:
         req = urllib.request.Request(
