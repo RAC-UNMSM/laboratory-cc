@@ -1,0 +1,6 @@
+mcp
+sympy
+matplotlib
+numpy
+requests
+fastmcp
