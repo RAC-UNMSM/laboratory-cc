@@ -1,26 +1,9 @@
 import io
-import os
-import platform
-import subprocess
-import tempfile
 import numpy as np
 import sympy as sp
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
-def abrir_imagen_sistema(filepath: str):
-    """Abre el archivo de imagen según el sistema operativo del usuario."""
-    sistema = platform.system().lower()
-    try:
-        if sistema == "darwin":      # macOS
-            subprocess.run(["open", filepath], check=False)
-        elif sistema == "windows":  # Windows
-            os.startfile(filepath)
-        elif sistema == "linux":    # Linux
-            subprocess.run(["xdg-open", filepath], check=False)
-    except Exception:
-        pass  # Si no hay entorno gráfico disponible, ignora la apertura.
 
 def generar_grafico_png(
     expr: sp.Expr,
@@ -30,10 +13,10 @@ def generar_grafico_png(
     y_max: float = None,
     g1_str: str = None,
     g2_str: str = None,
-    mostrar_local: bool = True
+    mostrar_local: bool = False
 ) -> bytes:
     """
-    Genera un gráfico PNG de la función dada.
+    Genera un gráfico PNG de la función dada y retorna sus bytes en memoria.
     - Si es de 1 variable, genera un gráfico 2D con el área sombreada.
     - Si es de 2 variables, genera una superficie 3D recortada con proyección en el suelo.
     """
@@ -123,12 +106,6 @@ def generar_grafico_png(
     plt.savefig(buf, format='png', dpi=120)
     buf.seek(0)
     png_bytes = buf.getvalue()
-
-    if mostrar_local:
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-            tmp.write(png_bytes)
-            tmp_path = tmp.name
-        abrir_imagen_sistema(tmp_path)
 
     plt.close(fig)
     return png_bytes

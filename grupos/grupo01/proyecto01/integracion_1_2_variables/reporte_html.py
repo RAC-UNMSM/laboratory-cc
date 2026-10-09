@@ -1,6 +1,5 @@
 import base64
-import os
-import webbrowser
+
 
 def generar_reporte_html(
     tipo_integral: str,
@@ -9,15 +8,17 @@ def generar_reporte_html(
     resultado_decimal: float,
     png_bytes: bytes,
     nombre_archivo: str = "reporte_integral.html",
-    abrir_en_navegador: bool = True
+    abrir_en_navegador: bool = False,
 ) -> str:
-    """
-    Genera un archivo HTML autocontenido con renderizado MathJax para las fórmulas 
-    y la imagen en formato Base64.
+    """Genera una cadena HTML autocontenida con renderizado MathJax para las fórmulas
+
+    y la imagen embebida en formato Base64.
+
+    Retorna la cadena de texto con el HTML completo generado en memoria.
     """
     # Convierte los bytes de la imagen a Base64 para embeberla directamente
     b64_img = base64.b64encode(png_bytes).decode("utf-8")
-    
+
     html_content = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -58,12 +59,5 @@ def generar_reporte_html(
 </body>
 </html>
 """
-
-    filepath = os.path.abspath(nombre_archivo)
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(html_content)
-
-    if abrir_en_navegador:
-        webbrowser.open(f"file://{filepath}")
 
     return html_content
