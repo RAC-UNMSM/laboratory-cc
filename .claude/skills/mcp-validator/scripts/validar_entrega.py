@@ -57,7 +57,7 @@ SALUD_SEG = 60
 # Docker Compose exige esto para el nombre de proyecto (lab-<grupo>-<app>).
 NOMBRE_VALIDO = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 # Variables que inyecta el propio despliegue: no hay que pedirlas.
-VARS_AUTOMATICAS = {"LAB_CONTAINER_NAME", "LAB_PUBLIC_PATH", "LAB_DOMAIN"}
+VARS_AUTOMATICAS = {"LAB_CONTAINER_NAME", "LAB_PUBLIC_PATH", "LAB_DOMAIN", "LAB_IMG_BUCKET", "LAB_PUBLIC_IMG_URL"}
 # Carpetas bajo grupos/ que no son la entrega de un grupo de alumnos.
 NO_GRUPOS = {"TEMPLATE", "_referencia"}
 PILOTO_BUCKET = "derivadas1-imgs"
@@ -234,6 +234,14 @@ def rel(path: Path, base: Path) -> str:
         return path.relative_to(base).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def img_slug(grupo: str, tema: str) -> str:
+    """Nombre base del storage de imágenes: grupo + carpeta del proyecto, solo
+    `[a-z0-9-]`, recortado a 58 caracteres. COPIA de `lab_deploy/naming.py`
+    del repo de infraestructura: si cambia allá, hay que cambiarla acá."""
+    slug = re.sub(r"[^a-z0-9]+", "-", f"{grupo}-{tema}".lower()).strip("-")
+    return slug[:58].strip("-")
 
 
 def normalizar_paquete(nombre: str) -> str:
@@ -1370,7 +1378,7 @@ def revisar_server(app: Path, repo: Path, grupo: str, tema: str, rep: Reporte, c
 
 
 def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Reporte, codigo: Codigo, datos: dict) -> None:
-    slug = re.sub(r"[^a-z0-9]+", "-", f"{grupo}-{tema}".lower()).strip("-")
+    slug = img_slug(grupo, tema)
     bucket_sugerido = f"{slug}-imgs"
 
     # URLs y hosts en todo el código que corre (no tests).
@@ -1523,18 +1531,37 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
                 return valor, nota, getattr(nodo, "lineno", 0)
         return None
 
+    fuente_storage = codigo.fuentes[storage]
+    sin_pasar = sorted(x for x in ("LAB_IMG_BUCKET", "LAB_PUBLIC_IMG_URL") if x in fuente_storage and x not in datos["env_compose"])
+    if sin_pasar:
+        rep.error(
+            f"`storage.py` lee {', '.join('`' + x + '`' for x in sin_pasar)}, pero el `docker-compose.yml` no se la(s) pasa al "
+            "contenedor, así que llegan vacías y no se sube nada. Agrega al servicio, tal cual:\n"
+            "      environment:\n"
+            "        LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}\n"
+            "        LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}"
+        )
+
     bucket = constante("BUCKET")
     publica = constante("PUBLIC", "URL")
     seaweed = constante("SEAWEED")
     es_piloto = grupo == "g01"
     bucket_ok = None
+    forma_auto = (
+        "Lo más simple es no escribir el nombre: `IMG_BUCKET = os.environ.get(\"LAB_IMG_BUCKET\", \"\")` y "
+        "`PUBLIC_IMG_BASE_URL = os.environ.get(\"LAB_PUBLIC_IMG_URL\", \"\")`, como el piloto; el despliegue pone el valor."
+    )
+    if sin_pasar:
+        bucket = publica = None
 
-    if bucket is None or not isinstance(bucket[0], str):
-        rep.aviso(f"No pude determinar el bucket en `storage.py`. Debe ser `IMG_BUCKET = \"{bucket_sugerido}\"`: revísalo a mano.")
+    if sin_pasar:
+        pass
+    elif bucket is None or not isinstance(bucket[0], str):
+        rep.aviso(f"No pude determinar el bucket en `storage.py`. Debe valer `{bucket_sugerido}`. {forma_auto}")
     else:
         valor, nota, linea = bucket
         if not es_piloto and (valor == PILOTO_BUCKET or "derivadas1" in valor):
-            rep.error(f"`storage.py:{linea}`: el bucket es `{valor}`{nota}, el del piloto de g01: sus imágenes se mezclarían con las de ustedes. Cámbialo a `{bucket_sugerido}`.")
+            rep.error(f"`storage.py:{linea}`: el bucket es `{valor}`{nota}, el del piloto de g01: sus imágenes se mezclarían con las de ustedes. Debe valer `{bucket_sugerido}`. {forma_auto}")
         elif not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", valor):
             rep.error(f"`storage.py:{linea}`: el bucket `{valor}`{nota} no es un nombre S3 válido (solo minúsculas, dígitos y `-`, de 3 a 63 caracteres). Usa `{bucket_sugerido}`.")
         elif not es_piloto and not valor.startswith(f"{grupo}-"):
@@ -1547,8 +1574,10 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
             if not es_piloto and valor != bucket_sugerido:
                 rep.aviso(f"`storage.py:{linea}`: el bucket es `{valor}`{nota}; para que coincida con la carpeta del proyecto debería ser `{bucket_sugerido}`.")
 
-    if publica is None or not isinstance(publica[0], str):
-        rep.aviso(f"No pude determinar `PUBLIC_IMG_BASE_URL` en `storage.py`. Debe ser `{url_esperada}`: revísalo a mano.")
+    if sin_pasar:
+        pass
+    elif publica is None or not isinstance(publica[0], str):
+        rep.aviso(f"No pude determinar `PUBLIC_IMG_BASE_URL` en `storage.py`. Debe valer `{url_esperada}`. {forma_auto}")
     else:
         valor, nota, linea = publica
         m = re.fullmatch(rf"https://{re.escape(DOMINIO)}/img/([a-z0-9-]+)/?", valor)
@@ -1561,18 +1590,27 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
         elif bucket_ok:
             if not es_piloto and bucket_ok != f"{m.group(1)}-imgs":
                 rep.aviso(f"El bucket (`{bucket_ok}`) y la URL pública (`/img/{m.group(1)}`) no siguen el mismo nombre. Lo esperado: bucket `{m.group(1)}-imgs`.")
-            # La ruta de imágenes la genera sola el despliegue, leyendo estas dos
-            # constantes como texto fijo de storage.py (lab_deploy/routes.py).
-            if es_piloto:
-                pass
-            elif bucket[1] or publica[1]:
-                rep.aviso(
-                    "El bucket o la URL pública llegan por variable de entorno. La ruta de imágenes se crea sola al desplegar "
-                    "solo si `IMG_BUCKET` y `PUBLIC_IMG_BASE_URL` están escritos como texto fijo en `storage.py`."
-                )
-                rep.para_admin(
-                    f"Ruta de imágenes a mano en Caddy (no se genera sola porque los nombres vienen de variables de entorno): "
-                    f"`/img/{m.group(1)}/*` → bucket `{bucket_ok}`."
+            # La ruta /img/... la crea sola el despliegue (lab_deploy/routes.py):
+            # con los nombres escritos a mano en storage.py si son válidos, y si
+            # no hay ninguno escrito, con el nombre calculado de la carpeta.
+            # Lo que la app use de verdad tiene que coincidir con esa ruta.
+            literales = {}
+            for nodo in codigo.archivos[storage].body:
+                if isinstance(nodo, ast.Assign) and isinstance(nodo.value, ast.Constant) and isinstance(nodo.value.value, str):
+                    for objetivo in nodo.targets:
+                        if isinstance(objetivo, ast.Name):
+                            literales[objetivo.id] = nodo.value.value
+            lit_bucket = next((x for k, x in literales.items() if "BUCKET" in k.upper()), None)
+            lit_url = next((x for k, x in literales.items() if "PUBLIC" in k.upper() and "URL" in k.upper()), None)
+            m_lit = re.fullmatch(r"https://[A-Za-z0-9.-]+/img/([a-z0-9-]+)/?", lit_url or "")
+            if lit_bucket and m_lit:
+                ruta_bucket, ruta_slug = lit_bucket, m_lit.group(1)
+            else:
+                ruta_bucket, ruta_slug = bucket_sugerido, slug
+            if (bucket_ok, m.group(1)) != (ruta_bucket, ruta_slug):
+                rep.error(
+                    f"La app subirá las imágenes al bucket `{bucket_ok}` y dará enlaces en `/img/{m.group(1)}`, pero la ruta "
+                    f"pública que crea el servidor es `/img/{ruta_slug}` → bucket `{ruta_bucket}`: las imágenes no se verán. {forma_auto}"
                 )
             else:
                 rep.info(f"La ruta pública de imágenes `/img/{m.group(1)}/` se crea sola al desplegar.")
@@ -1646,7 +1684,17 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
     else:
         revisar_dockerfile(app, repo, rep, codigo, datos)
         revisar_requirements(app, repo, rep, codigo)
-        # Lo que vale en el contenedor: el compose pisa al Dockerfile.
+        # Lo que vale en el contenedor: el compose pisa al Dockerfile, y las
+        # variables ${LAB_...} las rellena el despliegue (lab_deploy/naming.py).
+        automaticas = {
+            "LAB_CONTAINER_NAME": f"lab-{app_id}", "LAB_PUBLIC_PATH": f"/{grupo}/{app_id}", "LAB_DOMAIN": DOMINIO,
+            "LAB_IMG_BUCKET": f"{img_slug(grupo, tema)}-imgs",
+            "LAB_PUBLIC_IMG_URL": f"https://{DOMINIO}/img/{img_slug(grupo, tema)}",
+        }
+        datos["envv_compose"] = {
+            k: re.sub(r"\$\{(\w+)(?::?-[^}]*)?\}", lambda m: automaticas.get(m.group(1), m.group(0)), val)
+            for k, val in datos["envv_compose"].items()
+        }
         datos["env"] = {**datos["envv_docker"], **datos["envv_compose"]}
         pisadas = sorted(k for k in datos["envv_docker"] if k in datos["envv_compose"] and datos["envv_docker"][k] != datos["envv_compose"][k])
         if pisadas:

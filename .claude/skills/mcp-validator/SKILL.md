@@ -30,18 +30,21 @@ Lo que tiene que cumplir toda entrega:
 - **Los cuatro archivos de despliegue, bien armados:** `docker-compose.yml`,
   `Dockerfile`, `requirements.txt` (con lo que el grupo usa de verdad, ni más
   ni menos) y `server.py`. `storage.py` si genera imágenes o archivos.
-- **Sus propios nombres en `server.py` y `storage.py`.** El piloto se llama
-  `g01-derivadas1` porque es del grupo `g01` y su proyecto es `derivadas1`.
-  Cada grupo pone los suyos, con su grupo y el nombre de su carpeta:
+- **Sus propios nombres, siempre "grupo + carpeta del proyecto".** El piloto
+  es `g01-derivadas1` porque es del grupo `g01` y su carpeta es `derivadas1`.
+  Para `grupo04` con la carpeta `interpolacion`:
 
-  | Dónde | Piloto | Grupo `grupo04`, carpeta `interpolacion` |
+  | Dónde | Valor | Quién lo pone |
   |---|---|---|
-  | `server.py`: `MCPServer(...)` | `g01-derivadas1` | `grupo04-interpolacion` |
-  | `storage.py`: `IMG_BUCKET` | `derivadas1-imgs` | `grupo04-interpolacion-imgs` |
-  | `storage.py`: `PUBLIC_IMG_BASE_URL` | `.../img/derivadas1` | `.../img/grupo04-interpolacion` |
+  | `server.py`: `MCPServer(...)` | `grupo04-interpolacion` | El alumno, a mano |
+  | Bucket de imágenes | `grupo04-interpolacion-imgs` | El despliegue (`LAB_IMG_BUCKET`) |
+  | URL de imágenes | `.../img/grupo04-interpolacion` | El despliegue (`LAB_PUBLIC_IMG_URL`) |
 
+  En `storage.py` ya no se escribe ningún nombre: se copia el del piloto, que
+  lee esas dos variables, y se copia el bloque `environment:` del compose.
+  Quien los tenga escritos a mano con esa misma regla puede dejarlos así.
   Que quede `g01` o `derivadas1` en esos archivos es error: significa que se
-  copió el piloto sin renombrar.
+  copió un piloto antiguo sin renombrar.
 
 Responde siempre en español y en lenguaje llano: muchos alumnos usan git y
 Docker por primera vez.
@@ -188,10 +191,10 @@ cambio real a un archivo del repo, se deshace.
 
 Al desplegarse un servidor MCP de un grupo (carpeta con `server.py`), el
 servidor genera su ruta `/<grupo>/<app>` hacia el puerto 8000, y la de
-imágenes `/img/<grupo>-<tema>/` si `storage.py` tiene `IMG_BUCKET` y
-`PUBLIC_IMG_BASE_URL` escritos como texto fijo y empezando con el grupo. El
-alumno no tiene que pedirlas. Si esos nombres no cumplen, la app despliega
-pero sin ruta de imágenes, y solo el administrador ve el motivo.
+imágenes `/img/<grupo>-<carpeta>/` si tiene `storage.py`, con el nombre que
+el despliegue calcula de la carpeta. El alumno no tiene que pedirlas. Si
+`storage.py` trae nombres escritos a mano que no siguen la regla, la app
+despliega pero sus imágenes no se ven; el validador lo marca como error.
 
 ## Cuándo avisar al administrador
 
@@ -204,7 +207,8 @@ mayoría; tú completa lo que veas al leer el código:
 - Una app que no sea un servidor MCP propio (una imagen ya hecha, una web) y
   necesite ruta pública: esa no se crea sola.
 - Variables de entorno, tokens o claves de API. El despliegue solo entrega al
-  compose `LAB_CONTAINER_NAME`, `LAB_PUBLIC_PATH` y `LAB_DOMAIN`; cualquier
+  compose `LAB_CONTAINER_NAME`, `LAB_PUBLIC_PATH`, `LAB_DOMAIN`,
+  `LAB_IMG_BUCKET` y `LAB_PUBLIC_IMG_URL`; cualquier
   otra `${VAR}` llega vacía hasta que él la habilite.
 - Una app eliminada o una carpeta renombrada: el contenedor anterior sigue
   corriendo hasta que él lo baje a mano.

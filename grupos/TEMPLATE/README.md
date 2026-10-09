@@ -42,7 +42,10 @@ Para un grupo nuevo (`grupoNN`):
      de escribirla mal), y unirse a la red externa `lab_net` (copiar el
      bloque `networks:` del ejemplo). Si la app necesita conocer su propia
      ruta pública (como el `N8N_PATH`/`WEBHOOK_URL` del ejemplo de n8n),
-     usar igual la variable automática `${LAB_PUBLIC_PATH}`.
+     usar igual la variable automática `${LAB_PUBLIC_PATH}`. Para el
+     storage de imágenes hay otras dos, `${LAB_IMG_BUCKET}` y
+     `${LAB_PUBLIC_IMG_URL}`, que se pasan al contenedor con `environment:`
+     (ver `grupos/g01/semana01/derivadas1/docker-compose.yml`).
 5. **No hace falta tocar nada del repo de infraestructura.** El despliegue
    descubre la app solo: tras cada merge a `main` busca
    `grupos/<grupo>/<semana>/<tema>/docker-compose.yml` y despliega las

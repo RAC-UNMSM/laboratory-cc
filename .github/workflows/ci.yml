@@ -221,6 +221,11 @@ jobs:
               public_path="/${group}/${app}"
             fi
 
+            # Mismo cálculo que lab_deploy/naming.py (img_slug): grupo + carpeta
+            # del proyecto, solo [a-z0-9-], recortado a 58 caracteres.
+            img_slug=$(printf '%s' "${group}-$(basename "$dir")" | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-58 | sed -E 's/-+$//')
+
             tocada=no
             if grep -q "^${dir}/" <<<"$CAMBIADOS"; then tocada=si; fi
 
@@ -232,6 +237,8 @@ jobs:
               LAB_DOMAIN="ci.localhost" \
               LAB_CONTAINER_NAME="$container_name" \
               LAB_PUBLIC_PATH="$public_path" \
+              LAB_IMG_BUCKET="${img_slug}-imgs" \
+              LAB_PUBLIC_IMG_URL="https://ci.localhost/img/${img_slug}" \
                 docker compose -p "$project" up -d --build --quiet-pull 2>&1
             ) > "$SALIDA" 2>&1
             up_status=$?
