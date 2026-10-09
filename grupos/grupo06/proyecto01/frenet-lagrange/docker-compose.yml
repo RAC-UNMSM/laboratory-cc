@@ -1,0 +1,43 @@
+services:
+  grupo06-frenet-lagrange:
+    build: .
+    image: grupo06-frenet-lagrange:latest
+    container_name: ${LAB_CONTAINER_NAME}
+    restart: unless-stopped
+    init: true
+    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    environment:
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+      MCP_HTTP_PATH: /mcp
+      MCP_STATELESS: "1"
+      MCP_MATH_STORAGE: s3
+      MCP_GRUPO: grupo06
+      SEAWEEDFS_S3_URL: http://seaweedfs:8333
+      IMG_BUCKET: grupo06-frenet-lagrange-imgs
+      PUBLIC_IMG_BASE_URL: https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange
+      MCP_MATH_PROCESOS: "1"
+      MCP_MATH_WORKERS: "1"
+      MCP_MATH_TIMEOUT: "120"
+      MCP_MATH_LOG: INFO
+      MCP_MATH_RESULTADOS: /tmp/resultados
+      MCP_URL: http://0.0.0.0:8000/mcp
+      PUBLIC_LOCAL_BASE_URL: http://localhost:8080/img/frenet-lagrange
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434/v1"
+      S3_ACCESS_KEY: ""
+      S3_SECRET_KEY: ""
+      S3_REGION: us-east-1
+      S3_TIMEOUT: "20"
+      AGENTE_PROVEEDOR: simulado
+    expose:
+      - "8000"
+
+networks:
+  default:
+    name: lab_net
+    external: true

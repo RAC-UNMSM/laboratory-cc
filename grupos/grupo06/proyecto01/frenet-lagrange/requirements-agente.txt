@@ -1,0 +1,3 @@
+# Solo para agente.py con un LLM real (DeepSeek, Gemini, Claude, OpenAI, Ollama)
+-r requirements.txt
+openai>=1.40            # cliente del protocolo "chat completions" (compatible con todos los proveedores)

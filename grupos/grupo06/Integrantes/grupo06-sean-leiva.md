@@ -1,0 +1,1 @@
+soy Sean Leiva y pertenezco al grupo 06

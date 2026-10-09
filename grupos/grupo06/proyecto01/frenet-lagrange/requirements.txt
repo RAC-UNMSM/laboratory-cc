@@ -1,0 +1,11 @@
+# Servidor MCP «Frenet, Lagrange y Puntos Críticos» — dependencias de ejecución
+pydantic>=2.7,<3        # capa 1 de validación (esquemas que ve el LLM)
+sympy>=1.13,<2          # cálculo simbólico exacto
+mpmath>=1.3             # precisión arbitraria (lo usa SymPy)
+numpy>=1.26             # muestreo de gráficos
+matplotlib>=3.8         # láminas PNG
+jinja2>=3.1,<4          # plantillas HTML
+pillow>=10              # miniatura PNG del bloque Image (ya la instala matplotlib)
+contourpy
+openai
+mcp>=1.2.0,<2.0.0

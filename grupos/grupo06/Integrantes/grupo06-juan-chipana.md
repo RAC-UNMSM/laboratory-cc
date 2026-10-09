@@ -1,0 +1,1 @@
+Soy Juan Chipana, pertenesco al grupo 06
