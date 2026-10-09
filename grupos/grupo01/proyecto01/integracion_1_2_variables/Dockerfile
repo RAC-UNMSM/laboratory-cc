@@ -17,8 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el código del proyecto
 COPY . .
 
-# Puerto expuesto para la comunicación MCP por SSE (Server-Sent Events)
+# Puerto expuesto para la comunicación MCP
 EXPOSE 8000
 
-# Ejecutar FastMCP expuesto a la red
-CMD ["fastmcp", "run", "server.py", "--transport", "sse", "--host", "0.0.0.0", "--port", "8000"]
+# Ejecutar el servidor MCP directamente con Python
+CMD ["python", "server.py"]

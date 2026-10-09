@@ -1,6 +1,5 @@
-mcp
+mcp==2.1.1
 sympy
-matplotlib
 numpy
 requests
-fastmcp
+matplotlib
