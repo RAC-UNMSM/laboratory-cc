@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Historia completa: el validador de entregas compara contra main.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -24,6 +27,107 @@ jobs:
 
       - name: Validar docker-compose.yml de cada grupo/app
         run: python3 ci/validate_resource_limits.py
+
+      # Mismo validador que usan los alumnos antes de subir (skill
+      # mcp-validator): un script de Python, sin IA ni tokens. Revisa lo que
+      # no debe subirse, la estructura de carpetas y que compose, Dockerfile,
+      # requirements.txt, server.py y storage.py estén bien armados.
+      # Se ejecuta la copia de main, no la del PR, para que un PR no pueda
+      # modificar el validador que lo revisa.
+      - name: Validar la entrega de cada grupo (mcp-validator)
+        id: entrega
+        run: |
+          set +e
+          REPORTE="$RUNNER_TEMP/entrega.md"
+          VALIDADOR="$RUNNER_TEMP/validar_entrega.py"
+          echo "### Revisión de la entrega (mcp-validator)" > "$REPORTE"
+          echo "summary_file=$REPORTE" >> "$GITHUB_OUTPUT"
+
+          if ! git show origin/main:.claude/skills/mcp-validator/scripts/validar_entrega.py > "$VALIDADOR" 2>/dev/null; then
+            echo "El validador no está en main: se omite esta revisión." | tee -a "$REPORTE"
+            exit 0
+          fi
+
+          # Grupos cuya carpeta toca este PR.
+          mapfile -t grupos < <(git diff --name-only origin/main...HEAD \
+            | awk -F/ '$1 == "grupos" && $2 ~ /^grupo[0-9][0-9]$/ {print $2}' | sort -u)
+          if [ ${#grupos[@]} -eq 0 ]; then
+            echo "" >> "$REPORTE"
+            echo "Este PR no toca la carpeta de ningún grupo: no hay entrega que revisar." | tee -a "$REPORTE"
+            cat "$REPORTE" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          estado=0
+          for grupo in "${grupos[@]}"; do
+            salida="$RUNNER_TEMP/entrega_${grupo}.txt"
+            python3 "$VALIDADOR" "$grupo" --repo "$GITHUB_WORKSPACE" --base origin/main > "$salida" 2>&1
+            rc=$?
+            cat "$salida"
+            veredicto=$(awk '/^## Veredicto/{f=1;next} f&&NF{print;exit}' "$salida" | sed 's/^ *//')
+            if [ $rc -ne 0 ]; then
+              estado=1
+              icono="❌"
+              [ -n "$veredicto" ] || veredicto="el validador no pudo completar la revisión"
+            else
+              icono="✅"
+            fi
+            {
+              echo ""
+              echo "<details open><summary><b>${icono} ${grupo}</b>: ${veredicto}</summary>"
+              echo ""
+              echo '```'
+              cut -c1-600 "$salida"
+              echo '```'
+              echo "</details>"
+            } >> "$REPORTE"
+          done
+
+          {
+            echo ""
+            echo "Para revisar antes de subir, desde la raíz del repo:"
+            echo "\`python .claude/skills/mcp-validator/scripts/validar_entrega.py grupoNN\`"
+            echo "(con Claude Code: \`/mcp-validator\`). \`[ERROR]\` bloquea el PR; \`[FALTA]\` es lo que falta para desplegar y no bloquea."
+          } >> "$REPORTE"
+          cat "$REPORTE" >> "$GITHUB_STEP_SUMMARY"
+          exit $estado
+
+      - name: Publicar la revisión de la entrega en el PR
+        if: always() && steps.entrega.outputs.summary_file != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = "${{ steps.entrega.outputs.summary_file }}";
+            if (!path || !fs.existsSync(path)) return;
+            let body = fs.readFileSync(path, "utf8");
+            if (body.length > 60000) {
+              body = body.slice(0, 60000) + "\n\n...(truncado)";
+            }
+            const marker = "<!-- mcp-validator -->";
+            body = marker + "\n" + body;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
 
   dev-run:
     name: Dev-run efímero (build + up + logs + down)
