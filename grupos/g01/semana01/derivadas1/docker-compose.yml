@@ -4,6 +4,11 @@ services:
     container_name: ${LAB_CONTAINER_NAME}
     restart: unless-stopped
     mem_limit: 512m
+    environment:
+      # Nombres del storage de imágenes, calculados por el despliegue a
+      # partir de la carpeta. Se copian tal cual, sin reemplazar nada.
+      LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}
+      LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}
 
 networks:
   default:
