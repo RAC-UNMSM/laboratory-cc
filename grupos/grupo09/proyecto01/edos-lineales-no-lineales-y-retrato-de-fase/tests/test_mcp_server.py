@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import io
 import json
+import math
 import unittest
 from pathlib import Path
 
@@ -27,7 +28,22 @@ class RegistroDeHerramientasTests(unittest.TestCase):
         herramientas = {h.name for h in _ejecutar(mcp_server.servidor.list_tools())}
         self.assertEqual(herramientas, {"ping", "informe", "nuevo_informe",
                                         "resolver_graficar_y_analizar_edo",
-                                        "analizar_equilibrios", "listar_balotario"})
+                                        "analizar_equilibrios", "listar_balotario",
+                                        "resolver_caos_fractales_y_atractores"})
+
+    def test_el_nombre_de_la_herramienta_de_caos_dice_sus_temas(self):
+        """Mismo motivo que el de la herramienta principal: el modelo elige por el nombre."""
+        nombres = {h.name for h in _ejecutar(mcp_server.servidor.list_tools())}
+        caos = next(n for n in nombres if "caos" in n)
+        for palabra in ("resolver", "caos", "fractales", "atractores"):
+            self.assertIn(palabra, caos)
+
+    def test_la_herramienta_de_caos_solo_exige_el_enunciado(self):
+        herramienta = next(h for h in _ejecutar(mcp_server.servidor.list_tools())
+                           if h.name == "resolver_caos_fractales_y_atractores")
+        self.assertEqual(set(herramienta.input_schema["required"]), {"enunciado"})
+        for campo in ("datos", "seccion_poincare", "ecuaciones", "parametros", "parametro"):
+            self.assertIn(campo, herramienta.input_schema["properties"])
 
     def test_el_nombre_dice_lo_que_piden_los_enunciados(self):
         """El nombre es lo único que el modelo ve al decidir; no lo acorte.
@@ -152,12 +168,21 @@ class RegistroDeHerramientasTests(unittest.TestCase):
             self.assertIn(campo, herramienta.input_schema["properties"], f"falta {campo}")
 
     def test_las_instrucciones_explican_el_desarrollo_y_el_alcance(self):
-        """El modelo debe presentar lo que el servidor calculó, y decir lo que todavía no hace."""
+        """El modelo debe presentar lo que el servidor calculó, y decir lo que no pertenece al proyecto."""
         texto = mcp_server.servidor.instructions
         self.assertIn("desarrollo.secciones", texto)
-        self.assertIn("FUERA DE ALCANCE POR AHORA", texto)
+        self.assertIn("FUERA DEL ALCANCE DEL PROYECTO", texto)
+        self.assertIn("mensaje_para_el_usuario", texto)
         self.assertIn("enunciado", texto)
         self.assertNotIn("pendiente de implementación", texto.lower())
+        self.assertNotIn("POR AHORA", texto)
+        for tema in ("Tema 1", "Tema 2", "Tema 3", "Tema 4", "Tema 5"):
+            self.assertIn(tema, texto)
+
+    def test_las_instrucciones_dicen_que_hacer_con_lo_que_no_es_matematica(self):
+        texto = mcp_server.servidor.instructions
+        self.assertIn("NO ES DE MATEMÁTICAS", texto)
+        self.assertIn("etapa='datos'", texto)
 
     def test_las_herramientas_se_describen_para_el_cliente(self):
         for herramienta in _ejecutar(mcp_server.servidor.list_tools()):
@@ -223,6 +248,26 @@ class HerramientasTests(unittest.TestCase):
         self.assertEqual(resultado["desarrollo"]["familia"], "mapa_1d")
         self.assertEqual(resultado["solucion"]["resultados"]["horizonte"], 34)
 
+    def test_la_herramienta_de_caos_por_el_protocolo(self):
+        """Solo el enunciado, como lo mandaría Claude: el tema se lee de él."""
+        respuesta = _ejecutar(mcp_server.servidor.call_tool("resolver_caos_fractales_y_atractores", {
+            "enunciado": "Calcule rigurosamente la dimensión de caja del conjunto ternario de Cantor.",
+            "visualizar": False}))
+        resultado = json.loads(respuesta.content[0].text)
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["familia"], "dimension_fractal")
+        self.assertAlmostEqual(resultado["solucion"]["resultados"]["dimension"]["valor"],
+                               math.log(2) / math.log(3), places=12)
+
+    def test_una_pregunta_ajena_vuelve_con_el_alcance_del_proyecto(self):
+        respuesta = _ejecutar(mcp_server.servidor.call_tool("resolver_caos_fractales_y_atractores", {
+            "enunciado": "Dame un color bonito para pintar mi cuarto"}))
+        resultado = json.loads(respuesta.content[0].text)
+        self.assertFalse(resultado["ok"])
+        self.assertEqual(resultado["etapa"], "no_es_un_problema_del_proyecto")
+        self.assertIn("no es un problema matemático", resultado["mensaje_para_el_usuario"])
+        self.assertEqual(len(resultado["alcance"]), 5)
+
     def test_la_solucion_general_se_pide_sin_condicion_inicial(self):
         resultado = mcp_server.analizar_edo(
             ecuaciones=["yp", "(2*x*yp - 2*y + x**3*log(x))/x**2"], variables_estado=["y", "yp"],
@@ -237,10 +282,20 @@ class HerramientasTests(unittest.TestCase):
         self.assertEqual(problemas["1.2"]["alcance"], "dentro")
         self.assertIn("bernoulli", problemas["1.2"]["familias"])
         self.assertEqual(problemas["4.1"]["familias"], ["mapa_1d"])
-        for identificador in ("4.2", "4.3", "4.4", "4.5", "5.1", "5.2", "5.3", "5.4", "5.5"):
-            self.assertEqual(problemas[identificador]["alcance"], "fuera_de_alcance")
+        self.assertTrue(all(p["alcance"] == "dentro" for p in problemas.values()))
+        self.assertEqual(len(problemas), 25)
+        for identificador, familia in (("4.2", "duplicacion_periodo"), ("4.3", "feigenbaum"),
+                                       ("4.4", "disipatividad"), ("4.5", "espectro_lyapunov"),
+                                       ("5.1", "dimension_fractal"), ("5.2", "herradura"), ("5.3", "mapa_2d"),
+                                       ("5.4", "seccion_poincare"), ("5.5", "kaplan_yorke")):
+            self.assertEqual(problemas[identificador]["familias"], [familia])
+            self.assertEqual(problemas[identificador]["solicitud"]["herramienta"],
+                             "resolver_caos_fractales_y_atractores")
         self.assertIn("Poincaré-Bendixson no aplica", problemas["2.5"]["revision_matematica"])
         self.assertIn("36/35", problemas["3.5"]["revision_matematica"])
+        self.assertIn("−1.1314", problemas["5.3"]["revision_matematica"])
+        self.assertIn("ẏ < 0", problemas["5.4"]["revision_matematica"])
+        self.assertEqual(len(resultado["alcance"]), 5)
 
     def test_listar_balotario_devuelve_ecuaciones_listas_para_el_solver(self):
         resultado = mcp_server.listar_balotario(tema="tema_01")

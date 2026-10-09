@@ -7,9 +7,9 @@
     "origen": {
       "archivo": "balotario.tex",
       "seccion_latex": "Tema 5: Atractores Extraños y Geometría Fractal",
-      "lineas": [2776, 2830]
+      "lineas": [3131, 3605]
     },
-    "notas": "ATENCIÓN: en el .tex NINGUNO de los cinco problemas de este tema tiene solución desarrollada; están solo con enunciado. Todos se registran con solucion_esperada.tipo = \"pendiente\" y solucion_en_tex = false, y lo que aparece en `datos_del_enunciado` son las cifras que el propio enunciado aporta.\n\nPor tipo de objeto: 5.1 y 5.2 son geometría fractal y dinámica simbólica, 5.3 es un mapa discreto 2D (Hénon), 5.4 pide una reducción por sección de Poincaré y 5.5 una dimensión de Lyapunov. Ninguno es un problema de valor inicial que el motor pueda resolver hoy; los sistemas de 5.4 (Rössler) sí son integrables, pero la pregunta no es la trayectoria."
+    "notas": "Los cinco problemas tienen solución desarrollada en el .tex y el agente los resuelve con su procedimiento en matematica/atractores_fractales.py: dimensión de caja de un conjunto autosemejante (5.1), modelo lineal de la herradura de Smale (5.2), mapas del plano como Hénon (5.3), sección de Poincaré y mapa de retorno (5.4) y dimensión de Kaplan-Yorke (5.5). Se piden a `resolver_caos_fractales_y_atractores` con el enunciado; los que nombran el sistema (Hénon, Rössler, Lorenz) no necesitan más.\n\nEl .tex tiene dos errores que el agente no repite, documentados en `revision_matematica` (el .tex no se modificó): el segundo punto fijo de Hénon (5.3) y la mitad de la sección de Poincaré de Rössler (5.4)."
   },
   "problemas": [
     {
@@ -19,8 +19,7 @@
       "enunciado": "El corte transversal de la mayoría de atractores extraños posee estructura de conjunto de Cantor. Calcule rigurosamente la dimensión de caja (Box-Counting Dimension) $D_0$ del conjunto ternario clásico de Cantor.",
       "tipo": "geometria_fractal",
       "dificultad": "intermedia",
-      "verificable_con_solver": false,
-      "motivo_no_verificable": "Cálculo de una dimensión fractal de un conjunto geométrico; no hay EDO que integrar.",
+      "verificable_con_solver": true,
       "ecuacion": {
         "latex": "D_0 = \\lim_{\\varepsilon \\to 0} \\frac{\\ln N(\\varepsilon)}{\\ln(1/\\varepsilon)}",
         "forma": "demostracion",
@@ -29,11 +28,28 @@
         "parametros": {}
       },
       "solucion_esperada": {
-        "tipo": "pendiente",
-        "solucion_en_tex": false,
-        "nota": "El .tex trae solo el enunciado."
+        "tipo": "dimension_fractal",
+        "solucion_en_tex": true,
+        "latex": "N(3^{-n}) = 2^n \\implies D_0 = \\frac{\\ln 2}{\\ln 3} \\approx 0.6309",
+        "valores": {
+          "copias": 2,
+          "razon": 0.3333333333333333,
+          "dimension": 0.6309297535714574,
+          "dimension_expresion": "log(2)/log(3)",
+          "medida_etapa_n": "(2/3)**n"
+        }
       },
-      "verificacion": { "no_verificable_con_el_motor_actual": true }
+      "verificacion": {
+        "conteo_exacto": true,
+        "dimension_por_conteo": true,
+        "ecuacion_de_autosemejanza": true,
+        "nota": "Se construye C₁₅ y se cuentan cajas: N = 2ᵏ exactamente en las escalas 3⁻ᵏ, y la pendiente del conteo con ε = 2⁻ʲ reproduce ln 2/ln 3."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "Sin ecuación. Para otro conjunto autosemejante: datos = {copias, razon}."
+      }
     },
     {
       "id": "5.2",
@@ -42,8 +58,7 @@
       "enunciado": "Describa el mecanismo geométrico de la herradura de Smale y explique por qué genera un atractor extraño con infinitas órbitas periódicas inestables y dinámica caótica simbólica.",
       "tipo": "demostracion_teorica",
       "dificultad": "avanzada",
-      "verificable_con_solver": false,
-      "motivo_no_verificable": "Pregunta conceptual sobre un mecanismo geométrico; no tiene datos numéricos.",
+      "verificable_con_solver": true,
       "ecuacion": {
         "latex": "\\text{Herradura de Smale: estiramiento, plegado y reinyección}",
         "forma": "demostracion",
@@ -52,11 +67,27 @@
         "parametros": {}
       },
       "solucion_esperada": {
-        "tipo": "pendiente",
-        "solucion_en_tex": false,
-        "nota": "El .tex trae solo el enunciado."
+        "tipo": "demostracion",
+        "solucion_en_tex": true,
+        "latex": "\\Lambda \\cong \\text{Cantor} \\times \\text{Cantor},\\quad D_0(\\Lambda) = 2\\frac{\\ln 2}{\\ln 3} \\approx 1.26,\\quad \\phi\\circ f = \\sigma\\circ\\phi,\\quad h_{top} = \\ln 2",
+        "valores": {
+          "contraccion": 0.3333333333333333,
+          "expansion": 3.0,
+          "dimension": 1.2618595071429148,
+          "entropia_topologica": 0.6931471805599453,
+          "puntos_de_periodo_n": "2**n"
+        }
       },
-      "verificacion": { "no_verificable_con_el_motor_actual": true }
+      "verificacion": {
+        "puntos_de_periodo": true,
+        "dimension_por_conteo": true,
+        "nota": "En el modelo lineal se resuelven uno por uno los puntos fijos de fⁿ (n = 1..8): son 2ⁿ, siguen su itinerario y son sillas con autovalores λⁿ y μⁿ."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "Sin ecuación. Otros factores: datos = {contraccion (< 1/2), expansion (> 2)}."
+      }
     },
     {
       "id": "5.3",
@@ -65,8 +96,7 @@
       "enunciado": "Considere el mapa bidimensional de Hénon (1976) $x_{n+1} = 1 - a x_n^2 + y_n$, $y_{n+1} = b x_n$. (a) Calcule el determinante de su matriz jacobiana y verifique la contracción de áreas en el plano para los parámetros canónicos $a = 1.4$ y $b = 0.3$. (b) Demuestre que el mapa es invertible y obtenga su mapeo inverso explícito $T^{-1}(x,y)$.",
       "tipo": "mapa_discreto_bidimensional",
       "dificultad": "avanzada",
-      "verificable_con_solver": false,
-      "motivo_no_verificable": "Mapa discreto 2D: el motor integra EDOs continuas y no itera mapas.",
+      "verificable_con_solver": true,
       "ecuacion": {
         "latex": "x_{n+1} = 1 - a x_n^2 + y_n, \\qquad y_{n+1} = b x_n",
         "forma": "mapa_discreto",
@@ -81,11 +111,44 @@
       },
       "datos_del_enunciado": { "a": 1.4, "b": 0.3 },
       "solucion_esperada": {
-        "tipo": "pendiente",
-        "solucion_en_tex": false,
-        "nota": "El .tex trae solo el enunciado. Los parámetros canónicos vienen del propio enunciado."
+        "tipo": "mapa_discreto_bidimensional",
+        "solucion_en_tex": true,
+        "latex": "\\det DT = -b,\\quad |\\det DT| = 0.3 < 1,\\quad T^{-1}(x, y) = \\left(\\frac{y}{b},\\; x - 1 + \\frac{a}{b^2} y^2\\right)",
+        "valores": {
+          "jacobiana": [["-2*a*x", "1"], ["b", "0"]],
+          "determinante": "-b",
+          "factor_de_area": 0.3,
+          "suma_exponentes": -1.2039728043259361,
+          "exponentes_lyapunov_referencia": [0.42, -1.62],
+          "inverso": ["y/b", "x - 1 + a*y**2/b**2"],
+          "puntos_fijos": [
+            [0.6313544770895047, 0.1894063431268514],
+            [-1.1313544770895048, -0.3394063431268514]
+          ],
+          "clasificacion_puntos_fijos": ["silla", "silla"]
+        },
+        "notas": "El segundo punto fijo es el corregido (ver revision_matematica)."
       },
-      "verificacion": { "no_verificable_con_el_motor_actual": true }
+      "verificacion": {
+        "inverso_por_la_derecha": true,
+        "inverso_por_la_izquierda": true,
+        "descomposicion": true,
+        "suma_de_exponentes": true,
+        "nota": "Prueba de aceptación de matematica.atractores_fractales.desarrollar_mapa_2d."
+      },
+      "revision_matematica": {
+        "estado": "error_aritmetico_en_el_tex",
+        "resumen": "El segundo punto fijo de Hénon es x₋ ≈ −1.1314, no −1.1135.",
+        "detalle": "x* = (−0.7 ± √6.09)/2.8 con √6.09 ≈ 2.46779: x₋ = −3.16779/2.8 ≈ −1.13135 (y* = b·x₋ ≈ −0.33941). El .tex escribe −1.1135, con dos cifras transpuestas; x₊ ≈ 0.6314 sí es correcto. La conclusión no cambia: los dos son sillas (en x₋ los autovalores de DT son ≈ 3.2598 y −0.0920).",
+        "valores_corregidos": { "x_menos": -1.1313544770895048, "y_menos": -0.3394063431268514 },
+        "verificado_por": "matematica.atractores_fractales.desarrollar_mapa_2d (puntos fijos exactos con sympy y residuo T(P) − P); tests/test_tema5.py",
+        "tex_modificado": false
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "El enunciado nombra el mapa de Hénon con a = 1.4 y b = 0.3: basta con pasarlo."
+      }
     },
     {
       "id": "5.4",
@@ -94,8 +157,7 @@
       "enunciado": "El sistema de Rössler (1976) viene dado por $\\dot{x} = -y - z$, $\\dot{y} = x + a y$, $\\dot{z} = b + z(x - c)$ con $a = b = 0.2$ y $c = 5.7$. Explique cómo el flujo tridimensional se reduce a un mapa unidimensional con cúspide a través de la sección de Poincaré transversal $y = 0$, $\\dot{y} > 0$.",
       "tipo": "seccion_de_poincare",
       "dificultad": "avanzada",
-      "verificable_con_solver": false,
-      "motivo_no_verificable": "El sistema sí es integrable por el motor, pero la pregunta pide la reducción por sección de Poincaré, que requiere detección de cruces: es lo que falta en `matematica/analisis_caos.py`.",
+      "verificable_con_solver": true,
       "ecuacion": {
         "latex": "\\dot{x} = -y - z, \\qquad \\dot{y} = x + a y, \\qquad \\dot{z} = b + z(x - c)",
         "forma": "sistema_primer_orden",
@@ -105,20 +167,51 @@
         "variables_estado": ["x", "y", "z"],
         "campo": ["-y - z", "x + a*y", "b + z*(x - c)"],
         "parametros": { "a": 0.2, "b": 0.2, "c": 5.7 },
-        "notas": "Este campo sí se puede pasar a `resolver_graficar_y_analizar_edo` para obtener la trayectoria y el atractor 3D; lo que no está implementado es la sección de Poincaré."
+        "notas": "Se integra con detección de eventos sobre la sección para obtener el mapa de retorno."
       },
-      "datos_del_enunciado": {
-        "a": 0.2, "b": 0.2, "c": 5.7,
-        "seccion": "y = 0 con y' > 0"
-      },
+      "datos_del_enunciado": { "a": 0.2, "b": 0.2, "c": 5.7, "seccion": "y = 0 con y' > 0" },
       "solucion_esperada": {
-        "tipo": "pendiente",
-        "solucion_en_tex": false,
-        "nota": "El .tex trae solo el enunciado. Los parámetros canónicos vienen del propio enunciado."
+        "tipo": "seccion_de_poincare",
+        "solucion_en_tex": true,
+        "latex": "\\nabla\\cdot\\mathbf{f} = x - 5.5;\\quad \\Sigma: y = 0;\\quad e^{\\lambda_3 T} \\sim 10^{-14};\\quad u_{n+1} = g(u_n) \\text{ unimodal}",
+        "valores": {
+          "divergencia": "x - 11/2",
+          "equilibrios": [
+            [0.007026204834100129, -0.035131024170500645, 0.035131024170500645],
+            [5.6929737951659, -28.4648689758295, 28.4648689758295]
+          ],
+          "autovalores_P_menos": "0.097 ± 0.995i, -5.687",
+          "tiempo_de_retorno": 5.86,
+          "lambda_3_referencia": -5.39,
+          "lambda_1_referencia": 0.0714,
+          "maximo_de_g_en_u_igual_menos_x": 5.78
+        },
+        "notas": "La reducción a un mapa unimodal se hace en la mitad ẏ < 0 (ver revision_matematica)."
       },
       "verificacion": {
-        "no_verificable_con_el_motor_actual": true,
-        "nota": "Cuando se implementen las secciones de Poincaré en analisis_caos.py, este es su caso de referencia."
+        "seccion_delgada": true,
+        "unimodal": true,
+        "ramas_de_g": true,
+        "lyapunov_por_el_mapa": true,
+        "nota": "Prueba de aceptación de matematica.atractores_fractales.desarrollar_seccion_poincare."
+      },
+      "revision_matematica": {
+        "estado": "seccion_mal_orientada_en_el_tex",
+        "resumen": "La reducción a un mapa unimodal funciona en la mitad y = 0, ẏ < 0 (x < 0), no en ẏ > 0 como dice el .tex.",
+        "detalle": "Sobre y = 0 es ẏ = x, así que ẏ > 0 es la mitad x > 0, que es justo donde ocurre la excursión: allí los cruces tienen z entre 0.08 y 18 y x entre 3.6 y 9.8, la nube no es una curva recorrida por x, y x_{n+1} no es función de x_n. En la mitad ẏ < 0 (x < 0) los cruces quedan con z entre 0.013 y 0.026 (contracción e^{λ₃T} ~ 10⁻¹⁴), y con u = −x el mapa de retorno es unimodal, con máximo en u ≈ 5.78, rama creciente para u pequeño y decreciente para u grande, y ⟨ln|g'|⟩/T ≈ 0.07 ≈ λ₁ del flujo. Todo lo que el .tex explica es cierto, pero en la otra mitad de la sección.",
+        "valores_corregidos": {
+          "sentido": "decreciente",
+          "rango_z_en_la_mitad_correcta": [0.0135, 0.0257],
+          "rango_z_en_la_mitad_del_tex": [0.0827, 17.98],
+          "maximo_de_g_en_u": 5.78
+        },
+        "verificado_por": "matematica.atractores_fractales.desarrollar_seccion_poincare (prueba la mitad pedida, detecta que no deja un mapa unidimensional y usa la otra); tests/test_tema5.py",
+        "tex_modificado": false
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "El enunciado nombra a Rössler y su sección: basta con pasarlo. La sección también se puede dar en seccion_poincare = {variable, valor, sentido}."
       }
     },
     {
@@ -128,8 +221,7 @@
       "enunciado": "La Conjetura de Kaplan-Yorke (dimensión de Lyapunov $D_L$) relaciona el espectro de exponentes de Lyapunov ordenados $\\lambda_1 \\ge \\lambda_2 \\ge \\dots \\ge \\lambda_n$ con la dimensión de información del atractor mediante $D_L = k + \\frac{\\sum_{j=1}^k \\lambda_j}{|\\lambda_{k+1}|}$, donde $k$ es el entero más grande tal que $\\sum_{j=1}^k \\lambda_j \\ge 0$. Para el atractor de Lorenz con parámetros canónicos $\\sigma = 10$, $b = 8/3$, $r = 28$, los exponentes calculados numéricamente son $\\lambda_1 \\approx 0.9056$, $\\lambda_2 = 0$, $\\lambda_3 \\approx -14.5723$. (a) Compruebe analíticamente que $\\lambda_1 + \\lambda_2 + \\lambda_3$ coincide con la divergencia media del sistema de Lorenz. (b) Calcule la dimensión fractal de Lyapunov $D_L$ del atractor de Lorenz e interprete físicamente su valor fraccionario.",
       "tipo": "dimension_de_lyapunov",
       "dificultad": "avanzada",
-      "verificable_con_solver": false,
-      "motivo_no_verificable": "Requiere el espectro de exponentes de Lyapunov, que es justo lo que `matematica/analisis_caos.py` no implementa todavía. El enunciado aporta los exponentes ya calculados.",
+      "verificable_con_solver": true,
       "ecuacion": {
         "latex": "D_L = k + \\frac{\\sum_{j=1}^k \\lambda_j}{|\\lambda_{k+1}|}",
         "forma": "sistema_primer_orden",
@@ -148,13 +240,25 @@
         "nota": "Los tres exponentes los da el enunciado como dato, no como resultado a calcular."
       },
       "solucion_esperada": {
-        "tipo": "pendiente",
-        "solucion_en_tex": false,
-        "nota": "El .tex trae solo el enunciado. La suma de los exponentes dados y la divergencia -(sigma+1+b) son comprobables de inmediato, pero no se registran como respuesta porque el .tex no las demuestra."
+        "tipo": "dimension_de_lyapunov",
+        "solucion_en_tex": true,
+        "latex": "\\lambda_1 + \\lambda_2 + \\lambda_3 = -\\tfrac{41}{3} = \\langle\\nabla\\cdot\\mathbf{f}\\rangle,\\quad k = 2,\\quad D_L = 2 + \\frac{0.9056}{14.5723} \\approx 2.0621",
+        "valores": {
+          "suma_de_exponentes": -13.6667,
+          "divergencia_media": -13.666666666666666,
+          "k": 2,
+          "dimension_lyapunov": 2.0621453030750123
+        }
       },
       "verificacion": {
-        "no_verificable_con_el_motor_actual": true,
-        "nota": "Caso de aceptación final para analisis_caos.py: el espectro que estime debería reproducir los exponentes que este enunciado da como referencia."
+        "suma_igual_divergencia": true,
+        "espectro_dado_vs_calculado": true,
+        "nota": "Prueba de aceptación de matematica.atractores_fractales.desarrollar_kaplan_yorke: además de la fórmula, el espectro de Lorenz se recalcula por el método QR y se compara con el del enunciado."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "El enunciado nombra a Lorenz y escribe los exponentes: basta con pasarlo. Con solo los exponentes: datos = {exponentes: [...]}"
       }
     }
   ]

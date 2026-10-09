@@ -378,14 +378,22 @@ class TestDesarrolloEnElInforme(unittest.TestCase):
         roles = {traza["meta"]["rol"] for traza in figura["spec"]["data"]}
         self.assertTrue({"rama:estable", "rama:inestable", "critico"} <= roles)
 
-    def test_lo_fuera_de_alcance_se_avisa_en_la_entrada(self):
-        capacidades.analizar_equilibrios_sistema({
+    def test_lo_fuera_del_proyecto_se_avisa_en_la_entrada(self):
+        resultado = capacidades.analizar_equilibrios_sistema({
             "ecuaciones": ["-x"], "variables_estado": ["x"],
-            "enunciado": "Calcule la dimensión de caja del conjunto de Cantor"})
+            "enunciado": "Resuelva la ecuación del calor u_t = u_xx en una barra"})
+        self.assertEqual(resultado["etapa"], "fuera_de_alcance")
         entrada = self._entradas()[0]
-        avisos = [a for a in entrada["desarrollo"]["advertencias"] if a.startswith("FUERA DE ALCANCE")]
-        self.assertEqual(len(avisos), 1)
-        self.assertIn("function avisoDeAlcance", PLANTILLA.read_text(encoding="utf-8"))
+        self.assertEqual(entrada["etapa"], "fuera_de_alcance")
+        self.assertIn("El proyecto abarca", entrada["error"])
+        plantilla = PLANTILLA.read_text(encoding="utf-8")
+        self.assertIn("function avisoDeAlcance", plantilla)
+        self.assertIn("Fuera del alcance del proyecto", plantilla)
+
+    def test_una_pregunta_que_no_es_matematica_no_ensucia_el_informe(self):
+        resultado = capacidades.analizar_caos_y_fractales({"enunciado": "¿Dónde queda el baño?"})
+        self.assertEqual(resultado["etapa"], "no_es_un_problema_del_proyecto")
+        self.assertEqual(self.sesion.estado()["analisis_registrados"], 0)
 
 
 class TestModoUltimo(unittest.TestCase):

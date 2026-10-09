@@ -302,12 +302,23 @@ def _traza(capa, rango_y):
         simbolo = capa.get("simbolo") or _MARCADOR.get(rol)
         if simbolo is None and rol.startswith("equilibrio:"):
             simbolo = _simbolo(rol.split(":", 1)[1])
-        tamano = 9 if rol in ("crece", "decrece", "numerica") else 13
+        tamano = capa.get("tamano") or (9 if rol in ("crece", "decrece", "numerica") else 13)
         texto = capa.get("etiquetas")
-        return go.Scatter(x=_redondear(capa["x"]), y=_redondear(capa["y"]),
-                          mode="markers+text" if texto else "markers", name=nombre, meta=meta,
-                          text=texto, textposition="top right",
-                          marker={"size": tamano, "symbol": simbolo or "circle", "line": {"width": 2}})
+        # Una nube densa (diagrama de bifurcación, atractor) va en WebGL, con
+        # puntos pequeños y sin aro: miles de marcadores SVG ahogan la página.
+        nube = tamano <= 4 and len(capa["x"]) > 1500
+        clase = go.Scattergl if nube else go.Scatter
+        return clase(x=_redondear(capa["x"], 5 if nube else 6), y=_redondear(capa["y"], 5 if nube else 6),
+                     mode="markers+text" if texto else "markers", name=nombre, meta=meta,
+                     text=texto, textposition="top right", hoverinfo="skip" if nube else None,
+                     marker={"size": tamano, "symbol": simbolo or "circle",
+                             "line": {"width": 0 if tamano <= 4 else 2}})
+    if tipo in ("linea3d", "puntos3d"):
+        linea = tipo == "linea3d"
+        return go.Scatter3d(x=_redondear(capa["x"]), y=_redondear(capa["y"]), z=_redondear(capa["z"]),
+                            mode="lines" if linea else "markers", name=nombre, meta=meta,
+                            line={"width": 2} if linea else None,
+                            marker=None if linea else {"size": capa.get("tamano") or 3, "line": {"width": 0}})
     if tipo == "contorno":
         return go.Contour(x=_redondear(capa["x"]), y=_redondear(capa["y"]),
                           z=[_redondear(fila) for fila in capa["z"]], name=nombre, meta=meta,
@@ -337,6 +348,12 @@ def figura_de_especificacion(especificacion):
     for capa in especificacion["capas"]:
         figura.add_trace(_traza(capa, rango_y))
     ejes = especificacion.get("ejes", {})
+    if any(c.get("tipo") in ("linea3d", "puntos3d") for c in especificacion["capas"]):
+        figura.update_layout(title=especificacion.get("titulo", ""),
+                             **{k: v for k, v in _DISENO.items() if k != "hovermode"},
+                             scene={"xaxis_title": ejes.get("x", ""), "yaxis_title": ejes.get("y", ""),
+                                    "zaxis_title": ejes.get("z", "")})
+        return figura
     diseno = dict(_DISENO, hovermode="closest")
     figura.update_layout(title=especificacion.get("titulo", ""), xaxis_title=ejes.get("x", ""),
                          yaxis_title=ejes.get("y", ""), **diseno)

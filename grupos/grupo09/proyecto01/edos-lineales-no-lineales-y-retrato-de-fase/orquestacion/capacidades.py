@@ -26,17 +26,19 @@ import numpy as np
 import sympy as sp
 
 import storage
-from matematica import FueraDeAlcance, MetodoNoAplicable
+from matematica import MAX_DIMENSION, DatoInvalido, FueraDeAlcance, MetodoNoAplicable
 from matematica.analisis_estabilidad import Equilibrio, buscar_equilibrios, linealizar
-from matematica.clasificacion import anteponer_clasificacion, clasificar, inventario
+from matematica.clasificacion import (anteponer_clasificacion, clasificar, describir_alcance, inventario,
+                                      mensaje_de_alcance, parece_matematica)
 from matematica.desarrollo import a_json
+from matematica.espectro_lyapunov import espectro_flujo, espectro_mapa
 from matematica.expresiones import ExpresionInvalida, compilar_escalar
 from matematica.modelo_edos import desarrollar_numerico, resolver_edo, seccion_solucion_numerica
 from matematica.validacion_solucion import (verificar, verificar_integral_primera,
                                              verificar_solucion_exacta)
-from orquestacion.contratos import (ALIAS_ANALISIS, SolicitudEDO, SolicitudEquilibrios,
-                                    respuesta_aclaracion, respuesta_error, respuesta_ok,
-                                    serializable, solucion_a_datos)
+from orquestacion.contratos import (ALIAS_ANALISIS, SolicitudEDO, SolicitudEquilibrios, SolicitudTema,
+                                    respuesta_aclaracion, respuesta_error, respuesta_fuera_de_alcance,
+                                    respuesta_ok, serializable, solucion_a_datos)
 from orquestacion.informe import SESION
 from orquestacion.interpretacion import interpretar
 from visualizacion.html import (MAXIMO_PUNTOS_TRAZA, construir_figuras, figuras_del_desarrollo,
@@ -72,10 +74,35 @@ def analizar_equilibrios_sistema(solicitud):
     return resolver_problema(solicitud, enfoque="equilibrios")
 
 
+def analizar_caos_y_fractales(solicitud):
+    """Temas 4 y 5: con la ecuación, o solo con el enunciado (Cantor, Feigenbaum, un sistema con nombre)."""
+    return resolver_problema(solicitud, enfoque="tema")
+
+
+def _fuera_de_alcance(motivo, configuracion=None, no_matematico=False, enunciado=None):
+    """La respuesta, y el aviso en el informe si era una pregunta de matemáticas.
+
+    Una consulta que no es matemática no se registra: el informe es del trabajo
+    del usuario, y "dónde queda el baño" no lo es.
+    """
+    mensaje = mensaje_de_alcance(motivo, no_matematico)
+    if not no_matematico:
+        _registrar_en_informe("Fuera del alcance del proyecto", configuracion or {}, ok=False,
+                              etapa="fuera_de_alcance", error=mensaje, enunciado=enunciado)
+    return respuesta_fuera_de_alcance(mensaje, describir_alcance(), configuracion, motivo, no_matematico)
+
+
 def resolver_problema(solicitud, enfoque="completo"):
     """El recorrido entero. Nunca levanta por entrada inválida: el error viaja en el resultado."""
+    # --- 0. ¿Cabe en el proyecto? -------------------------------------------------
+    crudo = solicitud if isinstance(solicitud, dict) else getattr(solicitud, "__dict__", {})
+    variables = crudo.get("variables_estado") or []
+    if isinstance(variables, list) and len(variables) > MAX_DIMENSION:
+        return _fuera_de_alcance(f"el sistema tiene {len(variables)} variables de estado y el proyecto trabaja "
+                                 f"sistemas de hasta {MAX_DIMENSION}")
+
     # --- 1. Validación de la solicitud --------------------------------------------
-    clase = SolicitudEquilibrios if enfoque == "equilibrios" else SolicitudEDO
+    clase = {"equilibrios": SolicitudEquilibrios, "tema": SolicitudTema}.get(enfoque, SolicitudEDO)
     try:
         if not isinstance(solicitud, clase):
             solicitud = clase.model_validate(solicitud if isinstance(solicitud, dict)
@@ -108,7 +135,19 @@ def resolver_problema(solicitud, enfoque="completo"):
 
     # --- 3 y 4. Clasificación y desarrollo ----------------------------------------
     clasificacion = clasificar(problema)
-    desarrollo = _desarrollar(problema, clasificacion)
+    if clasificacion.fuera_de_alcance is not None:
+        fuera = clasificacion.fuera_de_alcance
+        no_matematico = fuera["clave"] == "sin_tema" and not parece_matematica(problema.enunciado)
+        return _fuera_de_alcance(fuera["motivo"], configuracion, no_matematico, problema.enunciado)
+    try:
+        desarrollo = _desarrollar(problema, clasificacion)
+    except DatoInvalido as exc:
+        return respuesta_error("datos", exc, configuracion, {
+            "mensaje_para_el_usuario": f"Revise los datos del problema: {exc}",
+            "sugerencia": "Pídale al usuario el valor correcto y vuelva a llamar; no lo reemplace por uno "
+                          "inventado."})
+    except FueraDeAlcance as exc:
+        return _fuera_de_alcance(exc.motivo, configuracion, enunciado=problema.enunciado)
 
     # --- 5. Cálculo numérico cuando corresponde -------------------------------------
     numerico = None
@@ -193,10 +232,8 @@ def _desarrollar(problema, clasificacion):
         except MetodoNoAplicable as exc:
             desarrollo = desarrollar_numerico(
                 problema, f"{familia.nombre}: {exc} Se trata numéricamente.")
-        except FueraDeAlcance as exc:
-            desarrollo = desarrollar_numerico(problema, str(exc),
-                                              {"problema": exc.problema, "tema": exc.tema,
-                                               "descripcion": exc.motivo})
+        except (DatoInvalido, FueraDeAlcance):
+            raise                             # los responde `resolver_problema` con su mensaje
         except Exception as exc:              # un fallo de sympy no tumba al agente
             registro.warning("El desarrollo de %s falló: %s", familia.clave, exc)
             desarrollo = desarrollar_numerico(
@@ -388,6 +425,8 @@ def _analisis_pedidos(solicitud, problema, clasificacion, desarrollo, enfoque):
     analisis = {}
     tratamiento = set(desarrollo.tratamiento)
     for nombre in pedidos:
+        if nombre == "estabilidad" and problema.tipo == "teorico":
+            continue
         if nombre == "estabilidad":
             analisis["estabilidad"] = _bloque_estabilidad(problema, solicitud)
         elif nombre == "solucion_analitica":
@@ -406,17 +445,38 @@ def _analisis_pedidos(solicitud, problema, clasificacion, desarrollo, enfoque):
                                  "nota": "Para estudiar una bifurcación indique en `parametro` el "
                                          "parámetro que varía (y, si quiere, `rango_parametro`)."})
         elif nombre == "caos":
-            if desarrollo.familia == "mapa_1d":
-                analisis[nombre] = {"disponible": True, "familia": "mapa_1d",
-                                    "nota": "El exponente de Lyapunov está en `desarrollo`."}
-            else:
-                analisis[nombre] = {
-                    "disponible": False, "estado": "fuera_de_alcance",
-                    "motivo": "FUERA DE ALCANCE POR AHORA: el balotario solo desarrolla el exponente "
-                              "de Lyapunov de mapas unidimensionales (problema 4.1). Los indicadores de "
-                              "caos en flujos (4.4, 4.5 y el Tema 5) todavía no tienen solución en el "
-                              "balotario."}
+            analisis[nombre] = _bloque_caos(problema, desarrollo)
     return analisis
+
+
+#: Familias cuyo desarrollo ya contiene los exponentes de Lyapunov.
+_FAMILIAS_CON_EXPONENTES = {"mapa_1d", "espectro_lyapunov", "kaplan_yorke", "mapa_2d", "seccion_poincare"}
+
+
+def _bloque_caos(problema, desarrollo):
+    """Exponentes de Lyapunov del sistema: los del desarrollo, o calculados aquí por el método QR."""
+    if desarrollo.familia in _FAMILIAS_CON_EXPONENTES:
+        return {"disponible": True, "familia": desarrollo.familia,
+                "nota": "Los exponentes de Lyapunov están en `desarrollo`."}
+    if problema.tipo == "teorico" or problema.dimension < 2 or not problema.autonomo:
+        return {"disponible": False,
+                "nota": "Los exponentes de Lyapunov se calculan para mapas o para flujos autónomos de 2 o 3 "
+                        "variables."}
+    x0 = tuple(float(sp.N(v)) for v in problema.ci[1]) if problema.ci is not None else None
+    try:
+        espectro = (espectro_flujo(problema.campo_con(), problema.estados, x0) if problema.tipo == "edo"
+                    else espectro_mapa(problema.campo_con(), problema.estados, x0))
+    except MetodoNoAplicable as exc:
+        return {"disponible": False, "nota": str(exc)}
+    l1 = espectro.exponentes[0]
+    caotico = l1 > max(5 * espectro.errores[0], 0.01)
+    return {"disponible": True, "metodo": "QR (Benettin)", "exponentes": espectro.exponentes,
+            "errores": espectro.errores, "suma": espectro.suma, "divergencia_media": espectro.divergencia_media,
+            "caotico": caotico,
+            "nota": ("λ₁ > 0: dependencia sensible a las condiciones iniciales (caos)." if caotico else
+                     "λ₁ ≤ 0 dentro del error: la dinámica es regular (equilibrio, ciclo o toro).")
+                    + (" Un flujo plano no puede ser caótico (Poincaré–Bendixson)."
+                       if problema.tipo == "edo" and problema.dimension == 2 else "")}
 
 
 def _bloque_estabilidad(problema, solicitud):
@@ -458,7 +518,12 @@ def _solucion_para_respuesta(problema, solicitud, desarrollo, numerico, analisis
         equilibrios = analisis.get("estabilidad", {}).get("equilibrios", [])
         return {"equilibrios": [e["punto"] for e in equilibrios], "cantidad": len(equilibrios)}
     claves = ("solucion_general", "solucion_particular", "solucion_homogenea", "hamiltoniano",
-              "lyapunov", "horizonte", "mu_critico", "mu_melnikov", "mu_numerico", "radio_ciclo")
+              "lyapunov", "horizonte", "mu_critico", "mu_melnikov", "mu_numerico", "radio_ciclo",
+              # Temas 4 y 5
+              "r_1", "r_2", "r_infinito", "r_infinito_numerico", "divergencia", "V_estrella",
+              "funcion_lyapunov", "espectro", "dimension", "dimension_numerica", "determinante", "inverso",
+              "exponentes_lyapunov", "dimension_kaplan_yorke", "maximo_de_g", "tiempo_de_retorno",
+              "dimension_lyapunov", "k", "entropia")
     return {"tipo": "desarrollo", "familia": desarrollo.familia,
             "resultados": {k: a_json(desarrollo.resultados[k]) for k in claves if k in desarrollo.resultados}}
 
@@ -562,9 +627,9 @@ def _consultar_tipo_de_sistema(solicitud, configuracion):
                  "consecuencia": "se desarrolla y se resuelve como ecuación diferencial"},
                 {"respuesta": "Es un mapa iterado, x_{n+1} = f(x_n)",
                  "accion": "repetir la llamada con tipo_de_sistema='mapa_discreto'",
-                 "consecuencia": "para un mapa de una variable se calculan sus puntos fijos y su "
-                                 "exponente de Lyapunov (problema 4.1); el resto de los mapas está "
-                                 "fuera de alcance por ahora"},
+                 "consecuencia": "se itera como mapa: puntos fijos y exponente de Lyapunov (4.1), "
+                                 "duplicación de periodo si tiene un parámetro (4.2) o, si es del plano, "
+                                 "jacobiano, inverso y exponentes (5.3)"},
             ],
             configuracion,
             indicios or ["el cliente declaró que no podía determinarlo"])
@@ -575,6 +640,7 @@ def describir_capacidades():
     """Qué sabe hacer el agente hoy, por familias del balotario, y qué queda fuera."""
     alcance = inventario()
     return serializable({
+        "alcance": describir_alcance(),
         "desarrollo_matematico": {
             "descripcion": "Cada problema se clasifica en una familia del balotario y se resuelve con "
                            "su procedimiento: el desarrollo (fórmulas intermedias calculadas con "
@@ -597,11 +663,17 @@ def describir_capacidades():
             "bifurcaciones": {"implementado": True,
                               "descripcion": "Silla-nodo, transcrítica, horquilla, Hopf y homoclínica "
                                              "(Tema 3), indicando el parámetro en `parametro`."},
-            "caos": {"implementado": "parcial",
-                     "descripcion": "Exponente de Lyapunov y horizonte de predictibilidad de mapas "
-                                    "unidimensionales (problema 4.1)."},
+            "caos": {"implementado": True,
+                     "descripcion": "Exponente de Lyapunov y horizonte de mapas (4.1), duplicación de periodo "
+                                    "(4.2), Feigenbaum (4.3), disipatividad y elipsoide atrapante (4.4), "
+                                    "espectro de Lyapunov de flujos por el método QR (4.5)."},
+            "atractores_y_fractales": {"implementado": True,
+                                       "descripcion": "Dimensión de caja (5.1), herradura de Smale (5.2), mapas "
+                                                      "del plano como Hénon (5.3), secciones de Poincaré (5.4) y "
+                                                      "dimensión de Kaplan-Yorke (5.5)."},
         },
-        "fuera_de_alcance": alcance["fuera_de_alcance"],
+        "fuera_del_proyecto": alcance["fuera_del_proyecto"],
+        "metodos_no_trabajados": alcance["metodos_no_trabajados"],
         "verificacion": ["validaciones simbólicas de cada familia (sustitución, invariantes, "
                          "identidades)", "condicion_inicial", "residuo", "convergencia",
                          "metodo_alternativo", "solucion_exacta (analítica vs numérica)",
@@ -609,7 +681,8 @@ def describir_capacidades():
         "visualizacion": ["solución analítica y numérica", "retratos de fase con nulclinas, "
                           "variedades y separatrices", "diagramas de bifurcación", "plano "
                           "traza-determinante", "diagrama de telaraña", "series temporales",
-                          "trayectoria 3D"],
+                          "trayectoria 3D", "cascada de duplicaciones", "convergencia del espectro de "
+                          "Lyapunov", "atractores y fractales", "mapas de retorno", "conteo de cajas"],
         "alias_aceptados": dict(sorted(ALIAS_ANALISIS.items())),
         "limites": {
             "dimension_maxima": 3,
@@ -617,9 +690,9 @@ def describir_capacidades():
             "solo_primer_orden": "Una EDO de orden n se reduce antes a un sistema de n ecuaciones "
                                  "de primer orden; el agente reconoce esa forma (y' = yp, yp' = ...) "
                                  "y la trata como EDO escalar de orden n.",
-            "mapas_discretos": "Solo mapas de una variable (problema 4.1): puntos fijos, exponente de "
-                               "Lyapunov y horizonte. x_{n+1} = f(x_n) y dx/dt = f(x) se escriben "
-                               "igual, así que hay que declararlo en `tipo_de_sistema`; el mapa "
-                               "logístico con r = 3.8 es caótico y la EDO continua no.",
+            "mapas_discretos": "Mapas de una variable (4.1, 4.2, 4.3) y del plano (5.3). x_{n+1} = f(x_n) y "
+                               "dx/dt = f(x) se escriben igual, así que hay que declararlo en "
+                               "`tipo_de_sistema`; el mapa logístico con r = 3.8 es caótico y la EDO "
+                               "continua no.",
         },
     })

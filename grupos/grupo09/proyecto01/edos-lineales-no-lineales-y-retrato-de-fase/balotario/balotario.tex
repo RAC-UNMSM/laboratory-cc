@@ -2735,19 +2735,219 @@ El mapa tienda ilustra el paradigma elemental del caos determinista mediante el 
 
 \vspace{3mm}
 
+% =========================================================================
+% PROBLEMA 4.2
+% =========================================================================
 \begin{problema}[Problema 4.2]
 Para el mapa logístico $x_{n+1} = r x_n(1 - x_n)$ con $x \in [0, 1]$:
 Determine analíticamente el valor crítico $r_1$ donde la órbita de periodo 1 pierde estabilidad y nace la órbita de periodo 2.
 \end{problema}
 
-\vspace{5mm}
+\begin{solucion}
 
+\textbf{\large 1. Determinar los puntos fijos}
+\[
+f(x) = r x (1 - x), \qquad f(x^*) = x^*
+\]
+\[
+r x^* (1 - x^*) = x^* \iff x^*\left[r(1 - x^*) - 1\right] = 0
+\]
+\[
+\boxed{x_1^* = 0, \qquad x_2^* = 1 - \frac{1}{r} \quad (r > 1)}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 2. Estabilidad lineal de los puntos fijos}
+\[
+f'(x) = r(1 - 2x)
+\]
+\[
+f'(0) = r \implies |f'(0)| < 1 \iff 0 < r < 1
+\]
+\[
+f'(x_2^*) = r\left(1 - 2 + \frac{2}{r}\right) = 2 - r
+\]
+\[
+|2 - r| < 1 \iff \boxed{1 < r < 3 \implies x_2^* \text{ es asintóticamente estable}}
+\]
+\[
+r = 3 \implies f'(x_2^*) = -1 \implies \boxed{\text{multiplicador } \mu = -1 \text{ (condición de bifurcación de duplicación de periodo)}}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 3. Ecuación de la órbita de periodo 2}
+\[
+f^2(x) = r\,[r x(1-x)]\,[1 - r x(1-x)] = r^2 x(1-x)\left(1 - r x + r x^2\right)
+\]
+Los puntos fijos de $f$ también lo son de $f^2$; factorizándolos (se verifica por expansión directa):
+\[
+f^2(x) - x = -x\,\bigl(r x - (r - 1)\bigr)\,\bigl(r^2 x^2 - r(r+1)x + (r+1)\bigr)
+\]
+Los puntos de periodo 2 son las raíces del factor cuadrático:
+\[
+r^2 x^2 - r(r+1)x + (r+1) = 0
+\]
+\[
+\Delta = r^2(r+1)^2 - 4r^2(r+1) = r^2 (r+1)(r - 3)
+\]
+\[
+\boxed{p, q = \frac{(r+1) \pm \sqrt{(r+1)(r-3)}}{2r}}
+\]
+\[
+\Delta > 0 \iff r > 3 \quad (\text{pues } r > 0) \implies \boxed{\text{la órbita de periodo 2 existe (reales y distintos) solo para } r > 3}
+\]
+\[
+r = 3 \implies p = q = \frac{4}{6} = \frac{2}{3} = x_2^* \quad (\text{la órbita de periodo 2 nace del punto fijo})
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 4. Estabilidad de la órbita de periodo 2}
+\[
+(f^2)'(p) = f'(p)\,f'(q) = r^2 (1 - 2p)(1 - 2q) = r^2\left[1 - 2(p + q) + 4pq\right]
+\]
+Por Vieta: $p + q = \dfrac{r+1}{r}$ y $pq = \dfrac{r+1}{r^2}$. Entonces:
+\[
+(f^2)'(p) = r^2 - 2r(r+1) + 4(r+1) = -r^2 + 2r + 4
+\]
+\[
+\left|-r^2 + 2r + 4\right| < 1 \iff
+\begin{cases}
+-r^2 + 2r + 4 < 1 \iff (r-3)(r+1) > 0 \iff r > 3 \\
+-r^2 + 2r + 4 > -1 \iff r^2 - 2r - 5 < 0 \iff r < 1 + \sqrt{6}
+\end{cases}
+\]
+\[
+\boxed{\text{La órbita de periodo 2 es estable para } 3 < r < 1 + \sqrt{6} \approx 3.44949}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 5. Valor crítico}
+\[
+\boxed{r_1 = 3}
+\]
+En $r_1 = 3$ el punto fijo $x_2^* = 2/3$ pierde estabilidad con multiplicador $-1$ y, simultáneamente, nace una órbita de periodo 2 estable (bifurcación de duplicación de periodo supercrítica). La siguiente duplicación ocurre en $r_2 = 1 + \sqrt{6}$, donde el multiplicador de la órbita de periodo 2 vale $-1$:
+\[
+-r^2 + 2r + 4 = -1 \implies r^2 - 2r - 5 = 0 \implies r = 1 + \sqrt{6}
+\]
+
+\begin{center}
+\begin{tikzpicture}[xscale=2.2, yscale=4]
+    \draw[->, thick, gray!70] (0, 0) -- (3.9, 0) node[right, black, font=\footnotesize] {$r$};
+    \draw[->, thick, gray!70] (0, 0) -- (0, 1.08) node[above, black, font=\footnotesize] {$x^*$};
+    \foreach \x in {1, 2, 3}
+        \draw (\x, 0.012) -- (\x, -0.012) node[below, font=\scriptsize] {$\x$};
+    \draw (3.449, 0.012) -- (3.449, -0.012) node[below right, font=\scriptsize] {$1+\sqrt{6}$};
+    \draw (0.02, 0.5) -- (-0.02, 0.5) node[left, font=\scriptsize] {$0.5$};
+    \draw (0.02, 1) -- (-0.02, 1) node[left, font=\scriptsize] {$1$};
+
+    % x* = 0
+    \draw[very thick, solborder] (0, 0) -- (1, 0);
+    \draw[very thick, dashed, red!80!black] (1, 0) -- (3.7, 0);
+    % x* = 1 - 1/r
+    \draw[very thick, solborder, domain=1:3, samples=14, smooth] plot (\x, {1 - 1/\x});
+    \draw[very thick, dashed, red!80!black, domain=3:3.7, samples=10, smooth] plot (\x, {1 - 1/\x});
+    % periodo 2
+    \draw[very thick, deepteal, domain=3:3.449, samples=18, smooth]
+        plot (\x, {(\x + 1 + sqrt((\x + 1)*(\x - 3)))/(2*\x)});
+    \draw[very thick, deepteal, domain=3:3.449, samples=18, smooth]
+        plot (\x, {(\x + 1 - sqrt((\x + 1)*(\x - 3)))/(2*\x)});
+
+    \filldraw[unmsmblue] (3, 0.6667) circle (1.6pt);
+    \node[above left, font=\scriptsize\bfseries, unmsmblue] at (3, 0.67) {$r_1 = 3$};
+    \node[below, font=\scriptsize\bfseries, solborder] at (0.5, 0.0) {$x^*=0$};
+    \node[font=\scriptsize\bfseries, deepteal, right] at (3.46, 0.88) {periodo 2};
+\end{tikzpicture}
+\end{center}
+
+\end{solucion}
+
+\begin{conclusion}
+El valor crítico es $r_1 = 3$. Allí el multiplicador del punto fijo $x^* = 1 - 1/r$ cruza $-1$ y se produce una duplicación de periodo: el punto fijo pasa a ser inestable y nace una órbita de periodo 2 estable. Esta es la primera etapa de la cascada $2^n$ que conduce al caos.
+\end{conclusion}
+
+\vspace{3mm}
+
+% =========================================================================
+% PROBLEMA 4.3
+% =========================================================================
 \begin{problema}[Problema 4.3]
 La transición al caos en mapas unimodales sigue una cascada infinita de duplicaciones de periodo $2^n$ que ocurren en parámetros $r_n$. Si $r_1 = 3$ y $r_2 = 1 + \sqrt{6} \approx 3.44949$, estime el umbral crítico de acumulación caótica $r_\infty$ usando la constante de Feigenbaum $\delta \approx 4.6692016$.
 \end{problema}
 
-\vspace{5mm}
+\begin{solucion}
 
+\textbf{\large 1. Ley de convergencia geométrica de Feigenbaum}
+\[
+\boxed{\delta = \lim_{n \to \infty} \frac{r_n - r_{n-1}}{r_{n+1} - r_n} \approx 4.6692016}
+\]
+Sea $d_n = r_{n+1} - r_n$. Para $n$ grande, $d_n \approx d_{n-1}/\delta$, es decir, las distancias entre bifurcaciones forman (asintóticamente) una progresión geométrica de razón $1/\delta$.
+
+\vspace{3.5mm}
+
+\textbf{\large 2. Datos}
+\[
+d_1 = r_2 - r_1 = (1 + \sqrt{6}) - 3 = \sqrt{6} - 2 \approx 0.449490
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 3. Serie geométrica para $r_\infty$}
+\[
+r_\infty = r_2 + \sum_{k=2}^{\infty} d_k, \qquad d_k \approx \frac{d_1}{\delta^{\,k-1}}
+\]
+\[
+r_\infty \approx r_2 + d_1 \sum_{k=2}^\infty \delta^{-(k-1)} = r_2 + d_1\,\frac{1/\delta}{1 - 1/\delta}
+\]
+\[
+\boxed{r_\infty \approx r_2 + \frac{d_1}{\delta - 1}}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 4. Evaluación numérica}
+\[
+\frac{d_1}{\delta - 1} = \frac{0.449490}{3.6692016} \approx 0.122504
+\]
+\[
+\boxed{r_\infty \approx 3.449490 + 0.122504 \approx 3.57199}
+\]
+Estimación de la tercera duplicación:
+\[
+r_3 \approx r_2 + \frac{d_1}{\delta} = 3.449490 + \frac{0.449490}{4.6692016} \approx 3.54576
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 5. Comparación con los valores numéricos conocidos}
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{c c c}
+\hline
+ & \textbf{Estimación (Feigenbaum)} & \textbf{Valor numérico de referencia} \\ \hline
+$r_3$ & $3.54576$ & $3.54409$ \\
+$r_\infty$ & $3.57199$ & $3.56995$ \\ \hline
+\end{tabular}
+\end{center}
+\[
+\text{Error relativo en } r_\infty: \quad \frac{|3.57199 - 3.56995|}{3.56995} \approx 0.06\%
+\]
+La pequeña desviación se debe a que $\delta$ es un límite asintótico: los primeros cocientes no son exactamente $\delta$ (por ejemplo $(r_2 - r_1)/(r_3 - r_2) \approx 4.75$ con los valores reales).
+
+\end{solucion}
+
+\begin{conclusion}
+Con solo dos bifurcaciones y la constante universal de Feigenbaum se estima $r_\infty \approx 3.572$, con un error del orden de $0.06\%$ respecto al valor numérico $3.5699$. Para $r > r_\infty$ comienza el régimen caótico, intercalado con ventanas periódicas (por ejemplo la de periodo 3 en $r = 1 + \sqrt{8} \approx 3.828$). La constante $\delta$ es universal: es la misma para toda la clase de mapas unimodales con máximo cuadrático.
+\end{conclusion}
+
+\vspace{3mm}
+
+% =========================================================================
+% PROBLEMA 4.4
+% =========================================================================
 \begin{problema}[Problema 4.4]
 El sistema de Lorenz (1963) está dado por:
 \[
@@ -2760,8 +2960,97 @@ con $\sigma, r, b > 0$.
 \end{enumerate}
 \end{problema}
 
-\vspace{5mm}
+\begin{solucion}
 
+\textbf{\large a) 1. Divergencia del campo vectorial}
+\[
+\mathbf{f}(x,y,z) = \bigl(\sigma(y-x),\; r x - y - x z,\; x y - b z\bigr)
+\]
+\[
+\nabla \cdot \mathbf{f} = \frac{\partial}{\partial x}\bigl[\sigma(y-x)\bigr] + \frac{\partial}{\partial y}\bigl[r x - y - x z\bigr] + \frac{\partial}{\partial z}\bigl[x y - b z\bigr]
+\]
+\[
+\boxed{\nabla \cdot \mathbf{f} = -\sigma - 1 - b < 0 \quad \forall (x,y,z) \in \mathbb{R}^3}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large a) 2. Contracción del volumen (teorema de Liouville)}
+Sea $\Omega(t) = \phi_t(\Omega_0)$ y $V(t) = \mathrm{vol}(\Omega(t))$. Entonces:
+\[
+\frac{dV}{dt} = \int_{\Omega(t)} \nabla \cdot \mathbf{f}\; d^3x = -(\sigma + 1 + b)\,V
+\]
+\[
+\boxed{V(t) = V(0)\, e^{-(\sigma + 1 + b)\,t}}
+\]
+Para los parámetros canónicos $\sigma = 10$, $b = 8/3$:
+\[
+\sigma + 1 + b = \frac{41}{3} \approx 13.667 \implies V(t) = V(0)\,e^{-13.667\,t}
+\]
+\[
+\text{En una unidad de tiempo: } \frac{V(1)}{V(0)} = e^{-41/3} \approx 1.2 \times 10^{-6}
+\]
+El flujo es \textbf{estrictamente disipativo}: todo volumen colapsa exponencialmente a cero, por lo que los atractores tienen volumen nulo.
+
+\vspace{3.5mm}
+
+\textbf{\large b) 1. Función de Lyapunov cuadrática}
+Se define (con $r > 0$):
+\[
+V(x,y,z) = r x^2 + \sigma y^2 + \sigma (z - 2r)^2, \qquad Q(x,y,z) = r x^2 + y^2 + b(z - r)^2
+\]
+Derivando a lo largo del flujo:
+\[
+\frac{1}{2}\dot{V} = r x \sigma (y - x) + \sigma y (r x - y - x z) + \sigma (z - 2r)(x y - b z)
+\]
+Los términos $xy$ suman $r\sigma + \sigma r - 2r\sigma = 0$ y los términos $xyz$ se cancelan, quedando:
+\[
+\frac{1}{2}\dot{V} = -\sigma r x^2 - \sigma y^2 - \sigma b z^2 + 2\sigma b r z = -\sigma\left[r x^2 + y^2 + b(z - r)^2\right] + \sigma b r^2
+\]
+\[
+\boxed{\dot{V} = -2\sigma\left(Q - b r^2\right)}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large b) 2. Acotación de $Q$ en términos de $V$}
+Como $(z - 2r)^2 \le 2(z - r)^2 + 2r^2$, se tiene $(z - r)^2 \ge \tfrac{1}{2}(z - 2r)^2 - r^2$. Por tanto:
+\[
+Q \ge r x^2 + y^2 + \frac{b}{2}(z - 2r)^2 - b r^2 \ge \kappa V - b r^2, \qquad \kappa = \min\left\{1, \; \frac{1}{\sigma}, \; \frac{b}{2\sigma}\right\} > 0
+\]
+Sustituyendo en $\dot V$:
+\[
+\dot{V} \le -2\sigma\left(\kappa V - 2 b r^2\right) = -2\sigma\kappa\,(V - V^*), \qquad V^* = \frac{2 b r^2}{\kappa}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large b) 3. Región atrapante}
+Por comparación (lema de Gronwall):
+\[
+\boxed{V(t) - V^* \le \bigl(V(0) - V^*\bigr)\, e^{-2\sigma\kappa\, t}}
+\]
+Luego $\limsup_{t\to\infty} V(t) \le V^*$. Para todo $\varepsilon > 0$, el elipsoide
+\[
+\boxed{E_\varepsilon = \left\{(x,y,z) \in \mathbb{R}^3 : r x^2 + \sigma y^2 + \sigma (z - 2r)^2 \le V^* + \varepsilon\right\}}
+\]
+es acotado, y:
+\begin{itemize}[leftmargin=2em]
+    \item toda trayectoria entra en $E_\varepsilon$ en tiempo finito (pues $V(t) \to$ un valor $\le V^*$);
+    \item en su frontera $V = V^* + \varepsilon$ se cumple $\dot V \le -2\sigma\kappa\varepsilon < 0$, de modo que $E_\varepsilon$ es positivamente invariante: una vez dentro, la trayectoria no sale.
+\end{itemize}
+
+\end{solucion}
+
+\begin{conclusion}
+El sistema de Lorenz es globalmente disipativo ($\nabla\cdot\mathbf{f} = -(\sigma+1+b)$) y existe un elipsoide acotado que atrapa todas las órbitas. Así, el conjunto $\omega$-límite de cualquier trayectoria es compacto y todos los atractores tienen volumen nulo, lo que es compatible con un atractor extraño de dimensión fractal comprendida entre 2 y 3.
+\end{conclusion}
+
+\vspace{3mm}
+
+% =========================================================================
+% PROBLEMA 4.5
+% =========================================================================
 \begin{problema}[Problema 4.5]
 Demuestre que para cualquier flujo suave tridimensional disipativo $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$ que posea un atractor caótico acotado que no contenga puntos de equilibrio, el espectro de exponentes de Lyapunov $(\lambda_1, \lambda_2, \lambda_3)$ debe satisfacer rigurosamente:
 \[
@@ -2769,24 +3058,257 @@ Demuestre que para cualquier flujo suave tridimensional disipativo $\dot{\mathbf
 \]
 \end{problema}
 
+\begin{solucion}
+
+\textbf{\large 1. Hipótesis y definiciones}
+Sea $A \subset \mathbb{R}^3$ el atractor: compacto, invariante, sin equilibrios. Sea $\Phi_t(\mathbf{x}_0)$ la matriz fundamental de la ecuación variacional $\dot{\boldsymbol\delta} = D\mathbf{f}(\mathbf{x}(t))\,\boldsymbol\delta$. Los exponentes ordenados $\lambda_1 \ge \lambda_2 \ge \lambda_3$ se definen como las tasas de crecimiento asintótico de $\|\Phi_t \mathbf{v}\|$ (existen para casi todo punto respecto a la medida invariante, por el teorema multiplicativo ergódico de Oseledets). Se entiende por \textbf{caótico} que hay dependencia sensible a las condiciones iniciales, es decir, $\lambda_1 > 0$.
+
+\vspace{3.5mm}
+
+\textbf{\large 2. Existe un exponente nulo (dirección del flujo)}
+Sea $\mathbf{x}(t)$ una trayectoria en $A$ y $\boldsymbol\delta(t) = \mathbf{f}(\mathbf{x}(t))$. Entonces:
+\[
+\dot{\boldsymbol\delta} = D\mathbf{f}(\mathbf{x}(t))\,\dot{\mathbf{x}}(t) = D\mathbf{f}(\mathbf{x}(t))\,\boldsymbol\delta
+\]
+Es decir, $\mathbf{f}(\mathbf{x}(t))$ es solución de la ecuación variacional. Como $A$ es compacto y no contiene equilibrios, $\mathbf{f}$ no se anula en $A$:
+\[
+0 < m \le \|\mathbf{f}(\mathbf{x})\| \le M < \infty \quad \forall \mathbf{x} \in A
+\]
+\[
+\lim_{t \to \infty} \frac{1}{t}\ln\|\boldsymbol\delta(t)\| = 0 \implies \boxed{\text{uno de los exponentes } \lambda_i \text{ es exactamente } 0}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 3. Suma de exponentes = divergencia media}
+Por la fórmula de Liouville, $\det \Phi_t = \exp\left(\int_0^t \nabla\cdot\mathbf{f}(\mathbf{x}(s))\,ds\right)$ y por tanto:
+\[
+\lambda_1 + \lambda_2 + \lambda_3 = \lim_{t\to\infty}\frac{1}{t}\ln|\det\Phi_t| = \left\langle \nabla \cdot \mathbf{f} \right\rangle
+\]
+Para un flujo disipativo, $\langle\nabla\cdot\mathbf{f}\rangle < 0$:
+\[
+\boxed{\lambda_1 + \lambda_2 + \lambda_3 < 0}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 4. Ubicación del exponente nulo}
+Se sabe que $\lambda_1 > 0$ (caos) y que algún exponente es $0$. Hay tres posibilidades:
+\begin{itemize}[leftmargin=2em]
+    \item $\lambda_1 = 0$: contradice $\lambda_1 > 0$.
+    \item $\lambda_3 = 0$: entonces $\lambda_1 \ge \lambda_2 \ge 0$ y la suma sería $\ge \lambda_1 > 0$, lo que contradice $\sum\lambda_i < 0$.
+    \item $\lambda_2 = 0$: única posibilidad compatible.
+\end{itemize}
+\[
+\boxed{\lambda_1 > 0, \qquad \lambda_2 = 0}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 5. Signo de $\lambda_3$}
+\[
+\lambda_3 = \underbrace{(\lambda_1 + \lambda_2 + \lambda_3)}_{<0} - \lambda_1 - \lambda_2 < -\lambda_1 < 0
+\]
+\[
+\boxed{\lambda_3 < -\lambda_1 < 0}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 6. Necesidad de $\lambda_1 > 0$ en la caracterización}
+Si en cambio $\lambda_1 \le 0$, la condición del paso 2 fuerza $\lambda_1 = \lambda_2 = 0$ y $\lambda_3 < 0$: no hay expansión exponencial, y los atractores acotados sin equilibrios son órbitas periódicas o toros cuasiperiódicos, no caóticos.
+
+\end{solucion}
+
+\begin{conclusion}
+Todo atractor caótico acotado, sin equilibrios, de un flujo disipativo tridimensional tiene espectro $(+,\,0,\,-)$ con $\lambda_3 < -\lambda_1$: una dirección expansiva (estiramiento), una neutra (a lo largo del flujo) y una contractiva más intensa que la expansión (la disipación). Esto es exactamente lo que se observa en Rössler, $(+0.07,\,0,\,-5.39)$, y en Lorenz, $(+0.906,\,0,\,-14.572)$. En Lorenz hay equilibrios en el atractor, pero el mismo espectro se obtiene para casi toda trayectoria.
+\end{conclusion}
+
 \vspace{5mm}
 % =========================================================================
 % TEMA 5: ATRACTORES EXTRAÑOS Y GEOMETRÍA FRACTAL
 % =========================================================================
 \section*{\color{unmsmblue} Tema 5: Atractores Extraños y Geometría Fractal}
 
+% =========================================================================
+% PROBLEMA 5.1
+% =========================================================================
 \begin{problema}[Problema 5.1]
 El corte transversal de la mayoría de atractores extraños posee estructura de conjunto de Cantor. Calcule rigurosamente la dimensión de caja (Box-Counting Dimension) $D_0$ del conjunto ternario clásico de Cantor.
 \end{problema}
 
-\vspace{5mm}
+\begin{solucion}
 
+\textbf{\large 1. Construcción del conjunto de Cantor}
+\[
+C_0 = [0, 1], \qquad C_{n+1} = \frac{1}{3}C_n \;\cup\; \left(\frac{2}{3} + \frac{1}{3}C_n\right), \qquad C = \bigcap_{n=0}^\infty C_n
+\]
+$C_n$ consta de $2^n$ intervalos cerrados disjuntos, cada uno de longitud $3^{-n}$.
+
+\vspace{3.5mm}
+
+\textbf{\large 2. Definición de la dimensión de caja}
+\[
+\boxed{D_0 = \lim_{\varepsilon \to 0} \frac{\ln N(\varepsilon)}{\ln(1/\varepsilon)}}
+\]
+donde $N(\varepsilon)$ es el número mínimo de intervalos de longitud $\varepsilon$ necesarios para cubrir el conjunto.
+
+\vspace{3.5mm}
+
+\textbf{\large 3. Conteo exacto para $\varepsilon_n = 3^{-n}$}
+Los $2^n$ intervalos de $C_n$ cubren $C$, y no pueden cubrirse con menos de $2^n$ intervalos de longitud $3^{-n}$ (pues dos intervalos de $C_n$ distintos están separados por una distancia al menos $3^{-n}$ y cada caja de longitud $3^{-n}$ cubre a lo sumo uno, salvo bordes que solo cambian la cota por un factor constante):
+\[
+N(3^{-n}) = 2^n \implies \frac{\ln N(\varepsilon_n)}{\ln(1/\varepsilon_n)} = \frac{n\ln 2}{n\ln 3} = \frac{\ln 2}{\ln 3}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 4. Paso al límite continuo}
+Para cualquier $\varepsilon$ con $3^{-(n+1)} < \varepsilon \le 3^{-n}$ se tiene $2^n \le N(\varepsilon) \le 2^{n+1}$ y $n \ln 3 \le \ln(1/\varepsilon) \le (n+1)\ln 3$. Entonces:
+\[
+\frac{n \ln 2}{(n+1)\ln 3} \le \frac{\ln N(\varepsilon)}{\ln(1/\varepsilon)} \le \frac{(n+1)\ln 2}{n \ln 3} \xrightarrow{n \to \infty} \frac{\ln 2}{\ln 3}
+\]
+\[
+\boxed{D_0 = \frac{\ln 2}{\ln 3} \approx 0.6309}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 5. Verificación por autosemejanza}
+$C$ se compone de 2 copias de sí mismo a escala $1/3$, de modo que $2\,(1/3)^{D} = 1$:
+\[
+D = \frac{\ln 2}{\ln 3}
+\]
+\textbf{Medida de Lebesgue:} $\mu(C_n) = (2/3)^n \to 0$, es decir, $C$ tiene longitud nula y, sin embargo, es no numerable y de dimensión $D_0 > 0$.
+
+\vspace{3.5mm}
+
+\textbf{\large 6. Construcción gráfica}
+
+\begin{center}
+\begin{tikzpicture}[scale=1.0]
+    \foreach \n/\lab in {0/{$C_0$}, 1/{$C_1$}, 2/{$C_2$}, 3/{$C_3$}} {
+        \node[left, font=\footnotesize] at (-0.2, {-\n*0.6}) {\lab};
+    }
+    \fill[deepteal] (0, 0.1) rectangle (9, -0.1);
+    \foreach \a in {0, 2}
+        \fill[deepteal] ({\a/3*9}, -0.5) rectangle ({(\a+1)/3*9}, -0.7);
+    \foreach \a in {0, 2, 6, 8}
+        \fill[deepteal] ({\a/9*9}, -1.1) rectangle ({(\a+1)/9*9}, -1.3);
+    \foreach \a in {0, 2, 6, 8, 18, 20, 24, 26}
+        \fill[deepteal] ({\a/27*9}, -1.7) rectangle ({(\a+1)/27*9}, -1.9);
+    \node[font=\scriptsize\bfseries, unmsmblue] at (4.5, -2.4) {$N = 1,\;2,\;4,\;8,\dots$ \quad $\varepsilon = 1,\;\tfrac13,\;\tfrac19,\;\tfrac1{27},\dots$ \quad $D_0 = \ln 2/\ln 3$};
+\end{tikzpicture}
+\end{center}
+
+\end{solucion}
+
+\begin{conclusion}
+El conjunto ternario de Cantor tiene dimensión de caja $D_0 = \ln 2/\ln 3 \approx 0.631$, estrictamente entre 0 (un conjunto de puntos) y 1 (un intervalo). Esta dimensión no entera es la firma de la estructura fractal que se observa en los cortes transversales de los atractores extraños.
+\end{conclusion}
+
+\vspace{3mm}
+
+% =========================================================================
+% PROBLEMA 5.2
+% =========================================================================
 \begin{problema}[Problema 5.2]
 Describa el mecanismo geométrico de la herradura de Smale y explique por qué genera un atractor extraño con infinitas órbitas periódicas inestables y dinámica caótica simbólica.
 \end{problema}
 
-\vspace{5mm}
+\begin{solucion}
 
+\textbf{\large 1. Construcción geométrica del mapa}
+Sea $S = [0,1]^2$ un cuadrado. El difeomorfismo $f$ actúa en tres etapas:
+\begin{enumerate}[label=\textbf{(\roman*)}, leftmargin=2.5em]
+    \item \textbf{Estiramiento vertical} por un factor $\mu > 2$ y \textbf{contracción horizontal} por un factor $\lambda < 1/2$ (hiperbolicidad: $S$ se convierte en una banda alargada y delgada).
+    \item \textbf{Plegado} de la banda en forma de herradura (``U'').
+    \item \textbf{Colocación}: la herradura se superpone a $S$ de modo que $f(S) \cap S$ consta de \textbf{dos bandas verticales} $V_0$ y $V_1$; la curva del pliegue queda fuera de $S$.
+\end{enumerate}
+
+\begin{center}
+\begin{tikzpicture}[scale=1.0]
+    % Cuadrado original
+    \draw[thick, unmsmblue, fill=probhead] (0, 0) rectangle (2, 2);
+    \node[font=\footnotesize\bfseries, unmsmblue] at (1, 1) {$S$};
+    \draw[-{Latex[length=2.5mm]}, very thick, gray!70] (2.5, 1) -- (3.7, 1) node[midway, above, font=\scriptsize] {$f$};
+
+    % Herradura f(S)
+    \begin{scope}[xshift=4.4cm]
+        \draw[dashed, gray!70] (0, 0) rectangle (2, 2);
+        \fill[deepteal!60] (0.2, 0) rectangle (0.7, 2);
+        \fill[deepteal!60] (1.3, 0) rectangle (1.8, 2);
+        \fill[deepteal!60] (0.2, 0) arc[start angle=180, end angle=360, radius=0.8]
+            -- (1.3, 0) arc[start angle=0, end angle=-180, radius=0.3] -- cycle;
+        \node[font=\scriptsize\bfseries, white] at (0.45, 1.0) {$V_0$};
+        \node[font=\scriptsize\bfseries, white] at (1.55, 1.0) {$V_1$};
+        \node[font=\scriptsize\bfseries, deepteal] at (1.0, -1.15) {$f(S)$};
+    \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\vspace{3.5mm}
+
+\textbf{\large 2. Construcción del conjunto invariante}
+\[
+\Lambda = \bigcap_{n = -\infty}^{\infty} f^n(S)
+\]
+Cada iteración hacia adelante corta $S$ en $2^n$ bandas verticales (la intersección $\bigcap_{n \ge 0} f^{-n}(S)$ es producto de un intervalo por un conjunto de Cantor en horizontal), y cada iteración hacia atrás corta en bandas horizontales. Por tanto:
+\[
+\boxed{\Lambda \cong \text{(Conjunto de Cantor)} \times \text{(Conjunto de Cantor)}}
+\]
+Si los factores de contracción y expansión son $1/3$ y $3$, la dimensión de caja es $D_0(\Lambda) = 2\,\dfrac{\ln 2}{\ln 3} \approx 1.26$, un conjunto totalmente disconexo, perfecto y de área nula.
+
+\vspace{3.5mm}
+
+\textbf{\large 3. Conjugación con el desplazamiento de Bernoulli}
+Se codifica cada punto $\mathbf{p} \in \Lambda$ por su itinerario:
+\[
+\phi: \Lambda \to \Sigma_2 = \{0,1\}^{\mathbb{Z}}, \qquad \phi(\mathbf{p}) = (\dots s_{-1}\, s_0\, s_1 \dots), \quad s_k = i \iff f^k(\mathbf{p}) \in V_i
+\]
+\[
+\boxed{\phi \circ f = \sigma \circ \phi, \qquad \sigma(\dots s_{-1} . s_0 s_1 \dots) = (\dots s_{-1} s_0 . s_1 \dots)}
+\]
+$\phi$ es un homeomorfismo: $f|_\Lambda$ es topológicamente conjugado al desplazamiento (shift) completo en dos símbolos.
+
+\vspace{3.5mm}
+
+\textbf{\large 4. Consecuencias dinámicas (heredadas del shift)}
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{p{4.6cm} p{10.4cm}}
+\hline
+\textbf{Propiedad} & \textbf{Justificación simbólica} \\ \hline
+Infinitas órbitas periódicas & Hay $2^n$ puntos de periodo $n$ (secuencias periódicas de periodo $n$). Total: numerable e infinito. \\
+Órbitas periódicas densas & Toda secuencia puede aproximarse por una periódica coincidiendo en una ventana central larga. \\
+Órbitas periódicas inestables & Cada una es de tipo silla (hiperbólica): contracción $\lambda<1/2$ en horizontal, expansión $\mu>2$ en vertical. \\
+Órbita densa (transitividad) & Existe una secuencia que contiene todos los bloques finitos; su órbita es densa en $\Lambda$. \\
+Dependencia sensible & Dos secuencias que difieren en un símbolo lejano se separan en $\mathcal{O}(1)$ tras pocas iteraciones. \\
+Entropía topológica & $h_{top} = \ln 2 > 0$ (el número de palabras de longitud $n$ crece como $2^n$). \\
+Cardinalidad & $\Lambda$ es no numerable: hay órbitas aperiódicas. \\ \hline
+\end{tabular}
+\end{center}
+
+\vspace{3.5mm}
+
+\textbf{\large 5. Relación con los atractores extraños}
+El propio $\Lambda$ es un conjunto invariante de tipo silla (de medida cero y no atractor). Sin embargo, es el ``esqueleto'' del caos en los atractores extraños:
+\begin{itemize}[leftmargin=2em]
+    \item Por el teorema de Smale--Birkhoff, una intersección transversal de $W^s$ y $W^u$ de un punto silla (punto homoclínico transversal) implica la existencia de una herradura.
+    \item En un sistema disipativo, la clausura de la variedad inestable de ese tejido homoclínico forma el atractor, que hereda la estructura de Cantor transversal, las órbitas periódicas inestables densas y la sensibilidad a las condiciones iniciales (como en Hénon y Rössler).
+\end{itemize}
+
+\end{solucion}
+
+\begin{conclusion}
+El mecanismo de la herradura (estirar, contraer, plegar y volver a insertar) convierte un cuadrado en una ``U'' que solo reintersecta el cuadrado original en dos bandas. Iterándolo se produce un conjunto de tipo Cantor $\times$ Cantor sobre el que la dinámica es equivalente al shift de Bernoulli de dos símbolos: infinitas órbitas periódicas inestables densas, órbitas aperiódicas, entropía $\ln 2$ y dependencia sensible. Esto constituye el modelo geométrico de la dinámica caótica simbólica en los atractores extraños.
+\end{conclusion}
+
+\vspace{3mm}
+
+% =========================================================================
+% PROBLEMA 5.3
+% =========================================================================
 \begin{problema}[Problema 5.3]
 Considere el mapa bidimensional de Hénon (1976):
 \[
@@ -2798,8 +3320,107 @@ x_{n+1} = 1 - a x_n^2 + y_n, \qquad y_{n+1} = b x_n
 \end{enumerate}
 \end{problema}
 
-\vspace{5mm}
+\begin{solucion}
 
+\textbf{\large a) 1. Matriz jacobiana}
+\[
+T(x,y) = \bigl(1 - a x^2 + y,\; b x\bigr)
+\]
+\[
+\boxed{DT(x,y) = \begin{pmatrix} -2 a x & 1 \\ b & 0 \end{pmatrix}}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large a) 2. Determinante}
+\[
+\det DT(x,y) = (-2ax)(0) - (1)(b) = -b
+\]
+\[
+\boxed{\det DT \equiv -b \quad (\text{constante, independiente de } (x,y))}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large a) 3. Contracción de áreas}
+Para un conjunto $\Omega$ del plano, el área de su imagen es $\mathrm{Area}(T(\Omega)) = |\det DT|\,\mathrm{Area}(\Omega)$ (cambio de variables):
+\[
+\mathrm{Area}(T^n(\Omega)) = |b|^n\,\mathrm{Area}(\Omega)
+\]
+Para $a = 1.4$ y $b = 0.3$:
+\[
+|\det DT| = 0.3 < 1 \implies \boxed{\mathrm{Area}(T^n(\Omega)) = (0.3)^n\,\mathrm{Area}(\Omega) \xrightarrow{n\to\infty} 0}
+\]
+Cada iteración reduce el área al $30\%$ (una contracción del $70\%$). El signo negativo del determinante indica además que $T$ invierte la orientación. Como consecuencia, la suma de los exponentes de Lyapunov es:
+\[
+\lambda_1 + \lambda_2 = \ln|b| = \ln 0.3 \approx -1.204
+\]
+(numéricamente, $\lambda_1 \approx 0.42$ y $\lambda_2 \approx -1.62$ para el atractor canónico).
+
+\vspace{3.5mm}
+
+\textbf{\large b) 1. Despeje de $(x_n, y_n)$ en función de $(x_{n+1}, y_{n+1})$}
+Dado $(x', y') = T(x, y)$:
+\[
+y' = b x \implies x = \frac{y'}{b} \qquad (b \ne 0)
+\]
+\[
+x' = 1 - a x^2 + y \implies y = x' - 1 + a x^2 = x' - 1 + \frac{a\,y'^2}{b^2}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large b) 2. Mapa inverso}
+\[
+\boxed{T^{-1}(x, y) = \left(\frac{y}{b},\; x - 1 + \frac{a}{b^2}\,y^2\right)}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large b) 3. Verificación}
+\[
+T\bigl(T^{-1}(x,y)\bigr) = \left(1 - a\frac{y^2}{b^2} + x - 1 + \frac{a y^2}{b^2},\; b\cdot\frac{y}{b}\right) = (x, y) \;\checkmark
+\]
+\[
+T^{-1}\bigl(T(x,y)\bigr) = \left(\frac{bx}{b},\; 1 - a x^2 + y - 1 + \frac{a}{b^2}b^2 x^2\right) = (x, y) \;\checkmark
+\]
+Ambas composiciones dan la identidad, y $T$ y $T^{-1}$ son polinómicas (suaves), de modo que $T$ es un difeomorfismo de $\mathbb{R}^2$ si $b \ne 0$. Además, $\det DT^{-1} = -1/b$.
+
+\vspace{3.5mm}
+
+\textbf{\large b) 4. Descomposición geométrica (estirar, plegar, contraer)}
+\[
+T = T_3 \circ T_2 \circ T_1: \quad
+\begin{cases}
+T_1(x,y) = (x,\; 1 - a x^2 + y) & \text{(pliegue no lineal, área conservada)} \\
+T_2(x,y) = (b x,\; y) & \text{(contracción en } x \text{ por } |b|\text{)} \\
+T_3(x,y) = (y,\; x) & \text{(reflexión respecto de } y = x\text{)}
+\end{cases}
+\]
+Esta composición reproduce el mecanismo de la herradura: pliegue, contracción y reubicación.
+
+\vspace{3.5mm}
+
+\textbf{\large Puntos fijos para los parámetros canónicos}
+\[
+a x^2 + (1 - b)x - 1 = 0 \implies x^* = \frac{-(1-b) \pm \sqrt{(1-b)^2 + 4a}}{2a} = \frac{-0.7 \pm \sqrt{6.09}}{2.8}
+\]
+\[
+x^*_{+} \approx 0.6314, \qquad x^*_{-} \approx -1.1135, \qquad y^* = b x^*
+\]
+Ambos son inestables (silla), y el atractor de Hénon se organiza alrededor de ellos.
+
+\end{solucion}
+
+\begin{conclusion}
+El mapa de Hénon tiene determinante jacobiano constante $-b$: contrae áreas por un factor $|b| = 0.3$ en cada paso y es invertible con inverso explícito $T^{-1}(x,y) = \bigl(y/b,\; x - 1 + a y^2/b^2\bigr)$. Así, es un difeomorfismo disipativo cuyo atractor tiene área nula y dimensión fractal ($\approx 1.26$), un modelo bidimensional del mecanismo de estiramiento y plegado.
+\end{conclusion}
+
+\vspace{3mm}
+
+% =========================================================================
+% PROBLEMA 5.4
+% =========================================================================
 \begin{problema}[Problema 5.4]
 El sistema de Rössler (1976) viene dado por:
 \[
@@ -2809,8 +3430,91 @@ con $a = b = 0.2$ y $c = 5.7$.
 Explique cómo el flujo tridimensional se reduce a un mapa unidimensional con cúspide a través de la sección de Poincaré transversal $y = 0, \dot{y} > 0$.
 \end{problema}
 
-\vspace{5mm}
+\begin{solucion}
 
+\textbf{\large 1. Disipación y equilibrios}
+\[
+\nabla\cdot\mathbf{f} = 0 + a + (x - c) = x - 5.5
+\]
+La divergencia es negativa mientras $x < 5.5$ (casi toda la región de espiral) y positiva solo en las excursiones breves con $x > 5.5$; en promedio es negativa, de modo que el flujo es disipativo. Equilibrios:
+\[
+y = -\frac{x}{a},\quad z = \frac{x}{a}, \quad b + \frac{x}{a}(x - c) = 0 \implies x^2 - c\,x + ab = 0
+\]
+\[
+x_{\mp} = \frac{c \mp \sqrt{c^2 - 4ab}}{2} \implies P_- \approx (0.007,\,-0.035,\,0.035), \qquad P_+ \approx (5.693,\,-28.46,\,28.46)
+\]
+Cerca de $P_-$ la linealización da un foco inestable en el plano $(x, y)$ (autovalores $\approx 0.097 \pm 0.995\, i$) y una dirección estable fuerte en $z$.
+
+\vspace{3.5mm}
+
+\textbf{\large 2. Mecanismo cualitativo (espiral y excursión)}
+\begin{enumerate}[label=\textbf{(\roman*)}, leftmargin=2.5em]
+    \item \textbf{Fase de espiral:} mientras $z \approx 0$, el sistema se comporta como $\dot{x} \approx -y$, $\dot{y} \approx x + ay$: una espiral que se expande (el término $ay$ con $a>0$ amplifica la amplitud) alrededor de $P_-$.
+    \item \textbf{Fase de excursión:} cuando el radio $x$ supera $c = 5.7$, el término $z(x - c)$ en $\dot{z}$ se vuelve positivo y $z$ crece explosivamente (impulsado por $b > 0$). Entonces $\dot{x} = -y - z$ se hace muy negativo y la trayectoria es expulsada hacia arriba, hacia valores grandes de $z$.
+    \item \textbf{Reinyección:} al crecer $z$, $x$ cae por debajo de $c$ y $\dot{z}<0$; $z$ decae casi exponencialmente, y la trayectoria regresa cerca del plano $(x,y)$, a una distancia del centro que depende de dónde partió. Se reinicia la espiral.
+\end{enumerate}
+Esta alternancia de \textbf{estirar} (la espiral expansiva) y \textbf{plegar} (la excursión en $z$) da lugar al caos.
+
+\vspace{3.5mm}
+
+\textbf{\large 3. La sección de Poincaré $\Sigma: y = 0,\ \dot{y} > 0$}
+Sobre $y = 0$ se tiene $\dot{y} = x$, así que $\dot y > 0 \iff x > 0$:
+\[
+\Sigma = \left\{(x, y, z) : y = 0,\ x > 0\right\}, \qquad \text{coordenadas de la sección: } (x, z)
+\]
+Toda órbita cruza $\Sigma$ transversalmente (en la dirección de $y$ creciente, una vez por vuelta de la espiral). El mapa de primer retorno es:
+\[
+P: \Sigma \to \Sigma, \qquad (x_n, z_n) \mapsto (x_{n+1}, z_{n+1})
+\]
+\textbf{Reducción de dimensión de 3 a 2:} la sección elimina una variable (el flujo es continuo y la sección solo registra el cruce).
+
+\vspace{3.5mm}
+
+\textbf{\large 4. Reducción de 2D a 1D por disipación fuerte}
+El exponente contractivo es $\lambda_3 \approx -5.39$ y el tiempo de retorno es $T \approx 6$, de modo que la contracción transversal por vuelta es del orden de
+\[
+e^{\lambda_3 T} \approx e^{-32} \sim 10^{-14}
+\]
+Numéricamente, los puntos $(x_n, z_n)$ quedan sobre una curva casi unidimensional $z = h(x)$ (el atractor es una ``lámina'' delgada), y la dinámica se resume en la función escalar
+\[
+\boxed{x_{n+1} = g(x_n)}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large 5. Forma de $g$: unimodal con máximo (cúspide)}
+\begin{itemize}[leftmargin=2em]
+    \item Para $x_n$ pequeño, la espiral aún no ha alcanzado la zona $x > c$; la amplitud crece de una vuelta a otra: $g(x) > x$ y $g'(x) > 0$ (rama creciente).
+    \item Para $x_n$ grande, la excursión en $z$ es más pronunciada y el reingreso ocurre más cerca del centro: $g'(x) < 0$ (rama decreciente).
+    \item Entre ambas ramas, $g$ alcanza un máximo único $x_c$ con $g'(x_c) = 0$: la \textbf{cúspide}.
+\end{itemize}
+Así, $g$ es unimodal, estructuralmente igual a un mapa logístico (estirar la rama creciente, plegar en el máximo). Como $|g'| > 1$ en promedio, el exponente de Lyapunov del mapa es positivo, y por la relación con el flujo $\lambda_1 \approx \langle\ln|g'|\rangle / T \approx 0.07$.
+
+\begin{center}
+\begin{tikzpicture}[scale=4.2]
+    \draw[->, thick, gray!70] (-0.03, 0) -- (1.1, 0) node[right, black, font=\footnotesize] {$x_n$};
+    \draw[->, thick, gray!70] (0, -0.03) -- (0, 1.05) node[above, black, font=\footnotesize] {$x_{n+1}$};
+    \draw[thick, dashed, gray!80] (0, 0) -- (1, 1) node[right, font=\scriptsize] {$x_{n+1} = x_n$};
+    \draw[very thick, deepteal, domain=0:1, samples=25, smooth] plot (\x, {3.2*\x*(1 - \x)});
+    \filldraw[unmsmblue] (0.5, 0.8) circle (0.4pt);
+    \node[above, font=\scriptsize\bfseries, unmsmblue] at (0.5, 0.82) {cúspide ($g'=0$)};
+    \filldraw[red!80!black] (0.6875, 0.6875) circle (0.4pt);
+    \node[below right, font=\scriptsize\bfseries, red!80!black] at (0.69, 0.68) {punto fijo};
+    \node[font=\tiny, gray!80!black] at (0.78, 0.07) {\emph{(esquema cualitativo)}};
+\end{tikzpicture}
+\end{center}
+
+\end{solucion}
+
+\begin{conclusion}
+La sección de Poincaré $y = 0,\ \dot{y} > 0$ reduce el flujo de Rössler a un mapa bidimensional $(x_n, z_n) \mapsto (x_{n+1}, z_{n+1})$ y, gracias a la fuerte contracción transversal ($\lambda_3 \approx -5.4$), a un mapa unidimensional unimodal con máximo $x_{n+1} = g(x_n)$. Esa estructura de pliegue explica la cascada de duplicaciones de periodo al variar $c$ y la universalidad de Feigenbaum, y muestra que el caos de Rössler es esencialmente el del mapa logístico.
+\end{conclusion}
+
+\vspace{3mm}
+
+% =========================================================================
+% PROBLEMA 5.5
+% =========================================================================
 \begin{problema}[Problema 5.5]
 La Conjetura de Kaplan-Yorke (dimensión de Lyapunov $D_L$) relaciona el espectro de exponentes de Lyapunov ordenados $\lambda_1 \ge \lambda_2 \ge \dots \ge \lambda_n$ con la dimensión de información del atractor mediante:
 \[
@@ -2826,6 +3530,75 @@ Para el atractor de Lorenz con parámetros canónicos $\sigma = 10, b = 8/3, r =
     \item Calcule la dimensión fractal de Lyapunov $D_L$ del atractor de Lorenz e interprete físicamente su valor fraccionario.
 \end{enumerate}
 \end{problema}
+
+\begin{solucion}
+
+\textbf{\large a) 1. Divergencia del sistema de Lorenz}
+\[
+\nabla\cdot\mathbf{f} = -\sigma - 1 - b \equiv \text{constante}
+\]
+Al ser constante, su media temporal a lo largo de cualquier órbita es igual a ella misma:
+\[
+\langle\nabla\cdot\mathbf{f}\rangle = -(\sigma + 1 + b) = -\left(10 + 1 + \frac{8}{3}\right) = -\frac{41}{3} \approx -13.6667
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large a) 2. Suma de los exponentes}
+Por la fórmula de Liouville (como en el Problema 4.5), $\sum_i \lambda_i = \langle\nabla\cdot\mathbf{f}\rangle$. Comprobación con los valores numéricos:
+\[
+\lambda_1 + \lambda_2 + \lambda_3 \approx 0.9056 + 0 - 14.5723 = -13.6667
+\]
+\[
+\boxed{\lambda_1 + \lambda_2 + \lambda_3 = -13.6667 = -\frac{41}{3} = \langle\nabla\cdot\mathbf{f}\rangle \quad \checkmark}
+\]
+Esto sirve además como control de calidad del cálculo numérico: dado que $\lambda_2 = 0$ y $\lambda_1$ se obtiene numéricamente, el valor $\lambda_3 = -\tfrac{41}{3} - \lambda_1 \approx -14.5723$ queda determinado exactamente.
+
+\vspace{3.5mm}
+
+\textbf{\large b) 1. Determinación de $k$}
+\[
+S_1 = \lambda_1 = 0.9056 \ge 0
+\]
+\[
+S_2 = \lambda_1 + \lambda_2 = 0.9056 \ge 0
+\]
+\[
+S_3 = \lambda_1 + \lambda_2 + \lambda_3 = -13.6667 < 0
+\]
+\[
+\boxed{k = 2}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large b) 2. Cálculo de $D_L$}
+\[
+D_L = k + \frac{\lambda_1 + \lambda_2}{|\lambda_3|} = 2 + \frac{0.9056}{14.5723}
+\]
+\[
+\frac{0.9056}{14.5723} \approx 0.06215
+\]
+\[
+\boxed{D_L \approx 2.0621}
+\]
+
+\vspace{3.5mm}
+
+\textbf{\large b) 3. Interpretación física}
+\begin{itemize}[leftmargin=2em]
+    \item $2 < D_L < 3$: el atractor no es una superficie (dimensión 2) ni llena un volumen (dimensión 3). Esto concuerda con la disipación: el volumen se contrae a cero, así que $D_L < 3$.
+    \item \textbf{Dimensión 2 de base:} la expansión a lo largo de $\lambda_1$ y la dirección neutra del flujo ($\lambda_2 = 0$) dan una variedad bidimensional (lámina).
+    \item \textbf{Fracción $\approx 0.062$:} la lámina no es lisa: está formada por infinitas capas muy próximas, cada una plegada sobre sí misma (mecanismo estirar y plegar). Un corte transversal es un conjunto de Cantor, con la dimensión fraccionaria adicional $\lambda_1/|\lambda_3|$ que mide cuánto de la expansión no es absorbida por la contracción.
+    \item Hay una dimensión adicional pequeña porque $\lambda_3$ es muy grande en valor absoluto: las capas se aplastan $e^{14.57}$ más rápido de lo que se separan, de modo que están casi superpuestas y el atractor es casi una superficie (el valor numérico medido por conteo de cajas es $\approx 2.06$, en excelente acuerdo con $D_L$).
+\end{itemize}
+\textbf{Interpretación:} un valor entero (2) sería periodicidad o cuasiperiodicidad en una superficie; el exceso $D_L - 2 > 0$ es la medida de la complejidad caótica.
+
+\end{solucion}
+
+\begin{conclusion}
+La suma $\lambda_1 + \lambda_2 + \lambda_3 = -41/3$ coincide con la divergencia constante del campo de Lorenz, verificando la consistencia del espectro numérico. La dimensión de Kaplan--Yorke $D_L = 2 + 0.9056/14.5723 \approx 2.062$ es fraccionaria: el atractor es un objeto fractal ligeramente más complejo que una superficie, formado por una infinidad de láminas plegadas con corte transversal de tipo Cantor, que ocupa un volumen nulo en $\mathbb{R}^3$.
+\end{conclusion}
 
 \vspace{5mm}
 

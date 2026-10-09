@@ -28,12 +28,13 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 
 import storage
+from orquestacion.capacidades import analizar_caos_y_fractales as _analizar_caos
 from orquestacion.capacidades import analizar_edo as _analizar_edo
 from orquestacion.capacidades import analizar_equilibrios_sistema as _analizar_equilibrios
 from orquestacion.capacidades import describir_capacidades
-from matematica.clasificacion import alcance_del_problema
+from matematica.clasificacion import alcance_del_problema, describir_alcance
 from orquestacion.catalogo import cargar_catalogo
-from orquestacion.contratos import Trozo
+from orquestacion.contratos import SeccionPoincare, Trozo
 from orquestacion.informe import MODO as MODO_INFORME
 from orquestacion.informe import SESION
 
@@ -69,11 +70,12 @@ servidor = MCPServer(
     name="edos-grupo09",
     title="Agente de EDOs y sistemas dinámicos (grupo 09)",
     instructions=(
-        "Resuelve problemas de ecuaciones diferenciales ordinarias (1 a 3 variables) y de "
-        "mapas unidimensionales con el DESARROLLO MATEMÁTICO del balotario del grupo: "
-        "clasifica el problema, elige el método que le corresponde, lo ejecuta con cálculo "
-        "simbólico (sympy) y numérico (scipy), lo verifica y lo dibuja.\n\n"
-        "QUÉ RESUELVE (familias del balotario, Temas 1 a 3 y el problema 4.1):\n"
+        "Resuelve problemas de ecuaciones diferenciales ordinarias (1 a 3 variables), de "
+        "mapas iterados (1 y 2 variables) y de caos y geometría fractal con el DESARROLLO "
+        "MATEMÁTICO del balotario del grupo: clasifica el problema, elige el método que le "
+        "corresponde, lo ejecuta con cálculo simbólico (sympy) y numérico (scipy), lo verifica "
+        "y lo dibuja.\n\n"
+        "QUÉ RESUELVE (los cinco temas del balotario, sus 25 problemas):\n"
         "  - Tema 1: separables (con intervalo maximal), lineales de primer orden (factor "
         "integrante), Bernoulli, Riccati (con una solución particular), Cauchy-Euler "
         "(ecuación indicial y variación de parámetros), y sistemas conservativos como el "
@@ -85,12 +87,22 @@ servidor = MCPServer(
         "  - Tema 3: bifurcaciones silla-nodo, transcrítica y de horquilla (condiciones de "
         "Sotomayor, histéresis), Hopf (coeficiente de Lyapunov) y homoclínica (Melnikov y "
         "disparo numérico).\n"
-        "  - Problema 4.1: exponente de Lyapunov y horizonte de predictibilidad de un mapa "
-        "unidimensional (por ejemplo el mapa tienda).\n\n"
+        "  - Tema 4: exponente de Lyapunov y horizonte de un mapa unidimensional (mapa tienda), "
+        "duplicación de periodo del mapa logístico (r₁, r₂), cascada de Feigenbaum (r_∞), "
+        "disipatividad y elipsoide atrapante de Lorenz, espectro de Lyapunov de un flujo 3D.\n"
+        "  - Tema 5: dimensión de caja de fractales autosemejantes (Cantor, Koch, Sierpinski), "
+        "herradura de Smale, mapa de Hénon (jacobiano, contracción de áreas, inverso), sección "
+        "de Poincaré y mapa de retorno (Rössler), dimensión de Kaplan-Yorke.\n\n"
         "QUÉ HERRAMIENTA USAR: `resolver_graficar_y_analizar_edo` para resolver, hallar la "
         "solución general, graficar o analizar un problema (la condición inicial es "
         "OPCIONAL: 'halle la solución general' no la necesita). `analizar_equilibrios` "
-        "cuando la pregunta sea solo sobre equilibrios, estabilidad o una bifurcación.\n\n"
+        "cuando la pregunta sea solo sobre equilibrios, estabilidad o una bifurcación. "
+        "`resolver_caos_fractales_y_atractores` para los Temas 4 y 5: basta el enunciado, aunque "
+        "no traiga ecuación (Cantor, herradura, Feigenbaum, el teorema del espectro) o nombre "
+        "el sistema en lugar de escribirlo (Lorenz, Rössler, Hénon, mapa logístico, mapa "
+        "tienda: el servidor usa sus ecuaciones y los valores que el enunciado escribe). Los "
+        "números que no son parámetros del sistema (r₁, r₂, δ, los exponentes de Lyapunov, las "
+        "copias y la razón de un fractal) van en `datos`.\n\n"
         "PASE EL ENUNCIADO Y LO QUE SE PIDE. Copie el enunciado del usuario en `enunciado`: "
         "de él se lee el método que nombra (Bernoulli, Riccati, Hopf...) y lo que pide "
         "(intervalo máximo, trayectorias, separatriz, periodo...), que decide qué partes "
@@ -107,13 +119,18 @@ servidor = MCPServer(
         "agregue operaciones, sustituciones ni resultados que no estén en el desarrollo: "
         "si un paso no está, el servidor no lo hizo. Las fórmulas destacadas son los "
         "resultados que el balotario encuadra.\n\n"
-        "FUERA DE ALCANCE POR AHORA (el balotario todavía no los resuelve): duplicación "
-        "de periodo y Feigenbaum (4.2, 4.3), disipatividad y elipsoide de Lorenz (4.4), "
-        "espectro de Lyapunov de flujos (4.5) y todo el Tema 5 (dimensión fractal, "
-        "herradura de Smale, Hénon, secciones de Poincaré, Kaplan-Yorke). Si el usuario "
-        "pide uno de ellos, el servidor lo marca como fuera de alcance: dígaselo así, sin "
-        "ofrecer un sustituto como si fuera la respuesta. Un sistema que no pertenece a "
-        "ninguna familia se resuelve numéricamente, y el desarrollo lo dice.\n\n"
+        "FUERA DEL ALCANCE DEL PROYECTO: ecuaciones en derivadas parciales, estocásticas, con "
+        "retardo o integrales, series de Fourier, sistemas de más de 3 variables. Si la "
+        "respuesta llega con etapa='fuera_de_alcance' o 'no_es_un_problema_del_proyecto', "
+        "transmita `mensaje_para_el_usuario` (dice qué abarca el proyecto, tema por tema) y no "
+        "lo resuelva por otra vía. Un sistema de EDOs que no pertenece a ninguna familia sí se "
+        "resuelve numéricamente, y el desarrollo lo dice.\n\n"
+        "SI LA PREGUNTA NO ES DE MATEMÁTICAS (una dirección, un color, una charla), no llame a "
+        "ninguna herramienta: diga en una o dos frases que este asistente resuelve los "
+        "problemas de EDOs y sistemas dinámicos del balotario del grupo 09, nombre los cinco "
+        "temas y ofrezca resolver uno. Si una respuesta llega con etapa='datos', un valor del "
+        "problema es imposible (r₂ ≤ r₁, una razón de semejanza fuera de (0, 1)...): dígale al "
+        "usuario cuál y pídale el correcto, sin inventar uno.\n\n"
         "MAPAS ITERADOS: x_{n+1} = f(x_n) y dx/dt = f(x) se escriben con el mismo lado "
         "derecho, así que el servidor no puede distinguirlos: quien lo sabe es el usuario. "
         "Si el enunciado usa notación de recurrencia (x_{n+1}, x_n, 'iterar', 'el mapa "
@@ -176,8 +193,8 @@ servidor = MCPServer(
         "  - `informe` como herramienta devuelve la dirección en cualquier momento, "
         "y sirve para dársela ANTES del primer análisis si el usuario quiere mirar "
         "cómo se va llenando.\n\n"
-        "Use `ping` para obtener el inventario exacto de familias y de lo que queda fuera de "
-        "alcance."),
+        "Use `ping` para obtener el inventario exacto de familias y de lo que queda fuera del "
+        "proyecto."),
 )
 
 
@@ -506,9 +523,107 @@ def analizar_equilibrios(
 
 
 @servidor.tool(
+    name="resolver_caos_fractales_y_atractores",
+    description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, para los problemas de caos, fractales y "
+                "atractores extraños: duplicación de periodo y diagrama de bifurcación del mapa "
+                "logístico, constante de Feigenbaum y r∞, disipatividad y elipsoide atrapante de "
+                "Lorenz, espectro y exponentes de Lyapunov de un flujo, dimensión de caja o fractal "
+                "(Cantor, Koch, Sierpinski), herradura de Smale, mapa de Hénon (jacobiano, contracción "
+                "de áreas, inverso), sección de Poincaré y mapa de retorno (Rössler), dimensión de "
+                "Kaplan-Yorke. Basta el ENUNCIADO: si nombra el sistema (Lorenz, Rössler, Hénon, mapa "
+                "logístico, mapa tienda) el servidor usa sus ecuaciones con los valores que el "
+                "enunciado escribe, y si trae la ecuación, pásela. Hace el desarrollo paso a paso del "
+                "balotario, lo verifica numéricamente y lo dibuja en el informe.")
+@sin_contaminar_stdout
+def resolver_caos_fractales_y_atractores(
+    enunciado: str,
+    ecuaciones: list[str] | None = None,
+    variables_estado: list[str] | None = None,
+    tipo_de_sistema: str = "edo_continua",
+    parametros: dict[str, float] | None = None,
+    parametro: str | None = None,
+    rango_parametro: list[float | None] | None = None,
+    datos: dict[str, float | list[float]] | None = None,
+    seccion_poincare: SeccionPoincare | None = None,
+    pedidos: list[str] | None = None,
+    metodo_analitico: str | None = None,
+    region: dict[str, list[float | None]] | None = None,
+    trozos: list[Trozo] | None = None,
+    separacion_inicial: float | None = None,
+    y0: list[float] | None = None,
+    intervalo: list[float] | None = None,
+    visualizar: bool = True,
+    titulo: str | None = None,
+) -> dict:
+    """Temas 4 y 5 del balotario, con o sin ecuación.
+
+    Args:
+        enunciado: El enunciado tal como lo escribió el usuario. Es lo único
+            obligatorio: de él se leen el tema, el sistema nombrado y sus datos.
+        ecuaciones: Lado derecho del sistema, si el enunciado da uno que no es
+            de los que el servidor conoce por su nombre.
+        variables_estado: Variables de estado de esas ecuaciones.
+        tipo_de_sistema: "edo_continua" o "mapa_discreto" (x_{n+1} = f(x_n)).
+            Con un sistema nombrado se toma del sistema.
+        parametros: Valores de los parámetros, p. ej. {"a": 1.4, "b": 0.3}.
+            Mandan sobre los canónicos y sobre los que se leen del enunciado.
+        parametro: Parámetro que se estudia de forma simbólica (la r del mapa
+            logístico en la duplicación de periodo).
+        rango_parametro: [mínimo, máximo] de ese parámetro.
+        datos: Números del enunciado que no son parámetros del sistema:
+            {"r_1": 3, "r_2": 3.449, "delta": 4.669} (Feigenbaum),
+            {"exponentes": [0.9056, 0, -14.5723]} (Kaplan-Yorke),
+            {"copias": 2, "razon": 0.3333} (fractal autosemejante),
+            {"contraccion": 0.3333, "expansion": 3} (herradura).
+        seccion_poincare: {"variable": "y", "valor": 0, "sentido": "creciente"}.
+            Si falta, se lee del enunciado ("y = 0, ẏ > 0").
+        pedidos: Lo que pide el enunciado, si quiere precisarlo:
+            duplicacion_periodo, feigenbaum, disipatividad, espectro_lyapunov,
+            dimension_fractal, herradura, seccion_poincare, kaplan_yorke.
+        metodo_analitico: Familia que nombra el enunciado, si la nombra.
+        region: Cotas de las variables, p. ej. {"x": [0, 1]}.
+        trozos: Mapa definido a trozos: [{expresion, desde, hasta}].
+        separacion_inicial: δ₀ del horizonte de predictibilidad de un mapa.
+        y0: Condición inicial de la órbita, si se quiere fijar.
+        intervalo: [t_inicial, t_final] si se da y0.
+        visualizar: Generar las figuras del informe.
+        titulo: Título para el informe.
+
+    Returns:
+        Como `resolver_graficar_y_analizar_edo`: `desarrollo` con las secciones
+        en orden, `verificacion`, `visualizacion.informe`. Si `ok` es false,
+        `etapa` dice por qué: 'fuera_de_alcance' o 'no_es_un_problema_del_proyecto'
+        (con `mensaje_para_el_usuario`, que se transmite tal cual), 'datos' (un
+        valor imposible: pídale el correcto al usuario) o 'validacion_solicitud'.
+    """
+    registro.info("resolver_caos_fractales_y_atractores: %s ecuaciones", len(ecuaciones or []))
+    return _analizar_caos({
+        "enunciado": enunciado,
+        "ecuaciones": ecuaciones or [],
+        "variables_estado": variables_estado or [],
+        "tipo_de_sistema": tipo_de_sistema,
+        "parametros": parametros or {},
+        "parametro": parametro,
+        "rango_parametro": rango_parametro,
+        "datos": datos,
+        "seccion_poincare": seccion_poincare.model_dump() if hasattr(seccion_poincare, "model_dump")
+        else seccion_poincare,
+        "pedidos": pedidos,
+        "metodo_analitico": metodo_analitico,
+        "region": region,
+        "trozos": [t.model_dump() if hasattr(t, "model_dump") else t for t in trozos] if trozos else None,
+        "separacion_inicial": separacion_inicial,
+        "y0": y0,
+        "intervalo": intervalo,
+        "visualizar": visualizar,
+        "titulo": titulo,
+    })
+
+
+@servidor.tool(
     description="Lista los problemas del balotario del grupo, que definen qué resuelve el "
-                "agente (y qué queda fuera de alcance por ahora), con su enunciado y su "
-                "ecuación lista para pasar a las otras herramientas.")
+                "agente, con su enunciado y su ecuación lista para pasar a las otras "
+                "herramientas.")
 @sin_contaminar_stdout
 def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) -> dict:
     """Problemas del balotario con su ecuación, condiciones iniciales y alcance.
@@ -522,8 +637,8 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
     Returns:
         Los temas con sus problemas. Cada problema trae id, enunciado, tipo,
         dificultad, el bloque `ecuacion` listo para pasar a `resolver_graficar_y_analizar_edo`, sus
-        condiciones iniciales y `alcance`: "dentro" (con las `familias` que lo
-        resuelven) o "fuera_de_alcance". El campo `ci_derivada` indica si la
+        condiciones iniciales y `alcance`: "dentro", con las `familias` que lo
+        resuelven. El campo `ci_derivada` indica si la
         condición inicial viene del enunciado original o se fijó para concretar
         un PVI. Si el balotario tiene un error en ese problema, viene
         `revision_matematica` con lo que el agente calcula en su lugar.
@@ -541,7 +656,7 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
         for problema in contenido["problemas"]:
             resumen = {clave: problema.get(clave) for clave in
                        ("id", "titulo", "enunciado", "tipo", "dificultad",
-                        "ecuacion", "condiciones_iniciales")}
+                        "ecuacion", "condiciones_iniciales", "solicitud")}
             resumen.update(alcance_del_problema(problema["id"]))
             if "revision_matematica" in problema:
                 resumen["revision_matematica"] = problema["revision_matematica"]["resumen"]
@@ -558,9 +673,10 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
                     "condición inicial). Las familias paramétricas del Tema 3 van a "
                     "`analizar_equilibrios` con `parametro` declarado: una sola llamada estudia "
                     "la bifurcación entera. El 4.1 es un mapa: tipo_de_sistema='mapa_discreto' y "
-                    "el mapa en `trozos` ([{expresion, desde, hasta}]). Los problemas con "
-                    "`alcance: fuera_de_alcance` todavía no tienen solución en el balotario: "
-                    "el agente lo dice y no los resuelve."}
+                    "el mapa en `trozos` ([{expresion, desde, hasta}]). Los Temas 4 y 5 van a "
+                    "`resolver_caos_fractales_y_atractores` con el `enunciado`; los que no tienen "
+                    "`campo` (4.3, 4.5, 5.1, 5.2) llevan sus números en `datos`.",
+            "alcance": describir_alcance()}
 
 
 def main():

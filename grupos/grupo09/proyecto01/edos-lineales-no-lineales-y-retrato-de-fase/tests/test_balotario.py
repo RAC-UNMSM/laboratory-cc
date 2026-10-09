@@ -11,8 +11,8 @@ Tres niveles:
    (el JSON no es la única fuente de verdad);
 3. el agente, recibiendo el problema como lo recibiría de un cliente, llega a
    los mismos resultados que el balotario. Donde el balotario se equivoca
-   (2.5 y 3.5, documentados en `revision_matematica`), el agente debe llegar al
-   resultado correcto, no al del .tex.
+   (2.5, 3.5, 5.3 y 5.4, documentados en `revision_matematica`), el agente debe
+   llegar al resultado correcto, no al del .tex.
 """
 
 import math
@@ -22,10 +22,10 @@ import numpy as np
 import sympy as sp
 from scipy.special import ellipk
 
-from matematica.clasificacion import FAMILIAS, FUERA_DE_ALCANCE
+from matematica.clasificacion import FAMILIAS
 from matematica.expresiones import campo_desde_catalogo, escalar_desde_catalogo
 from matematica.modelo_edos import resolver_edo
-from orquestacion.capacidades import analizar_edo, analizar_equilibrios_sistema
+from orquestacion.capacidades import analizar_caos_y_fractales, analizar_edo, analizar_equilibrios_sistema
 from orquestacion.catalogo import cargar_catalogo
 
 
@@ -137,30 +137,29 @@ class EstructuraBalotarioTests(unittest.TestCase):
             with self.subTest(problema=problema["id"]):
                 self.assertTrue(problema.get("motivo_no_verificable", "").strip())
 
-    def test_un_problema_pendiente_declara_que_el_tex_no_lo_resuelve(self):
-        """Nueve problemas del .tex no traen solución; eso debe quedar explícito."""
-        pendientes = []
+    def test_ningun_problema_queda_pendiente(self):
+        """El .tex ya desarrolla los 25 problemas; el catálogo no puede decir lo contrario."""
         for problema in _problemas():
             esperada = problema["solucion_esperada"]
-            if esperada["tipo"] != "pendiente":
-                continue
-            pendientes.append(problema["id"])
             with self.subTest(problema=problema["id"]):
-                self.assertFalse(esperada["solucion_en_tex"])
-                self.assertTrue(esperada.get("nota", "").strip())
-        self.assertEqual(pendientes, ["4.2", "4.3", "4.4", "4.5",
-                                      "5.1", "5.2", "5.3", "5.4", "5.5"])
+                self.assertNotEqual(esperada["tipo"], "pendiente")
+                if "solucion_en_tex" in esperada:
+                    self.assertTrue(esperada["solucion_en_tex"])
 
     def test_el_alcance_del_agente_es_el_del_balotario(self):
-        """Lo resuelto en el .tex es lo que las familias implementan; lo pendiente, lo fuera de alcance."""
-        resueltos = {p["id"] for p in _problemas() if p["solucion_esperada"]["tipo"] != "pendiente"}
-        pendientes = {p["id"] for p in _problemas() if p["solucion_esperada"]["tipo"] == "pendiente"}
-        self.assertEqual({ref for f in FAMILIAS for ref in f.balotario}, resueltos)
-        self.assertEqual({problema for problema, *_ in FUERA_DE_ALCANCE.values()}, pendientes)
+        """Cada problema del .tex tiene una familia que lo resuelve con su procedimiento."""
+        self.assertEqual({ref for f in FAMILIAS for ref in f.balotario}, {p["id"] for p in _problemas()})
+
+    def test_los_temas_4_y_5_dicen_como_se_piden(self):
+        for problema in _problemas():
+            if not problema["id"].startswith(("4.", "5.")):
+                continue
+            with self.subTest(problema=problema["id"]):
+                self.assertEqual(problema["solicitud"]["herramienta"], "resolver_caos_fractales_y_atractores")
 
     def test_las_revisiones_matematicas_estan_documentadas(self):
         revisados = {p["id"]: p["revision_matematica"] for p in _problemas() if "revision_matematica" in p}
-        self.assertEqual(sorted(revisados), ["2.5", "3.5"])
+        self.assertEqual(sorted(revisados), ["2.5", "3.5", "5.3", "5.4"])
         for identificador, revision in revisados.items():
             with self.subTest(problema=identificador):
                 self.assertFalse(revision["tex_modificado"])
@@ -404,6 +403,113 @@ class RevisionesDelBalotarioTests(unittest.TestCase):
         # El .tex da μc = −5/7: lo que el agente calcula no es eso.
         self.assertNotAlmostEqual(resultados["mu_melnikov"]["valor"],
                                   problema["solucion_esperada"]["datos_adicionales"]["mu_critico"], places=3)
+
+
+class ElAgenteReproduceLosTemas4y5Tests(unittest.TestCase):
+    """Cada enunciado, tal cual, a la herramienta de caos y fractales: llega a lo que dice el balotario.
+
+    Es la prueba de que "basta el enunciado": ni ecuaciones ni parámetros, salvo
+    los `argumentos` que el catálogo declara en `solicitud`.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.respuestas = {}
+        for problema in _problemas():
+            if problema["id"][0] in "45" and problema["id"] != "4.1":
+                cls.respuestas[problema["id"]] = analizar_caos_y_fractales(
+                    {"enunciado": problema["enunciado"], "visualizar": False,
+                     **problema["solicitud"]["argumentos"]})
+
+    def _resultados(self, identificador):
+        respuesta = self.respuestas[identificador]
+        self.assertTrue(respuesta["ok"], respuesta.get("error"))
+        self.assertEqual(respuesta["verificacion"]["fallidas"], [])
+        self.assertEqual(respuesta["desarrollo"]["balotario"], [identificador])
+        return respuesta["desarrollo"]["resultados"]
+
+    def _valores(self, identificador):
+        return _indice()[identificador]["solucion_esperada"]["valores"]
+
+    def test_4_2_umbrales_de_duplicacion(self):
+        resultados, valores = self._resultados("4.2"), self._valores("4.2")
+        self.assertEqual(_texto(resultados["r_1"]), sp.sympify(valores["r_1_expresion"]))
+        self.assertEqual(sp.simplify(_texto(resultados["r_2"]) - sp.sympify(valores["r_2_expresion"])), 0)
+        multiplicador = _plano(_texto(resultados["multiplicador_periodo_2"]))
+        self.assertEqual(sp.expand(multiplicador - sp.sympify(valores["multiplicador_periodo_2"])), 0)
+
+    def test_4_3_estimacion_de_feigenbaum(self):
+        resultados, valores = self._resultados("4.3"), self._valores("4.3")
+        self.assertAlmostEqual(resultados["r_infinito"], valores["r_infinito_estimado"], places=9)
+        self.assertAlmostEqual(resultados["r_3_estimado"], valores["r_3_estimado"], places=9)
+        self.assertAlmostEqual(resultados["umbrales_numericos"][2], valores["r_3_numerico"], places=6)
+        self.assertAlmostEqual(resultados["r_infinito_numerico"], valores["r_infinito_numerico"], delta=2e-5)
+
+    def test_4_4_disipatividad_y_elipsoide(self):
+        resultados, valores = self._resultados("4.4"), self._valores("4.4")
+        self.assertEqual(sp.simplify(_plano(_texto(resultados["divergencia"])) - sp.sympify(valores["divergencia"])), 0)
+        V = _plano(_texto(resultados["funcion_lyapunov"]))
+        self.assertEqual(sp.simplify(V - sp.sympify(valores["funcion_lyapunov"])), 0)
+        self.assertAlmostEqual(resultados["V_estrella_valor"], valores["V_estrella_canonico"], places=6)
+
+    def test_4_5_espectro_de_lorenz_y_rossler(self):
+        resultados, valores = self._resultados("4.5"), self._valores("4.5")
+        lorenz, rossler = resultados["espectro_1"], resultados["espectro_2"]
+        for calculado, referencia in zip(lorenz["exponentes"], valores["lorenz_referencia"]):
+            self.assertAlmostEqual(calculado, referencia, delta=0.05)
+        self.assertAlmostEqual(rossler["exponentes"][0], valores["rossler_referencia"][0], delta=0.02)
+        self.assertAlmostEqual(rossler["exponentes"][2], valores["rossler_referencia"][2], delta=0.1)
+        self.assertAlmostEqual(lorenz["suma"], valores["suma_lorenz"], delta=0.01)
+
+    def test_5_1_dimension_de_cantor(self):
+        resultados, valores = self._resultados("5.1"), self._valores("5.1")
+        self.assertAlmostEqual(resultados["dimension"]["valor"], valores["dimension"], places=12)
+
+    def test_5_2_herradura(self):
+        resultados, valores = self._resultados("5.2"), self._valores("5.2")
+        self.assertAlmostEqual(resultados["dimension"]["valor"], valores["dimension"], places=12)
+        self.assertAlmostEqual(resultados["entropia"]["valor"], valores["entropia_topologica"], places=12)
+
+    def test_5_3_henon(self):
+        resultados, valores = self._resultados("5.3"), self._valores("5.3")
+        self.assertEqual(_plano(_texto(resultados["determinante"])), sp.sympify(valores["determinante"]))
+        for calculado, esperado in zip(resultados["inverso"], valores["inverso"]):
+            self.assertEqual(sp.simplify(_plano(_texto(calculado)) - sp.sympify(esperado)), 0)
+        calculados = sorted(p["valor"] for p in resultados["puntos_fijos"])
+        np.testing.assert_allclose(calculados, sorted(valores["puntos_fijos"]), atol=1e-12)
+        self.assertEqual({p["tipo"] for p in resultados["puntos_fijos"]}, {"silla"})
+
+    def test_5_4_seccion_de_poincare(self):
+        resultados, valores = self._resultados("5.4"), self._valores("5.4")
+        self.assertAlmostEqual(resultados["maximo_de_g"], valores["maximo_de_g_en_u_igual_menos_x"], delta=0.05)
+        self.assertAlmostEqual(resultados["tiempo_de_retorno"], valores["tiempo_de_retorno"], delta=0.05)
+        self.assertLess(resultados["contraccion_por_vuelta"], 1e-12)
+
+    def test_5_5_kaplan_yorke(self):
+        resultados, valores = self._resultados("5.5"), self._valores("5.5")
+        self.assertEqual(resultados["k"], valores["k"])
+        self.assertAlmostEqual(resultados["dimension_lyapunov"], valores["dimension_lyapunov"], places=10)
+
+
+class RevisionesDeLosTemas4y5Tests(unittest.TestCase):
+    """Los dos errores del .tex en el Tema 5: el agente llega al valor correcto."""
+
+    def test_5_3_el_segundo_punto_fijo_es_menos_1_1314(self):
+        problema = _indice()["5.3"]
+        corregido = problema["revision_matematica"]["valores_corregidos"]["x_menos"]
+        resultado = analizar_caos_y_fractales({"enunciado": problema["enunciado"], "visualizar": False})
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        x_menos = min(p["valor"][0] for p in resultado["desarrollo"]["resultados"]["puntos_fijos"])
+        self.assertAlmostEqual(x_menos, corregido, places=12)
+        self.assertNotAlmostEqual(x_menos, -1.1135, places=3)        # lo que escribe el .tex
+
+    def test_5_4_la_seccion_util_es_la_otra_mitad(self):
+        problema = _indice()["5.4"]
+        revision = problema["revision_matematica"]["valores_corregidos"]
+        resultado = analizar_caos_y_fractales({"enunciado": problema["enunciado"], "visualizar": False})
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        self.assertEqual(resultado["desarrollo"]["resultados"]["mitad_corregida"], revision["sentido"])
+        self.assertTrue(any("corta el pliegue" in a for a in resultado["desarrollo"]["advertencias"]))
 
 
 if __name__ == "__main__":

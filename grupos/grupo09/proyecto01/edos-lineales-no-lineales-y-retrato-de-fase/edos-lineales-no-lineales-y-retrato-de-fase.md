@@ -19,10 +19,11 @@ verificado.
 
 Resolver y analizar los problemas del balotario del grupo — EDOs de primer y
 segundo orden, sistemas planos lineales y no lineales, sistemas conservativos,
-ciclos límite, bifurcaciones locales y globales, y el exponente de Lyapunov de
-mapas unidimensionales — con su **desarrollo matemático real**, generalizado a
-cualquier ejercicio de la misma familia, y con resultados **verificables** y
-reproducibles.
+ciclos límite, bifurcaciones locales y globales, caos en mapas y en flujos
+(Lyapunov, duplicación de periodo, Feigenbaum, disipatividad), atractores
+extraños y geometría fractal — con su **desarrollo matemático real**,
+generalizado a cualquier ejercicio de la misma familia, y con resultados
+**verificables** y reproducibles.
 
 ## Formulación
 
@@ -36,7 +37,10 @@ $$
 donde $\mathbf{x}$ son las variables de estado (1 a 3), $t$ la variable
 independiente, $\boldsymbol{\theta}$ los parámetros (uno de ellos puede quedar
 simbólico, como $\gamma$ o $\mu$) y $\mathbf{F}$ el campo vectorial; o mapas
-$x_{n+1}=f(x_n)$ de una variable.
+$\mathbf{x}_{n+1}=\mathbf{f}(\mathbf{x}_n)$ de una o dos variables; o preguntas
+sin ecuación de los Temas 4 y 5 (la dimensión del conjunto de Cantor, la
+herradura de Smale, la estimación de Feigenbaum, el teorema del espectro de
+Lyapunov), que se responden a partir del enunciado y sus datos.
 
 La condición inicial es opcional: «halle la solución general» o «clasifique el
 equilibrio según $\gamma$» no la tienen. Una EDO de orden $n$ se reduce antes a
@@ -45,27 +49,34 @@ un sistema de $n$ ecuaciones de primer orden, y el servidor reconoce esa forma
 
 ## Estado real: qué resuelve hoy y qué no
 
-El balotario determina el alcance. Lo que el `.tex` resuelve, el agente lo
-resuelve con el mismo procedimiento; lo que el `.tex` solo enuncia, el agente lo
-declara **FUERA DE ALCANCE POR AHORA**.
+El balotario determina el alcance: lo que el `.tex` resuelve, el agente lo
+resuelve con el mismo procedimiento. Hoy el `.tex` desarrolla los 25 problemas,
+y el agente los 25.
 
 | Tema | Familias (problemas del balotario) | Estado |
 | --- | --- | --- |
 | 1. EDOs lineales y no lineales | Separable (1.1), lineal, Bernoulli (1.2), Cauchy-Euler (1.3), Riccati (1.4), péndulo conservativo (1.5) | **Implementado** |
 | 2. Retratos de fase y análisis cualitativo en el plano | Lineal plano y clasificación según un parámetro (2.1, 2.2), no lineal plano (2.3), hamiltoniano con órbita homoclínica (2.4), ciclo límite por Poincaré–Bendixson (2.5) | **Implementado** |
 | 3. Teoría de bifurcaciones | Silla-nodo, transcrítica, horquillas e histéresis (3.1–3.3), línea de fase, Hopf (3.4), homoclínica con Melnikov y disparo numérico (3.5) | **Implementado** |
-| 4. Sistemas dinámicos caóticos | Exponente de Lyapunov y horizonte de un mapa 1D (4.1) | **Implementado** |
-| 4. Sistemas dinámicos caóticos | Duplicación de periodo, Feigenbaum, disipatividad de Lorenz, espectro de Lyapunov (4.2–4.5) | **Fuera de alcance por ahora** |
-| 5. Atractores extraños y geometría fractal | Dimensión fractal, herradura de Smale, Hénon, secciones de Poincaré, Kaplan-Yorke | **Fuera de alcance por ahora** |
+| 4. Sistemas dinámicos caóticos | Exponente de Lyapunov y horizonte de un mapa 1D (4.1), duplicación de periodo (4.2), Feigenbaum (4.3), disipatividad y elipsoide de Lorenz (4.4), teorema del espectro de Lyapunov (4.5) | **Implementado** |
+| 5. Atractores extraños y geometría fractal | Dimensión de caja (5.1), herradura de Smale (5.2), mapa de Hénon (5.3), sección de Poincaré de Rössler (5.4), Kaplan-Yorke (5.5) | **Implementado** |
 
 Un problema que no pertenece a ninguna familia se resuelve numéricamente
 (planteamiento, equilibrios y su linealización si es autónomo, integración con
 control de error: RK45, RK23, DOP853, Radau, BDF, LSODA), y el desarrollo lo
-dice. Lo fuera de alcance se reconoce por el enunciado o por la forma del
-problema, y la respuesta lo declara sin ofrecer un sustituto como si fuera la
-respuesta.
+dice.
 
-**El balotario tiene dos errores**, que el agente no repite (documentados en
+Lo que no pertenece a ninguno de los cinco temas —una ecuación en derivadas
+parciales, estocástica o con retardo, un sistema de más de tres variables— se
+responde con `etapa: fuera_de_alcance` y un mensaje ordenado: «Problema fuera
+del alcance de los temas trabajados: …; el proyecto abarca: Tema 1 — …, Tema 2
+— …». Una pregunta que no es de matemáticas («¿dónde queda el baño?») recibe
+`etapa: no_es_un_problema_del_proyecto` con el mismo listado, y un dato
+imposible (r₂ ≤ r₁, una razón fuera de (0, 1)) recibe `etapa: datos` con el
+valor que hay que corregir. Ninguna de las tres ofrece un sustituto como si
+fuera la respuesta.
+
+**El balotario tiene cuatro errores**, que el agente no repite (documentados en
 `revision_matematica` de su JSON; el `.tex` no se modificó):
 
 - **2.5:** el anillo de Poincaré–Bendixson contiene el equilibrio (1, 0), así
@@ -73,6 +84,11 @@ respuesta.
 - **3.5:** la integral de Melnikov $I_2$ vale $36/35$, no $6/7$; su cero es
   $\mu=-6/7$, el valor real de la conexión homoclínica es $\mu^*\approx-0.8645$, y
   el ciclo límite existe para $-1<\mu<\mu^*$.
+- **5.3:** el segundo punto fijo de Hénon es $x_-\approx-1.1314$, no $-1.1135$.
+- **5.4:** la reducción de Rössler a un mapa unimodal funciona en la mitad
+  $y=0,\ \dot y<0$ de la sección; en la mitad $\dot y>0$ que elige el `.tex` los
+  cruces caen sobre el pliegue ($z$ entre 0.08 y 18) y $x_{n+1}$ no es función
+  de $x_n$.
 
 ### La ambigüedad continuo/discreto
 
@@ -91,11 +107,12 @@ Tres capas, sin dependencias hacia arriba. `matematica/` no sabe que existe
 
 ```text
 edos-lineales-no-lineales-y-retrato-de-fase/
-├── mcp_server.py              Las 6 herramientas MCP (transporte stdio)
+├── mcp_server.py              Las 7 herramientas MCP (transporte stdio)
 ├── storage.py                 Publica el informe en el storage del laboratorio
 ├── matematica/                CAPA MATEMÁTICA — no sabe de MCP
 │   ├── problema.py            El problema interpretado (campo exacto, parámetro, CI, región)
-│   ├── clasificacion.py       Familias del balotario, selección del método, alcance
+│   ├── clasificacion.py       Familias del balotario, selección del método, los cinco temas
+│   ├── sistemas_conocidos.py  Lorenz, Rössler, Hénon, logístico, tienda; datos del enunciado
 │   ├── desarrollo.py          El desarrollo estructurado: secciones, resultados, validaciones
 │   ├── primer_orden.py        Separable, lineal, Bernoulli, Riccati
 │   ├── segundo_orden.py       Cauchy-Euler y variación de parámetros
@@ -103,7 +120,10 @@ edos-lineales-no-lineales-y-retrato-de-fase/
 │   ├── sistemas_planos.py     Lineal plano, no lineal plano, ciclo límite
 │   ├── analisis_estabilidad.py Equilibrios exactos, linealización, regímenes
 │   ├── analisis_bifurcaciones.py Bifurcación 1D, línea de fase, Hopf, homoclínica
-│   ├── analisis_caos.py       Mapas 1D: Lyapunov y horizonte de predictibilidad
+│   ├── analisis_caos.py       Mapas 1D: Lyapunov y horizonte, duplicación de periodo, Feigenbaum
+│   ├── caos_en_flujos.py      Disipatividad y elipsoide atrapante, teorema del espectro
+│   ├── atractores_fractales.py Dimensión fractal, herradura, Hénon, Poincaré, Kaplan-Yorke
+│   ├── espectro_lyapunov.py   Espectro de Lyapunov de flujos y mapas (método QR)
 │   ├── muestreo.py            Curvas, órbitas y campos para figuras y evidencia numérica
 │   ├── expresiones.py         Texto → sympy, sin eval
 │   ├── modelo_edos.py         Integración (solve_ivp) y planteamiento numérico
@@ -119,7 +139,7 @@ edos-lineales-no-lineales-y-retrato-de-fase/
 │   ├── plantilla.py           Carga la plantilla e inyecta los datos
 │   └── plantillas/informe.html La plantilla (KaTeX para las fórmulas)
 ├── balotario/                 25 problemas en 5 temas + el .tex original
-└── tests/                     280 pruebas
+└── tests/                     342 pruebas
 ```
 
 ### El recorrido de una pregunta
@@ -140,7 +160,7 @@ contratos.py ──────────── valida la solicitud; ¿mapa o 
 interpretacion.py ─────── PROBLEMA → INTERPRETACIÓN (método y pedidos del enunciado)
         │
         ▼
-clasificacion.py ──────── CLASIFICACIÓN → SELECCIÓN DEL MÉTODO (o fuera de alcance)
+clasificacion.py ──────── CLASIFICACIÓN → SELECCIÓN DEL MÉTODO (o fuera del proyecto)
         │
         ▼
 familia del balotario ─── DESARROLLO + CÁLCULO SIMBÓLICO + ANÁLISIS + validaciones
@@ -184,10 +204,11 @@ debe, rehacer el cálculo.
 | --- | --- |
 | `resolver_graficar_y_analizar_edo` | Resolver, hallar la solución general, graficar o analizar; con condición inicial además integra y contrasta |
 | `analizar_equilibrios` | Equilibrios, estabilidad o una bifurcación, **sin** condición inicial; con `parametro` declarado, una sola llamada estudia la bifurcación entera |
-| `listar_balotario` | Los 25 problemas del grupo, con su ecuación, su alcance y las revisiones |
+| `resolver_caos_fractales_y_atractores` | Temas 4 y 5 con solo el enunciado: con o sin ecuación, o nombrando el sistema (Lorenz, Rössler, Hénon, logístico, tienda) |
+| `listar_balotario` | Los 25 problemas del grupo, con su ecuación, cómo pedirlos, su alcance y las revisiones |
 | `informe` | La dirección del informe de la conversación |
 | `nuevo_informe` | Abre uno vacío al empezar un chat |
-| `ping` | Revisión del código e inventario de familias y de lo fuera de alcance |
+| `ping` | Revisión del código, los cinco temas e inventario de familias |
 
 ## Verificación: el portón del agente
 
@@ -213,6 +234,11 @@ cumplen.
 | clasificación vs. numpy | El tipo y la estabilidad exactos frente a los autovalores numéricos |
 | ramas vs. muestreo | Las ramas de una bifurcación frente al signo de $f$ en una malla |
 | Melnikov vs. disparo, radio del ciclo, Lyapunov | Las predicciones del Tema 3 y del 4.1 frente a integraciones o iteraciones |
+| 2-ciclo iterado, $r_n$ por Newton | Los umbrales exactos de 4.2 y la estimación de 4.3 frente al mapa iterado |
+| Liouville, Gronwall | $\det\Phi_t=e^{(\nabla\cdot f)t}$ integrando la variacional; trayectorias reales contra la cota del elipsoide (4.4) |
+| $\sum\lambda_i$ vs. $\langle\nabla\cdot f\rangle$ | El espectro QR sobre la misma órbita (4.5, 5.5) |
+| Conteo de cajas, puntos periódicos | El fractal construido (5.1); los $2^n$ puntos de periodo $n$ de la herradura resueltos uno a uno (5.2) |
+| $T\circ T^{-1}$, sección delgada | El inverso de Hénon por composición (5.3); la sección cae sobre una curva y el mapa de retorno reproduce $\lambda_1$ (5.4) |
 
 Dos detalles que distinguen una verificación honesta de una que solo aparenta:
 
@@ -255,8 +281,9 @@ Cada análisis muestra, en este orden: **las gráficas** (las del desarrollo
 —solución analítica con la numérica encima, retrato de fase con nulclinas,
 variedades y separatrices, diagrama de bifurcación, plano traza-determinante,
 telaraña— antes que las numéricas), el enunciado, el desarrollo con las
-fórmulas compuestas por KaTeX, las conclusiones y la tabla de verificación. Lo
-fuera de alcance se avisa arriba.
+fórmulas compuestas por KaTeX, las conclusiones y la tabla de verificación. Una
+pregunta de matemáticas fuera de los temas se avisa arriba, con el mensaje
+ordenado por temas; una que no es de matemáticas no entra al informe.
 
 El informe enseña **la última pregunta**, no un historial: cada análisis
 reemplaza al anterior en la misma dirección. Con `EDOS_INFORME_MODO=acumula`
@@ -291,17 +318,19 @@ cambia además de forma.
 
 Módulos nuevos de esta etapa, todavía sin responsable asignado:
 `problema.py`, `clasificacion.py`, `desarrollo.py`, `primer_orden.py`,
-`segundo_orden.py`, `conservativos.py`, `sistemas_planos.py`, `muestreo.py` y
-`orquestacion/interpretacion.py`.
+`segundo_orden.py`, `conservativos.py`, `sistemas_planos.py`, `muestreo.py`,
+`sistemas_conocidos.py`, `caos_en_flujos.py`, `atractores_fractales.py`,
+`espectro_lyapunov.py` y `orquestacion/interpretacion.py`.
 
 ## Casos de demostración y pruebas
 
 El balotario es la suite de aceptación: `tests/test_balotario.py` pasa cada
 problema por el agente tal como lo pediría un cliente y lo compara con la
-solución del `.tex` (y, en 2.5 y 3.5, con la corrección documentada). Las
-pruebas de cada tema (`test_tema1.py` … `test_tema4.py`) repiten cada familia
-con ejercicios equivalentes de otros datos y comprueban los resultados
-intermedios del procedimiento.
+solución del `.tex` (y, en 2.5, 3.5, 5.3 y 5.4, con la corrección documentada).
+Los de los Temas 4 y 5 se le pasan con solo su enunciado. Las pruebas de cada
+tema (`test_tema1.py` … `test_tema5.py`) repiten cada familia con ejercicios
+equivalentes de otros datos y comprueban los resultados intermedios del
+procedimiento.
 
 | Caso | Qué se verifica |
 | --- | --- |
@@ -315,11 +344,19 @@ intermedios del procedimiento.
 | 3.4 Hopf | $\alpha=\mu$, $\omega=1$, $R=\sqrt\mu$, $T=2\pi$, $l_1=-1$ |
 | 3.5 Homoclínica | $I_1=6/5$, $I_2=36/35$, $\mu_M=-6/7$, $\mu^*\approx-0.8645$ |
 | 4.1 Mapa tienda | $\lambda=\ln2$ exacto, $n^*=34$ para $\delta_0=10^{-10}$ |
-| Lorenz | Tratamiento numérico, sensibilidad detectada; Lyapunov de flujos fuera de alcance |
+| 4.2 Mapa logístico | $x_2^*=1-1/r$, $f'(x_2^*)=2-r$, $\Delta=r^2(r-3)(r+1)$, $(f^2)'=-r^2+2r+4$, $r_1=3$, $r_2=1+\sqrt6$ |
+| 4.3 Feigenbaum | $r_\infty\approx3.57199$ frente a $3.56995$ numérico (0.057 %), $r_3\approx3.54576$ |
+| 4.4 Lorenz | $\nabla\cdot f=-(\sigma+1+b)$, $V=rx^2+\sigma y^2+\sigma(z-2r)^2$, $\dot V=-2\sigma(Q-br^2)$, $V^*=2br^2/\kappa$ |
+| 4.5 Espectro | Lorenz $\approx(0.91,0,-14.58)$ y Rössler $\approx(0.07,0,-5.39)$, $\sum\lambda_i=\langle\nabla\cdot f\rangle$ |
+| 5.1 Cantor | $N(3^{-n})=2^n$ exacto, $D_0=\ln2/\ln3$, conteo de cajas $\approx0.64$ |
+| 5.2 Herradura | $2^n$ puntos de periodo $n$ ($n\le8$), $D_0=2\ln2/\ln3$, $h_{top}=\ln2$ |
+| 5.3 Hénon | $\det DT=-b$, $T^{-1}=(y/b,\ x-1+ay^2/b^2)$, sillas en $x\approx0.6314$ y $-1.1314$ |
+| 5.4 Rössler | Sección $y=0,\ \dot y<0$, mapa de retorno unimodal (máximo en $u\approx5.78$), $e^{\lambda_3T}\sim10^{-14}$ |
+| 5.5 Kaplan-Yorke | $\sum\lambda_i=-41/3$, $k=2$, $D_L\approx2.0621$ |
 
 ```bash
 python -m pip install -r requirements.txt
-python -m unittest discover -s tests          # 280 pruebas
+python -m unittest discover -s tests          # 342 pruebas
 claude mcp add edos-grupo09 -- python mcp_server.py
 ```
 
@@ -332,7 +369,8 @@ claude mcp add edos-grupo09 -- python mcp_server.py
    analítica.
 4. El bloque de verificación completo, con lo medido y el umbral de cada prueba.
 5. El enlace al informe, donde todo lo anterior aparece dibujado y legible.
-6. Lo que se pidió y está **fuera de alcance por ahora**, dicho como tal.
+6. Lo que se pidió y está **fuera del alcance del proyecto**, dicho como tal y
+   con los temas que sí abarca.
 
 El punto 6 no es una carencia del entregable: es parte de él. Un agente que
 calla lo que no sabe hacer es menos útil que uno que lo declara, porque obliga a

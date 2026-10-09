@@ -105,11 +105,9 @@ def desarrollar_numerico(problema, motivo, fuera_de_alcance=None) -> Desarrollo:
                    tratamiento=["numerico"])
     if fuera_de_alcance:
         d.tema = fuera_de_alcance.get("tema") or d.tema
-        d.advertir(f"FUERA DE ALCANCE POR AHORA: {fuera_de_alcance['descripcion']} (problema "
-                   f"{fuera_de_alcance['problema']} del balotario, que todavía no tiene solución "
-                   "desarrollada). " + ("Solo se plantea el mapa: no se itera ni se analiza."
-                                        if problema.tipo == "mapa" else
-                                        "Solo se ofrece el tratamiento numérico del sistema."))
+        d.advertir(f"Fuera del alcance del proyecto: {fuera_de_alcance['descripcion']}. "
+                   + ("Solo se plantea el mapa: no se itera ni se analiza." if problema.tipo == "mapa" else
+                      "Solo se ofrece el tratamiento numérico del sistema."))
     seccion = d.seccion("planteamiento", "Planteamiento")
     seccion.texto(motivo)
     if problema.tipo == "mapa":

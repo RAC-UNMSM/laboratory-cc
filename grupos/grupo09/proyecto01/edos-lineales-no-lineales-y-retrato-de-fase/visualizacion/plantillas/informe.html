@@ -934,19 +934,21 @@ figure.lamina figcaption{
     return ul;
   }
 
-  // Lo que el balotario todavía no desarrolla se dice arriba, no al pie.
+  // Lo que no pertenece a los temas del proyecto se dice arriba, no al pie:
+  // el mensaje trae una línea por tema, y cada línea va en su párrafo.
   function avisoDeAlcance(entrada) {
     var avisos = ((entrada.desarrollo || {}).advertencias || []).filter(function (a) {
-      return a.indexOf("FUERA DE ALCANCE") === 0;
+      return a.indexOf("Fuera del alcance") === 0;
     });
-    var analisis = entrada.analisis || {};
-    Object.keys(analisis).forEach(function (k) {
-      if (analisis[k] && analisis[k].estado === "fuera_de_alcance") avisos.push(analisis[k].motivo || k);
-    });
+    if (entrada.etapa === "fuera_de_alcance" && entrada.error) avisos.push(entrada.error);
     if (!avisos.length) return null;
     var caja = el("div", "alcance");
-    caja.appendChild(el("strong", null, "Fuera de alcance por ahora"));
-    avisos.forEach(function (a) { caja.appendChild(el("p", null, a)); });
+    caja.appendChild(el("strong", null, "Fuera del alcance del proyecto"));
+    avisos.forEach(function (a) {
+      String(a).split("\n").forEach(function (linea) {
+        if (linea.trim()) caja.appendChild(el("p", null, linea.trim()));
+      });
+    });
     return caja;
   }
 
@@ -983,6 +985,7 @@ figure.lamina figcaption{
 
     var alcance = avisoDeAlcance(entrada);
     if (alcance) art.appendChild(alcance);
+    if (!entrada.ok && entrada.etapa === "fuera_de_alcance") return art;
 
     if (!entrada.ok) {
       var sistema = bloqueSistema(cfg);

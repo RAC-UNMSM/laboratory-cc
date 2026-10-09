@@ -24,6 +24,7 @@ JSON. Convertirlos es requisito del transporte MCP, no un adorno.
 import math
 import re
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -123,8 +124,26 @@ class Trozo(BaseModel):
         return self
 
 
+class SeccionPoincare(BaseModel):
+    """Una sección transversal {variable = valor}, recorrida en un sentido."""
+
+    variable: str
+    valor: float = 0.0
+    sentido: str = "creciente"
+
+    @field_validator("sentido")
+    @classmethod
+    def _sentido(cls, valor):
+        if valor not in ("creciente", "decreciente"):
+            raise ValueError("El sentido de la sección debe ser 'creciente' o 'decreciente'.")
+        return valor
+
+
 class _SolicitudBase(BaseModel):
-    """Lo que tienen en común las dos herramientas: el sistema y el problema."""
+    """Lo que tienen en común las herramientas: el sistema y el problema."""
+
+    #: Solo la herramienta de caos y fractales admite una pregunta sin ecuación.
+    sin_ecuaciones: ClassVar[bool] = False
 
     ecuaciones: list[str] = Field(
         ..., description="Lado derecho de x'=F(t,x). Una expresión por variable de estado.")
@@ -163,6 +182,12 @@ class _SolicitudBase(BaseModel):
         None, description="Mapa definido a trozos: [{expresion, desde, hasta}, ...].")
     separacion_inicial: float | None = Field(
         None, gt=0, description="δ₀ para el horizonte de predictibilidad de un mapa.")
+    datos: dict[str, float | list[float]] | None = Field(
+        None, description="Datos numéricos del enunciado que no son parámetros del campo: r_1, r_2, delta "
+                          "(Feigenbaum), exponentes (Kaplan-Yorke), copias y razon (fractal autosemejante), "
+                          "contraccion y expansion (herradura).")
+    seccion_poincare: SeccionPoincare | None = Field(
+        None, description="Sección de Poincaré: {variable, valor, sentido: creciente|decreciente}.")
 
     @field_validator("tipo_de_sistema")
     @classmethod
@@ -186,7 +211,7 @@ class _SolicitudBase(BaseModel):
     @model_validator(mode="after")
     def _coherencia_del_sistema(self):
         n = len(self.variables_estado)
-        if n == 0:
+        if n == 0 and not (self.sin_ecuaciones and not self.ecuaciones):
             raise ValueError("Debe declarar al menos una variable de estado.")
         if n > MAX_DIMENSION:
             raise ValueError(f"El proyecto admite sistemas de hasta {MAX_DIMENSION} variables.")
@@ -231,6 +256,8 @@ class _SolicitudBase(BaseModel):
             "pedidos": self.pedidos,
             "enunciado": self.enunciado,
             "trozos": [t.model_dump() for t in self.trozos] if self.trozos else None,
+            "datos": self.datos,
+            "seccion_poincare": self.seccion_poincare.model_dump() if self.seccion_poincare else None,
         }
 
 
@@ -326,6 +353,24 @@ class SolicitudEquilibrios(_SolicitudBase):
                              "equilibrios_aportados": self.equilibrios})
 
 
+class SolicitudTema(SolicitudEDO):
+    """Una pregunta de caos, fractales o atractores: la ecuación es opcional.
+
+    "Calcule la dimensión de caja del conjunto de Cantor" o "estime r_∞ con
+    r₁ = 3 y r₂ = 1 + √6" no tienen ecuación; "demuestre que el sistema de
+    Lorenz es disipativo" la trae en el nombre del sistema. El enunciado es lo
+    único obligatorio: de él se lee el tema, el sistema nombrado y sus datos.
+    """
+
+    sin_ecuaciones: ClassVar[bool] = True
+
+    ecuaciones: list[str] = Field(
+        default_factory=list, description="Lado derecho del sistema, si el enunciado da uno.")
+    variables_estado: list[str] = Field(
+        default_factory=list, description="Variables de estado, si hay ecuaciones.")
+    enunciado: str = Field(..., min_length=1, description="El enunciado tal como lo escribió el usuario.")
+
+
 def respuesta_error(etapa, mensaje, configuracion=None, detalles=None):
     """Resultado de un fallo. No lleva conclusiones, por diseño."""
     return serializable({
@@ -335,6 +380,25 @@ def respuesta_error(etapa, mensaje, configuracion=None, detalles=None):
         "detalles": detalles or {},
         "configuracion": configuracion or {},
         "advertencia": "No se emiten conclusiones: la etapa indicada no se superó.",
+    })
+
+
+def respuesta_fuera_de_alcance(mensaje, alcance, configuracion=None, motivo=None, no_matematico=False):
+    """Lo pedido no pertenece a los temas del proyecto: se dice, con lo que sí abarca.
+
+    No es un error del servidor ni un fallo de cálculo: `mensaje_para_el_usuario`
+    ya está redactado para transmitirlo tal cual, y `alcance` enumera los temas.
+    """
+    return serializable({
+        "ok": False,
+        "etapa": "no_es_un_problema_del_proyecto" if no_matematico else "fuera_de_alcance",
+        "error": mensaje,
+        "mensaje_para_el_usuario": mensaje,
+        "motivo": motivo,
+        "alcance": alcance,
+        "configuracion": configuracion or {},
+        "advertencia": "No se resuelve: no pertenece a ninguno de los temas del proyecto. Transmita el mensaje "
+                       "al usuario; no lo resuelva por otra vía.",
     })
 
 

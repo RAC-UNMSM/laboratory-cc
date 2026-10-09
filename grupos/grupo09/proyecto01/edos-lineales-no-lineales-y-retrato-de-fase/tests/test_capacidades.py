@@ -111,7 +111,9 @@ class FlujoCompletoTests(unittest.TestCase):
         self.assertTrue(resultado["ok"])
         analisis = resultado["analisis"]
         self.assertTrue(analisis["solucion_analitica"]["disponible"])
-        self.assertEqual(analisis["caos"]["estado"], "fuera_de_alcance")
+        # Una EDO escalar no tiene espectro de Lyapunov que calcular: se dice para qué sí lo hay.
+        self.assertFalse(analisis["caos"]["disponible"])
+        self.assertIn("flujos autónomos de 2 o 3", analisis["caos"]["nota"])
         self.assertFalse(analisis["bifurcaciones"]["disponible"])
         self.assertIn("parametro", analisis["bifurcaciones"]["nota"])
 
@@ -149,7 +151,7 @@ class DegradacionHonestaTests(unittest.TestCase):
     def test_los_alias_toleran_mayusculas_guiones_y_espacios(self):
         analisis = self._analisis(["Estabilidad", "exponente-de-lyapunov"])
         self.assertTrue(analisis["estabilidad"]["disponible"])
-        self.assertEqual(analisis["caos"]["estado"], "fuera_de_alcance")
+        self.assertIn("caos", analisis)
 
     def test_un_analisis_de_verdad_desconocido_se_rechaza_con_el_inventario(self):
         resultado = analizar_edo(_sin_visualizar(
@@ -218,14 +220,28 @@ class DegradacionHonestaTests(unittest.TestCase):
         self.assertIn("solo_primer_orden", limites)
         self.assertEqual(limites["dimension_maxima"], 3)
 
-    def test_el_inventario_separa_lo_implementado_de_lo_fuera_de_alcance(self):
+    def test_el_inventario_separa_lo_implementado_de_lo_fuera_del_proyecto(self):
         capacidades_ = describir_capacidades()
         self.assertTrue(capacidades_["resolucion"]["analitica"]["implementado"])
         self.assertTrue(capacidades_["resolucion"]["numerica"]["implementado"])
         self.assertTrue(capacidades_["analisis"]["bifurcaciones"]["implementado"])
-        self.assertEqual(capacidades_["analisis"]["caos"]["implementado"], "parcial")
-        problemas = sorted(f["problema"] for f in capacidades_["fuera_de_alcance"])
-        self.assertEqual(problemas, ["4.2", "4.3", "4.4", "4.5", "5.1", "5.2", "5.3", "5.4", "5.5"])
+        self.assertIs(capacidades_["analisis"]["caos"]["implementado"], True)
+        self.assertIs(capacidades_["analisis"]["atractores_y_fractales"]["implementado"], True)
+        self.assertEqual(len(capacidades_["alcance"]), 5)
+        self.assertIn("ecuaciones en derivadas parciales", capacidades_["fuera_del_proyecto"])
+        self.assertNotIn("fuera_de_alcance", capacidades_)
+
+    def test_el_caos_de_un_flujo_se_calcula(self):
+        """Antes era 'fuera de alcance por ahora'; ahora el espectro de un flujo 3D se calcula."""
+        resultado = analizar_edo(_sin_visualizar(LORENZ, analisis=["lyapunov"]))
+        self.assertTrue(resultado["ok"], resultado.get("error"))
+        bloque = resultado["analisis"]["caos"]
+        self.assertTrue(bloque["disponible"])
+        self.assertTrue(bloque["caotico"])
+        l1, l2, l3 = bloque["exponentes"]
+        self.assertGreater(l1, 0.8)
+        self.assertLess(abs(l2), 0.03)
+        self.assertAlmostEqual(bloque["suma"], -41 / 3, delta=0.01)
 
 
 class PortonVerificacionTests(unittest.TestCase):
@@ -251,10 +267,13 @@ class PortonVerificacionTests(unittest.TestCase):
         self.assertIn("intervalo", resultado["error"])
 
     def test_dimension_por_encima_del_limite(self):
-        self._rechaza_en("validacion_solicitud",
-                         {"ecuaciones": ["a", "b", "c", "d"],
-                          "variables_estado": ["a", "b", "c", "d"],
-                          "y0": [0.0] * 4, "intervalo": [0.0, 1.0]})
+        """Cuatro variables no es un error de la solicitud: es algo que el proyecto no abarca, y se dice."""
+        resultado = analizar_edo({"ecuaciones": ["a", "b", "c", "d"], "variables_estado": ["a", "b", "c", "d"],
+                                  "y0": [0.0] * 4, "intervalo": [0.0, 1.0]})
+        self.assertFalse(resultado["ok"])
+        self.assertEqual(resultado["etapa"], "fuera_de_alcance")
+        self.assertNotIn("desarrollo", resultado)
+        self.assertIn("hasta 3", resultado["mensaje_para_el_usuario"])
 
     def test_expresion_hostil(self):
         self._rechaza_en("compilacion",
@@ -448,7 +467,7 @@ class EquilibriosSinTrayectoriaTests(unittest.TestCase):
             {"ecuaciones": ["a", "b", "c", "d"],
              "variables_estado": ["a", "b", "c", "d"]})
         self.assertFalse(resultado["ok"])
-        self.assertEqual(resultado["etapa"], "validacion_solicitud")
+        self.assertEqual(resultado["etapa"], "fuera_de_alcance")
 
     def test_el_resultado_es_json_estricto(self):
         resultado = analizar_equilibrios_sistema(

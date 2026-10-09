@@ -96,7 +96,7 @@ def nombre_derivada(base: sp.Symbol, orden: int, independiente: sp.Symbol) -> sp
 class Problema:
     """Un problema ya interpretado. Lo consumen la clasificación y las familias."""
 
-    tipo: str                                   # "edo" o "mapa"
+    tipo: str                                   # "edo", "mapa" o "teorico" (sin ecuación)
     x: sp.Symbol                                # variable independiente
     estados: list                               # símbolos del estado
     campo: list                                 # F, con los parámetros numéricos sustituidos
@@ -114,6 +114,17 @@ class Problema:
     trozos: list | None = None                  # mapas: [(expresion, desde, hasta)]
     separacion_inicial: float | None = None
     textos: list = field(default_factory=list)  # las ecuaciones tal como llegaron
+    #: Datos numéricos del enunciado que no son parámetros del campo: r₁, r₂ y δ
+    #: de Feigenbaum, los exponentes de Kaplan-Yorke, las copias y la razón de un
+    #: fractal autosemejante.
+    datos: dict = field(default_factory=dict)
+    #: Sección de Poincaré: {"variable", "valor", "sentido"}.
+    seccion: dict | None = None
+    #: El campo con TODOS los parámetros como símbolos (positivos si su valor
+    #: lo es): el 4.4 demuestra la disipatividad para σ, r, b > 0 genéricos y
+    #: solo al final sustituye los valores canónicos.
+    campo_simbolico: list = field(default_factory=list)
+    simbolos_parametros: dict = field(default_factory=dict)   # nombre -> Symbol
 
     # -- forma ----------------------------------------------------------------
 
@@ -171,6 +182,11 @@ class Problema:
             return float(superior) - 1.0
         return 1.0
 
+    def valores_simbolicos(self) -> dict:
+        """Símbolo de `campo_simbolico` → valor exacto, para sustituir al final."""
+        return {simbolo: exacto(self.parametros[nombre]) for nombre, simbolo in self.simbolos_parametros.items()
+                if nombre in self.parametros and simbolo != self.parametro}
+
     def campo_con(self, valor=None) -> list:
         """El campo con el parámetro simbólico fijado en `valor` (o el representativo)."""
         if self.parametro is None:
@@ -216,12 +232,21 @@ def construir_problema(*, ecuaciones, variables_estado, variable_independiente="
                        y0=None, intervalo=None, region=None, pedidos=(),
                        metodo=None, solucion_particular=None, enunciado=None,
                        tipo_de_sistema="edo_continua", trozos=None,
-                       separacion_inicial=None) -> Problema:
+                       separacion_inicial=None, datos=None, seccion=None) -> Problema:
     """Interpreta una solicitud ya validada por `orquestacion.contratos`.
+
+    Sin ecuaciones el problema es "teórico" (la dimensión del conjunto de
+    Cantor, la herradura de Smale, una estimación con datos): no hay campo y las
+    familias trabajan con el enunciado y `datos`.
 
     Levanta `ExpresionInvalida` si una expresión no se puede aceptar.
     """
     parametros = {str(k): float(v) for k, v in (parametros or {}).items()}
+    if not ecuaciones and not trozos:
+        x = simbolos([variable_independiente], real=True)[variable_independiente]
+        return Problema(tipo="teorico", x=x, estados=[], campo=[], parametros=parametros,
+                        pedidos=set(pedidos or ()), metodo_pedido=metodo, enunciado=enunciado,
+                        datos=dict(datos or {}), seccion=seccion)
     if len(variables_estado) > MAX_DIMENSION:
         raise ExpresionInvalida(f"El proyecto admite sistemas de hasta {MAX_DIMENSION} variables.")
 
@@ -264,6 +289,20 @@ def construir_problema(*, ecuaciones, variables_estado, variable_independiente="
     else:
         campo = [racionalizar(parsear(texto, todos).subs(sustitucion)) for texto in ecuaciones]
 
+    # El mismo campo con los parámetros como símbolos: positivos si su valor lo
+    # es, que es lo que permite a sympy decidir el signo de −2σr o de −(σ+1+b).
+    simbolicos = {}
+    for nombre in nombres_parametros:
+        if nombre == parametro:
+            simbolicos[nombre] = simbolos_parametros[nombre]
+        elif parametros.get(nombre, 0) > 0:
+            simbolicos[nombre] = sp.Symbol(nombre, positive=True)
+        else:
+            simbolicos[nombre] = sp.Symbol(nombre, real=True)
+    cambio = {simbolos_parametros[n]: simbolicos[n] for n in nombres_parametros}
+    campo_simbolico = ([racionalizar(parsear(texto, todos)).xreplace(cambio) for texto in ecuaciones]
+                       if not trozos else list(campo))
+
     particular = None
     if solucion_particular:
         particular = racionalizar(parsear(solucion_particular, todos).subs(sustitucion))
@@ -287,4 +326,6 @@ def construir_problema(*, ecuaciones, variables_estado, variable_independiente="
         ci=ci, intervalo=tuple(float(v) for v in intervalo) if intervalo else None,
         region=limites, pedidos=set(pedidos or ()), metodo_pedido=metodo,
         solucion_particular=particular, enunciado=enunciado, trozos=piezas,
-        separacion_inicial=separacion_inicial, textos=list(ecuaciones or []))
+        separacion_inicial=separacion_inicial, textos=list(ecuaciones or []),
+        datos=dict(datos or {}), seccion=seccion, campo_simbolico=campo_simbolico,
+        simbolos_parametros=simbolicos)

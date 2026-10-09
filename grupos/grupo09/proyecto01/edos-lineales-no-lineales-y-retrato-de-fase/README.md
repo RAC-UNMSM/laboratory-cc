@@ -1,8 +1,8 @@
 # Agente de EDOs y sistemas dinámicos — Grupo 09
 
 Servidor MCP local que resuelve problemas de ecuaciones diferenciales
-ordinarias (1 a 3 variables) y de mapas unidimensionales **con el desarrollo
-matemático del balotario del grupo**. Claude interpreta el pedido del usuario y
+ordinarias (1 a 3 variables), de mapas iterados (1 y 2 variables) y de caos y
+geometría fractal **con el desarrollo matemático del balotario del grupo**. Claude interpreta el pedido del usuario y
 llama a las herramientas; el servidor clasifica el problema, elige el método
 que le corresponde, lo **ejecuta** con cálculo simbólico (sympy) y numérico
 (scipy), lo **verifica** y lo dibuja; Claude presenta ese desarrollo sin
@@ -17,8 +17,10 @@ PROBLEMA → INTERPRETACIÓN → CLASIFICACIÓN → SELECCIÓN DEL MÉTODO → D
 
 El balotario (`balotario/balotario.tex`, 25 problemas en 5 temas) es la
 especificación: define qué familias se resuelven, con qué procedimiento, y sus
-ejercicios son la suite de aceptación. Lo que el balotario todavía no resuelve
-queda **FUERA DE ALCANCE POR AHORA** y el agente lo dice en vez de improvisar.
+ejercicios son la suite de aceptación. El agente resuelve los 25. Lo que no
+pertenece a ninguno de los cinco temas (una ecuación en derivadas parciales,
+una pregunta que no es de matemáticas) queda **fuera del alcance del proyecto**
+y el agente lo dice con un mensaje ordenado por temas, en vez de improvisar.
 
 ## Instalación
 
@@ -49,7 +51,10 @@ claude mcp list
 Luego, dentro de Claude Code, basta pedir en lenguaje natural: *"resuelve la
 ecuación de Bernoulli y' + y = y³ con y(0) = 1"* o *"clasifica el equilibrio
 del oscilador ẍ + γẋ + 4x = 0 según γ ≥ 0"*. Claude traducirá el pedido a una
-llamada de `resolver_graficar_y_analizar_edo` o de `analizar_equilibrios`.
+llamada de `resolver_graficar_y_analizar_edo` o de `analizar_equilibrios`. Para
+los Temas 4 y 5 basta pegar el enunciado: *"Para el mapa de Hénon con a = 1.4 y
+b = 0.3, calcule el determinante jacobiano y el inverso"* va a
+`resolver_caos_fractales_y_atractores`, que ya conoce las ecuaciones de Hénon.
 
 ## Registrar en Claude Desktop (la app de escritorio)
 
@@ -105,11 +110,12 @@ diagnosticar un problema de protocolo.
 
 | Herramienta | Qué hace | Cuándo |
 | --- | --- | --- |
-| `ping` | Conexión, revisión del código e inventario de familias y de lo fuera de alcance | Antes de un análisis largo |
+| `ping` | Conexión, revisión del código, los cinco temas e inventario de familias | Antes de un análisis largo |
 | `nuevo_informe` / `informe` | Abre un informe vacío / devuelve su enlace | Al empezar un chat / cuando el usuario lo pida |
 | `resolver_graficar_y_analizar_edo` | El recorrido completo: desarrollo, trayectoria si hay condición inicial, verificación y figuras | Resolver, hallar la solución general, graficar o analizar |
 | `analizar_equilibrios` | Equilibrios, estabilidad o una bifurcación, con su desarrollo, **sin integrar** | La pregunta es de equilibrios o de un parámetro y no hay condición inicial |
-| `listar_balotario` | Los problemas del balotario con su ecuación lista y su alcance | Para usarlo como vara de nivel |
+| `resolver_caos_fractales_y_atractores` | Temas 4 y 5 con solo el enunciado: si no trae ecuación (Cantor, herradura, Feigenbaum, el teorema del espectro) o si nombra el sistema (Lorenz, Rössler, Hénon, logístico, tienda) | Caos, fractales, atractores extraños |
+| `listar_balotario` | Los problemas del balotario con su ecuación lista, cómo pedirlos y su alcance | Para usarlo como vara de nivel |
 
 El nombre largo de `resolver_graficar_y_analizar_edo` es a propósito. En Claude
 Desktop las herramientas del conector llegan diferidas: el modelo elige mirando
@@ -161,6 +167,17 @@ ecuaciones=["x"], variables_estado=["x"], tipo_de_sistema="mapa_discreto",
 trozos=[{"expresion": "2*x", "desde": 0, "hasta": 0.5},
         {"expresion": "2*(1 - x)", "desde": 0.5, "hasta": 1}],
 separacion_inicial=1e-10
+
+# 4.2 — mapa logístico con r simbólico (o solo el enunciado, que nombra el mapa)
+ecuaciones=["r*x*(1 - x)"], variables_estado=["x"], tipo_de_sistema="mapa_discreto",
+parametro="r", rango_parametro=[0, 4], region={"x": [0, 1]}
+
+# 4.3 — sin ecuación: los datos del enunciado (resolver_caos_fractales_y_atractores)
+enunciado="... estime r_∞ ...", datos={"r_1": 3, "r_2": 3.449489742783178, "delta": 4.6692016}
+
+# 5.4 — Rössler: basta el enunciado; la sección también se puede dar explícita
+enunciado="El sistema de Rössler ... sección de Poincaré y = 0, ẏ > 0",
+seccion_poincare={"variable": "y", "valor": 0, "sentido": "creciente"}
 ```
 
 Campos que deciden el desarrollo, todos opcionales:
@@ -174,6 +191,8 @@ Campos que deciden el desarrollo, todos opcionales:
 | `region` | Cotas de las variables (el cuadrante biológico del 2.3) |
 | `solucion_particular` | La y₁ conocida de una Riccati (si falta, se busca una polinómica) |
 | `trozos`, `separacion_inicial` | Mapa a trozos y δ₀ del horizonte de predictibilidad |
+| `datos` | Números que no son parámetros del sistema: `r_1`, `r_2`, `delta` (Feigenbaum), `exponentes` (Kaplan-Yorke), `copias` y `razon` (fractal), `contraccion` y `expansion` (herradura). Si faltan, se leen del enunciado |
+| `seccion_poincare` | `{variable, valor, sentido}` de la sección de Poincaré. Si falta, se lee del enunciado ("y = 0, ẏ > 0") |
 
 Se usa `**` para la potencia (nunca `^`). Funciones disponibles: `sin`, `cos`,
 `tan`, `exp`, `log`/`ln`, `sqrt`, `sinh`, `cosh`, `tanh`, las inversas, `Abs`,
@@ -204,27 +223,59 @@ soluciones particulares del balotario escritas en el código.
 | 3 | Hopf | 3.4 | λ(μ) = α ± iω, condición espectral, transversalidad, forma polar, primer coeficiente de Lyapunov |
 | 3 | Homoclínica | 3.5 | Hamiltoniano no perturbado, lazo, integral de Melnikov, disparo numérico, divergencia del periodo |
 | 4 | Mapa unidimensional | 4.1 | Derivada a trozos, puntos fijos y multiplicadores, exponente de Lyapunov, horizonte n* |
+| 4 | Duplicación de periodo | 4.2 | Puntos fijos y su existencia según r, multiplicadores, f²(x) − x factorizado por f(x) − x, discriminante, multiplicador del 2-ciclo por Vieta, r₁ y r₂ |
+| 4 | Feigenbaum | 4.3 | Ley de convergencia geométrica, suma de la serie de razón 1/δ, r_∞ y r₃ estimados frente a los rₙ numéricos (Newton sobre f^p(x) = x, (f^p)' = −1) |
+| 4 | Disipatividad | 4.4 | ∇·f, Liouville V(t) = V(0)e^{(∇·f)t}, búsqueda de V = Σaᵢ(xᵢ − cᵢ)² con V̇ = −k(Q − K), acotación Q ≥ κV − D, Gronwall y elipsoide atrapante |
+| 4 | Espectro de Lyapunov | 4.5 | Demostración (+, 0, −): f(x(t)) resuelve la variacional, Liouville, ubicación del cero; contraste con el espectro por el método QR |
+| 5 | Dimensión fractal | 5.1 | Conteo exacto N(sⁿ) = Nⁿ, cotas y límite, autosemejanza N·s^D = 1, medida, conteo de cajas sobre el conjunto construido |
+| 5 | Herradura de Smale | 5.2 | Modelo lineal, Λ ≅ Cantor × Cantor y su dimensión, conjugación con el desplazamiento, los 2ⁿ puntos de periodo n resueltos uno por uno |
+| 5 | Mapa del plano | 5.3 | Jacobiana, determinante, contracción de áreas, despeje del inverso y su comprobación por composición, descomposición en tres pasos, puntos fijos, exponentes |
+| 5 | Sección de Poincaré | 5.4 | Divergencia y equilibrios, sección y su sentido, cruces por detección de eventos, contracción e^{λ₃T}, mapa de retorno unimodal y su exponente |
+| 5 | Kaplan-Yorke | 5.5 | Σλᵢ frente a ⟨∇·f⟩, sumas parciales, k, D_L, contraste con el espectro calculado |
 
 Un problema que no pertenece a ninguna familia se trata numéricamente, y el
 desarrollo lo dice: planteamiento, equilibrios y su linealización si el
 sistema es autónomo, e integración con control de error.
 
-### FUERA DE ALCANCE POR AHORA
+Para los Temas 4 y 5 el servidor conoce por su nombre los sistemas del
+balotario (`matematica/sistemas_conocidos.py`): Lorenz, Rössler, Hénon, el
+mapa logístico y el mapa tienda. Si el enunciado los nombra, se usan sus
+ecuaciones con los valores que el enunciado escribe ("a = b = 0.2 y c = 5.7"),
+y se leen los datos que no son parámetros (r₁, r₂, δ, los exponentes λᵢ, la
+sección "y = 0, ẏ > 0"). La respuesta dice qué se leyó en
+`interpretacion.sistema_reconocido` y `interpretacion.datos`.
 
-Los problemas 4.2 a 4.5 y todo el Tema 5 están en el balotario solo con su
-enunciado. El agente los reconoce (por el enunciado o por la forma) y responde
-que están fuera de alcance, sin sustituirlos por otra cosa:
+### Lo que queda fuera del proyecto
 
-| Problema | Tema |
+Cuatro respuestas distintas, según qué llegue:
+
+| Llega | Respuesta |
 | --- | --- |
-| 4.2 | Duplicación de periodo del mapa logístico (y en general mapas con parámetro) |
-| 4.3 | Cascada de Feigenbaum |
-| 4.4 | Disipatividad y elipsoide atrapante de Lorenz |
-| 4.5 | Espectro de Lyapunov de un flujo |
-| 5.1 – 5.5 | Dimensión de caja, herradura de Smale, mapa de Hénon, secciones de Poincaré, Kaplan-Yorke |
+| Algo de matemáticas que no está en ningún tema: EDP, ecuaciones estocásticas, con retardo o integrales, series de Fourier, sistemas de más de 3 variables, mapas de 3 variables | `etapa: fuera_de_alcance` con `mensaje_para_el_usuario`: el motivo y, tema por tema, lo que el proyecto abarca |
+| Algo que no es de matemáticas ("¿dónde queda el baño?") | `etapa: no_es_un_problema_del_proyecto`, con el mismo listado de temas. Las instrucciones del servidor le piden a Claude que ni siquiera llame a una herramienta |
+| Un dato imposible (r₂ ≤ r₁, una razón de semejanza fuera de (0, 1), μ ≤ 2 en la herradura) | `etapa: datos`: qué valor está mal y qué rango se esperaba, para pedirle al usuario el correcto |
+| Un método que existe pero que el balotario no trabaja (transformada de Laplace, Frobenius) | Se resuelve con el método del balotario que corresponde a la forma de la ecuación, y el desarrollo lo dice en su primera sección |
 
-Si el sistema es integrable (Lorenz, Rössler) se ofrece solo su tratamiento
-numérico, dicho como tal.
+Un ejemplo del mensaje:
+
+```
+Problema fuera del alcance de los temas trabajados: el enunciado trata de ecuaciones en
+derivadas parciales, que no forman parte de los cinco temas. Queda fuera de las limitaciones
+del proyecto, así que no se resuelve.
+El proyecto abarca:
+  • Tema 1 — EDOs lineales y no lineales: separables (con intervalo maximal), lineales, ...
+  • Tema 2 — Retratos de fase y análisis cualitativo en el plano: ...
+  • Tema 3 — Teoría de bifurcaciones: silla-nodo, transcrítica, horquilla, Hopf y homoclínica.
+  • Tema 4 — Sistemas dinámicos caóticos: ...
+  • Tema 5 — Atractores extraños y geometría fractal: ...
+Si su pregunta encaja en uno de estos temas, reformúlela con la ecuación o los datos del problema.
+```
+
+Las dos capas se cuidan por separado. Claude es quien recibe el lenguaje natural
+y quien decide no llamar a una herramienta ante una charla; el servidor no
+puede confiar en eso, porque cualquier cliente MCP puede mandarle cualquier
+cosa, así que valida todo lo que llega y nunca levanta una excepción hacia el
+cliente: cada fallo viaja como una respuesta con su `etapa`.
 
 ### Mapas discretos: el agente pregunta en vez de adivinar
 
@@ -239,7 +290,7 @@ Quien sí lo sabe es el usuario. Por eso la distinción es un campo del contrato
 | Valor | Qué hace el servidor |
 | --- | --- |
 | `edo_continua` (por defecto) | Lo trata como ecuación diferencial |
-| `mapa_discreto` | Un mapa de una variable sin parámetro simbólico: procedimiento del 4.1. Uno de dos variables o con parámetro: fuera de alcance |
+| `mapa_discreto` | Lo itera como mapa: el 4.1 si es de una variable, el 4.2 (o el 4.3 si se pregunta por Feigenbaum) si tiene un parámetro simbólico, el 5.3 si es del plano |
 | `no_estoy_seguro` | Devuelve `etapa: aclaracion_necesaria` con la pregunta para el usuario y las dos opciones con sus consecuencias, **sin calcular nada** |
 
 Además hay una heurística de notación: si la variable independiente es un
@@ -254,8 +305,9 @@ sistema continuo y no disparan nada.
 Toda respuesta trae un bloque `verificacion`. Si una comprobación concluyente no
 se supera, el resultado llega con `ok: false`, la `etapa` que falló y **sin
 conclusiones** ni desarrollo que interpretar. Las etapas posibles son
-`validacion_solicitud`, `compilacion`, `interpretacion`, `resolucion` y
-`verificacion`.
+`validacion_solicitud`, `compilacion`, `interpretacion`, `datos`, `resolucion`
+y `verificacion`, más `fuera_de_alcance` y `no_es_un_problema_del_proyecto`,
+que no son fallos sino respuestas.
 
 Hay dos clases de comprobaciones y las dos entran al mismo veredicto:
 
@@ -281,6 +333,11 @@ contrastan:
 | `ramas_contra_muestreo_numerico` | Las ramas de una bifurcación frente al signo de f en una malla. |
 | `linea_de_fase_coherente` | La estabilidad por f'(x*) frente al signo de f a cada lado. |
 | `melnikov_vs_disparo`, `radio_del_ciclo_numerico`, `lyapunov_numerico`… | Las predicciones analíticas de Tema 3 y 4.1 frente a integraciones o iteraciones. |
+| `orbita_periodo_2_iterada`, `umbrales_numericos`, `razones_tienden_a_delta` | La órbita de periodo 2 y los r₁, r₂ exactos frente al mapa iterado; los rₙ resueltos por Newton. |
+| `liouville_numerico`, `cota_de_gronwall`, `terminan_en_el_elipsoide` | det Φₜ = e^{(∇·f)t} integrando la variacional; trayectorias reales contra la cota del elipsoide. |
+| `suma_igual_divergencia`, `exponente_nulo` | El espectro QR: Σλᵢ frente a ⟨∇·f⟩ sobre la misma órbita y el cero de la dirección del flujo. |
+| `conteo_exacto`, `dimension_por_conteo`, `puntos_de_periodo_n` | Cajas contadas sobre el fractal construido; los 2ⁿ puntos periódicos de la herradura resueltos uno a uno. |
+| `inverso_por_*`, `seccion_delgada`, `unimodal`, `lyapunov_por_el_mapa` | T∘T⁻¹ = id; la sección cae sobre una curva y el mapa de retorno reproduce λ₁ del flujo. |
 
 **Sistemas caóticos.** Dos integraciones correctas de un sistema sensible
 *tienen* que separarse a tiempo largo. Por eso el veredicto de convergencia se
@@ -295,7 +352,7 @@ integrador, así que la prueba lo descuenta antes de denunciar nada.
 ## Organización
 
 ```
-mcp_server.py                  Servidor MCP (stdio): las seis herramientas
+mcp_server.py                  Servidor MCP (stdio): las siete herramientas
 orquestacion/
   capacidades.py               El recorrido completo, etapa por etapa (no calcula: ordena)
   interpretacion.py            Solicitud → Problema; lee del enunciado el método y lo pedido
@@ -304,7 +361,8 @@ orquestacion/
   informe.py, servidor_local.py   El informe de la sesión y su servidor http local
 matematica/
   problema.py                  El problema interpretado (campo exacto, parámetro, CI, región…)
-  clasificacion.py             Familias, selección del método, alcance (lo fuera de alcance)
+  clasificacion.py             Familias, selección del método, los cinco temas y lo que queda fuera
+  sistemas_conocidos.py        Lorenz, Rössler, Hénon, logístico, tienda; datos leídos del enunciado
   desarrollo.py                Representación estructurada del desarrollo (secciones, resultados…)
   primer_orden.py              Separable, lineal, Bernoulli, Riccati (Tema 1)
   segundo_orden.py             Cauchy-Euler (1.3)
@@ -312,7 +370,10 @@ matematica/
   sistemas_planos.py           Lineal plano, no lineal plano, ciclo límite (Tema 2)
   analisis_estabilidad.py      Equilibrios exactos, linealización, clasificación, regímenes
   analisis_bifurcaciones.py    Bifurcación 1D, línea de fase, Hopf, homoclínica (Tema 3)
-  analisis_caos.py             Mapas unidimensionales: Lyapunov y horizonte (4.1)
+  analisis_caos.py             Mapas unidimensionales: Lyapunov y horizonte, duplicación de periodo, Feigenbaum (4.1–4.3)
+  caos_en_flujos.py            Disipatividad y elipsoide atrapante, teorema del espectro (4.4, 4.5)
+  atractores_fractales.py      Dimensión fractal, herradura, mapas del plano, Poincaré, Kaplan-Yorke (Tema 5)
+  espectro_lyapunov.py         Espectro de Lyapunov de flujos y mapas por el método QR
   muestreo.py                  Curvas, órbitas y campos muestreados para figuras y evidencia
   expresiones.py               Texto → sympy (frontera de seguridad)
   modelo_edos.py               Integración con solve_ivp y planteamiento del tratamiento numérico
@@ -323,7 +384,7 @@ visualizacion/
 balotario/
   balotario.tex                Problemario original del grupo (25 problemas, 5 temas)
   tema_01.json .. tema_05.json Los 25 problemas convertidos
-tests/                         280 pruebas
+tests/                         342 pruebas
 ```
 
 `capacidades` es quien ordena el recorrido y el único módulo que conoce a
@@ -344,7 +405,7 @@ uno (no su nombre) y se clasificó así:
 | `modelo_edos.py` | B. Funcional pero incompleto | Se conserva la integración; el stub `resolver_analitico` se reemplazó por las familias, y el tratamiento numérico ahora hace su planteamiento |
 | `analisis_estabilidad.py` | C. Provisional | Jacobiano por diferencias finitas y solo "estable / inestable / no concluyente". Se reescribió: todo exacto, clasificación fina por τ, Δ, D, equilibrios por casos de factores y regímenes según un parámetro |
 | `analisis_bifurcaciones.py` | C. Provisional (stub) | Se implementó el Tema 3 completo |
-| `analisis_caos.py` | C (stub) y F | Se implementó solo el 4.1; el resto del Tema 4 y el Tema 5 quedan fuera de alcance, declarados en `clasificacion.py` |
+| `analisis_caos.py` | C (stub) y F | Se implementó el 4.1 y, cuando el `.tex` tuvo su solución, el 4.2 y el 4.3; el 4.4, el 4.5 y el Tema 5 viven en módulos propios (`caos_en_flujos.py`, `atractores_fractales.py`, `espectro_lyapunov.py`) |
 | `datos_validacion.py` | D. Redundante | Una función que solo usaba el integrador y repetía la validación de `contratos`: se fusionó en `modelo_edos.py` |
 | `buscar_equilibrios`, `es_autonomo` (en `orquestacion/capacidades.py`) | E. Mal ubicados | Era matemática dentro de la orquestación: se movieron a `analisis_estabilidad.py` |
 
@@ -357,8 +418,9 @@ tool. Lo que sí funciona es un enlace.
 `orquestacion/informe.py` mantiene un documento por conversación. Cada análisis
 muestra **primero las gráficas** (las del desarrollo antes que las numéricas),
 después el enunciado y el desarrollo completo con las fórmulas compuestas por
-KaTeX, las conclusiones y la tabla de verificación. Lo fuera de alcance se avisa
-arriba. El documento se reescribe sobre la **misma** dirección: el usuario abre
+KaTeX, las conclusiones y la tabla de verificación. Una pregunta de matemáticas
+fuera de los temas se avisa arriba, con el mensaje ordenado por temas; una
+pregunta que no es de matemáticas no entra al informe. El documento se reescribe sobre la **misma** dirección: el usuario abre
 el enlace una vez y la página se actualiza sola.
 
 **Una sesión no es un proceso.** El cliente MCP levanta este servidor una vez y
@@ -437,9 +499,10 @@ python -m unittest discover -s tests -v
 | `test_tema1.py` | Separable, lineal, Bernoulli, Riccati, Cauchy-Euler y péndulo: el ejercicio del balotario y equivalentes con otros datos, con sus resultados intermedios. |
 | `test_tema2.py` | Sistemas lineales (silla, foco, centro, regímenes según γ), no lineales, hamiltonianos y ciclos límite. |
 | `test_tema3.py` | Silla-nodo, transcrítica, horquillas con histéresis, Hopf super y subcrítica, homoclínica y línea de fase. |
-| `test_tema4.py` | El 4.1 y mapas equivalentes; lo fuera de alcance (4.2–4.5, Tema 5). |
-| `test_clasificacion.py` | Lectura del enunciado, selección y rechazo del método, alcance. |
-| `test_balotario.py` | Integridad del catálogo y que el agente reproduce cada problema del balotario (y corrige 2.5 y 3.5). |
+| `test_tema4.py` | 4.1 a 4.5 con los datos del balotario y con otros (mapa cúbico, Lorenz con otros parámetros, Rössler sin elipsoide, un ciclo límite que no es caótico); datos imposibles; lo que queda fuera del proyecto. |
+| `test_tema5.py` | 5.1 a 5.5: Cantor, Sierpinski, Koch y conjuntos dados por N y s; otra herradura; Hénon con otros parámetros, un mapa que conserva área y uno no invertible; las dos mitades de la sección de Rössler; Kaplan-Yorke con casos límite. |
+| `test_clasificacion.py` | Lectura del enunciado, selección y rechazo del método, cada tema a su familia, lo que queda fuera y el mensaje de alcance. |
+| `test_balotario.py` | Integridad del catálogo y que el agente reproduce cada problema del balotario solo con su enunciado (y corrige 2.5, 3.5, 5.3 y 5.4). |
 | `test_capacidades.py` | El recorrido completo, el portón, la degradación honesta y la serialización JSON. |
 | `test_mcp_server.py` | Registro y esquema de las herramientas, llamada por el protocolo y limpieza de stdout. |
 | `test_informe.py` | El informe: desarrollo con fórmulas, gráficas primero, dirección estable, sesión. |
@@ -462,14 +525,15 @@ Los 25 problemas de los 5 temas están en `balotario/tema_0N.json`:
 | 1. EDOs lineales y no lineales | 5 | 5 | EDO de 1.er y 2.º orden |
 | 2. Retratos de fase | 5 | 5 | Sistemas autónomos 2D |
 | 3. Bifurcaciones | 5 | 5 | Familias paramétricas |
-| 4. Sistemas caóticos | 5 | 1 (4.1) | Mapas discretos y demostraciones |
-| 5. Atractores extraños | 5 | 0 | Fractales, mapas 2D, Poincaré |
+| 4. Sistemas caóticos | 5 | 5 | Mapas discretos, estimaciones y demostraciones |
+| 5. Atractores extraños | 5 | 5 | Fractales, mapas 2D, Poincaré, Kaplan-Yorke |
 
-Los 9 restantes (4.2 a 4.5 y 5.1 a 5.5) **no tienen solución en el `.tex`**:
-solo enunciado. Se registran con `solucion_esperada.tipo: "pendiente"`; no se
-inventaron respuestas. `listar_balotario` informa el alcance de cada problema.
+Los problemas 4.2 a 5.5 se completaron en el `.tex` después del resto; cada
+uno lleva en su JSON la solución que el agente reproduce y, en `solicitud`, cómo
+se pide (para casi todos basta el enunciado). `listar_balotario` informa el
+alcance de cada problema.
 
-**Dos problemas del balotario tienen errores**, documentados en el campo
+**Cuatro problemas del balotario tienen errores**, documentados en el campo
 `revision_matematica` de su JSON (el `.tex` no se modificó):
 
 - **2.5.** El anillo K = {1/2 ≤ r ≤ 2} contiene el equilibrio (1, 0) — en
@@ -482,25 +546,36 @@ inventaron respuestas. `listar_balotario` informa el alcance de cada problema.
   real de la conexión (disparo numérico) es μ* ≈ −0.8645, y el ciclo límite
   existe para −1 < μ < μ* (nace en el Hopf supercrítico de μ = −1), no "al
   cruzar μc".
+- **5.3.** El segundo punto fijo de Hénon es x₋ = (−0.7 − √6.09)/2.8 ≈ −1.1314,
+  no −1.1135 (dos cifras transpuestas). La conclusión no cambia: los dos son
+  sillas.
+- **5.4.** Sobre y = 0 es ẏ = x, así que la mitad ẏ > 0 que elige el `.tex` es
+  x > 0, justo donde ocurre la excursión: allí los cruces tienen z entre 0.08 y
+  18 y x_{n+1} no es función de x_n. La reducción a un mapa unimodal (máximo en
+  u = −x ≈ 5.78, ⟨ln|g'|⟩/T ≈ λ₁ ≈ 0.07) funciona en la otra mitad, ẏ < 0. El
+  agente prueba la mitad pedida, lo detecta, lo dice y usa la otra.
 
 Además se corrigió en el JSON un valor transcrito mal (3.3B, μ = 0.5: el
 equilibrio es ±√((1+√3)/2) = ±1.16877089, no ±1.16877082).
 
-## Estado y pendientes
+## Estado y límites
 
-Implementado: las 14 familias de la tabla, con su desarrollo, validaciones
-simbólicas y numéricas y figuras; el tratamiento numérico verificado para lo
-que no tiene familia; la detección de lo fuera de alcance; el informe con el
+Implementado: las 23 familias de la tabla, que cubren los 25 problemas del
+balotario, con su desarrollo, validaciones simbólicas y numéricas y figuras; el
+tratamiento numérico verificado para lo que no tiene familia; el mensaje
+ordenado por temas para lo que queda fuera del proyecto; el informe con el
 desarrollo compuesto; el servidor MCP sobre stdio y su contenedor.
 
-Pendiente, a la espera de que el balotario lo desarrolle:
-
-- Los problemas 4.2 a 4.5 (duplicación de periodo, Feigenbaum, disipatividad,
-  espectro de Lyapunov de flujos) y todo el Tema 5. Cuando el `.tex` tenga su
-  solución, cada uno será una familia nueva en `clasificacion.FAMILIAS` y sus
-  ejercicios, su prueba de aceptación.
-
 Límites conocidos de lo implementado:
+
+- La región atrapante (4.4) se demuestra con funciones cuadráticas diagonales
+  V = Σaᵢ(xᵢ − cᵢ)²: sirve para Lorenz y sistemas parecidos; para Rössler no
+  existe una así, y el desarrollo lo dice.
+- El exponente λ₁ ≈ 0.07 de Rössler converge despacio: según la órbita sale
+  entre 0.066 y 0.079 con 1500 unidades de tiempo. Las validaciones usan
+  tolerancias de ese tamaño.
+- El 4.2 da r₂ en forma cerrada cuando f²(x) − x deja un factor cuadrático
+  (mapas cuadráticos como el logístico); para otros mapas da r₁ exacto y lo dice.
 
 - La línea de fase con infinitos equilibrios (sen x) estudia los de una ventana
   y no informa las cuencas que tocan su borde.
