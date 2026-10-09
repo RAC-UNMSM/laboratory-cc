@@ -1056,8 +1056,35 @@ def revisar_dockerfile(app: Path, repo: Path, rep: Reporte, codigo: Codigo, dato
     arranque = [l for l in lineas if l.upper().startswith(("CMD", "ENTRYPOINT"))]
     if not arranque:
         rep.error("El Dockerfile no tiene `CMD`: el contenedor no sabe qué ejecutar. Usa `CMD [\"python\", \"server.py\"]`.")
-    elif "server.py" not in arranque[-1] and server.is_file():
-        rep.aviso(f"El `CMD` no arranca `server.py`: `{arranque[-1]}`.")
+    else:
+        # El CMD manda: si no es `python server.py`, el bloque `__main__` de
+        # server.py (con su mcp.run) puede no ejecutarse nunca.
+        cuerpo = re.sub(r"^(CMD|ENTRYPOINT)\s*", "", arranque[-1], flags=re.I).strip()
+        try:
+            fichas = [str(x) for x in ast.literal_eval(cuerpo)] if cuerpo.startswith("[") else shlex.split(cuerpo)
+        except (ValueError, SyntaxError):
+            fichas = cuerpo.split()
+        datos["cmd"] = " ".join(fichas)
+        programa = Path(fichas[0]).name.lower() if fichas else ""
+
+        def opcion(*nombres: str) -> str | None:
+            for i, f in enumerate(fichas):
+                if f in nombres and i + 1 < len(fichas):
+                    return fichas[i + 1]
+                for nombre in nombres:
+                    if f.startswith(nombre + "="):
+                        return f.split("=", 1)[1]
+            return None
+
+        if programa in {"fastmcp", "mcp"} and "run" in fichas:
+            datos["cmd_runner"] = {
+                "programa": programa, "transport": opcion("--transport", "-t"),
+                "host": opcion("--host"), "port": opcion("--port", "-p"),
+            }
+        elif programa.startswith("python") and "server.py" not in " ".join(fichas) and "-m" not in fichas and server.is_file():
+            rep.aviso(f"El `CMD` no arranca `server.py`: `{datos['cmd']}`.")
+        elif not programa.startswith("python") and server.is_file():
+            rep.aviso(f"El `CMD` no es `python server.py` sino `{datos['cmd']}`: comprueba que arranque el servidor MCP por HTTP en 0.0.0.0:{PUERTO_MCP}.")
     for l in lineas:
         if not l.upper().startswith("ENV "):
             continue
@@ -1249,7 +1276,29 @@ def revisar_server(app: Path, repo: Path, grupo: str, tema: str, rep: Reporte, c
     # Arranque: transporte, host y puerto (en `mcp.run(...)` o en el constructor).
     corridas = [n for n in ast.walk(arbol) if isinstance(n, ast.Call) and nombre_llamada(n.func).endswith(".run")
                 and not nombre_llamada(n.func).startswith(("subprocess", "asyncio", "uvicorn"))]
-    if not corridas:
+    runner = datos.get("cmd_runner")
+    if runner:
+        cmd = datos.get("cmd", "")
+        correcto = f'CMD ["python", "server.py"]'
+        explicacion = (
+            f"El Dockerfile arranca con `{cmd}`. `{runner['programa']} run` carga `server.py` sin ejecutar su bloque "
+            "`if __name__ == \"__main__\"`, así que el `mcp.run(...)` que hay ahí no cuenta: manda lo que diga el `CMD`."
+        )
+        transporte = (runner["transport"] or "").lower()
+        if transporte not in {"streamable-http", "http"}:
+            como = f"`--transport {runner['transport']}`" if runner["transport"] else "sin `--transport` (usa stdio)"
+            detalle = (
+                "En SSE el servidor queda en `/sse`, no en `/mcp`: la URL del laboratorio no responde."
+                if transporte == "sse" else
+                "En stdio el contenedor termina al instante y el despliegue lo marca como fallido."
+            )
+            rep.error(f"{explicacion} Y el `CMD` arranca {como}. {detalle} Cambia la última línea del Dockerfile a `{correcto}`.")
+        elif runner["host"] != "0.0.0.0" or str(runner["port"]) != str(PUERTO_MCP):
+            rep.error(f"{explicacion} Ese `CMD` debe llevar `--host 0.0.0.0 --port {PUERTO_MCP}`; lo más simple es `{correcto}`.")
+        else:
+            rep.ok(f"Arranque correcto (definido en el `CMD` del Dockerfile): streamable-http en 0.0.0.0:{PUERTO_MCP}.")
+            rep.aviso(f"{explicacion} Funciona, pero es más claro `{correcto}`, como el piloto.")
+    elif not corridas:
         rep.error("`server.py` nunca llama a `mcp.run(...)`: el contenedor arrancaría y terminaría sin servir nada.")
     else:
         transportes = []
@@ -1512,15 +1561,53 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
         elif bucket_ok:
             if not es_piloto and bucket_ok != f"{m.group(1)}-imgs":
                 rep.aviso(f"El bucket (`{bucket_ok}`) y la URL pública (`/img/{m.group(1)}`) no siguen el mismo nombre. Lo esperado: bucket `{m.group(1)}-imgs`.")
-            rep.para_admin(
-                f"Ruta pública de imágenes en Caddy (solo GET): `/img/{m.group(1)}/*` → bucket `{bucket_ok}` en `seaweedfs:8333` "
-                "(mismo bloque que `/img/derivadas1/*`)."
-            )
+            # La ruta de imágenes la genera sola el despliegue, leyendo estas dos
+            # constantes como texto fijo de storage.py (lab_deploy/routes.py).
+            if es_piloto:
+                pass
+            elif bucket[1] or publica[1]:
+                rep.aviso(
+                    "El bucket o la URL pública llegan por variable de entorno. La ruta de imágenes se crea sola al desplegar "
+                    "solo si `IMG_BUCKET` y `PUBLIC_IMG_BASE_URL` están escritos como texto fijo en `storage.py`."
+                )
+                rep.para_admin(
+                    f"Ruta de imágenes a mano en Caddy (no se genera sola porque los nombres vienen de variables de entorno): "
+                    f"`/img/{m.group(1)}/*` → bucket `{bucket_ok}`."
+                )
+            else:
+                rep.info(f"La ruta pública de imágenes `/img/{m.group(1)}/` se crea sola al desplegar.")
             rep.ok(f"Storage: bucket `{bucket_ok}`, URL pública `/img/{m.group(1)}`.")
 
     if seaweed is not None and isinstance(seaweed[0], str) and seaweed[0].rstrip("/") != SEAWEEDFS_URL and seaweed[1]:
         rep.error(f"`storage.py:{seaweed[2]}`: la URL del storage queda en `{seaweed[0]}`{seaweed[1]}. En el servidor debe ser `{SEAWEEDFS_URL}`.")
     fuente = codigo.fuentes[storage]
+    usan_storage = sorted(
+        py.name for py in codigo.archivos
+        if py != storage and not codigo.es_test(py) and "storage" in codigo.imports(py)
+    )
+    if not usan_storage:
+        rep.error(
+            "`storage.py` existe pero ningún archivo lo importa: las imágenes nunca se suben y el usuario no las verá "
+            "en el chat. En `server.py` hay que llamarlo y agregar la URL al texto de respuesta, como el piloto: "
+            "`imagen_url = storage.subir_imagen(png_bytes)` y, si no es `None`, `resumen += f\"\\n\\n![Gráfico]({imagen_url})\"`."
+        )
+    sube_put = bool(re.search(r"method\s*=\s*[\"']PUT[\"']|\.put\(", fuente))
+    sube_post = bool(re.search(r"method\s*=\s*[\"']POST[\"']|\.post\(", fuente))
+    if sube_post and not sube_put:
+        rep.error(
+            "`storage.py` sube con `POST` (formulario). La API S3 de SeaweedFS (`seaweedfs:8333`) recibe un `PUT` con los "
+            "bytes de la imagen como cuerpo y la cabecera `Content-Type: image/png`, como hace el piloto. Con `POST` la subida falla."
+        )
+    if not re.search(r"\buuid\b|\bsecrets\b|\bhashlib\b|token_hex|time\.time|datetime", fuente):
+        rep.aviso(
+            "`storage.py` no genera un nombre distinto para cada archivo: cada resultado pisa al anterior y dos usuarios "
+            "verían la imagen del otro. Usa una clave aleatoria como el piloto: `key = f\"{uuid.uuid4().hex}.png\"`."
+        )
+    if "ensure_bucket" not in fuente and not re.search(r"BUCKET\}/[\"']", fuente):
+        rep.aviso(
+            "`storage.py` no crea su bucket. La primera subida falla si el bucket no existe: copia `ensure_bucket()` del piloto "
+            "y llámalo al arrancar `server.py`."
+        )
     if "seaweedfs" not in fuente:
         rep.error(f"`storage.py` no apunta a SeaweedFS. La URL interna es `{SEAWEEDFS_URL}` (el nombre `seaweedfs` se resuelve dentro de la red `lab_net`).")
     if "except" not in fuente:
@@ -1580,12 +1667,17 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
         prefijo = rel(app, repo) + "/"
         es_nueva = any(n == prefijo + "docker-compose.yml" for n in nuevos)
         ruta = f"/{grupo}/{app_id}"
-        rep.para_admin(
-            f"{'App NUEVA' if es_nueva else 'App'} `{app_id}`: ruta en Caddy `handle {ruta}*` → "
-            f"`reverse_proxy lab-{app_id}:{datos['puerto']}` (con `uri strip_prefix {ruta}`, sin login, igual que el piloto de g01)."
-            + ("" if es_nueva else " Solo hace falta si todavía no existe o cambió el puerto.")
-        )
-        datos["url"] = f"https://{DOMINIO}{ruta}/mcp"
+        # La ruta del MCP la genera sola el despliegue (lab_deploy/routes.py del
+        # repo de infraestructura), siempre hacia el puerto estándar.
+        if (app / "server.py").is_file() and datos["puerto"] != PUERTO_MCP:
+            rep.para_admin(
+                f"`{app_id}` escucha en el puerto {datos['puerto']}, no en {PUERTO_MCP}: la ruta automática no le sirve. "
+                f"Hay que escribirla a mano en Caddy: `handle {ruta}*` → `lab-{app_id}:{datos['puerto']}`."
+            )
+        elif (app / "server.py").is_file():
+            datos["url"] = f"https://{DOMINIO}{ruta}/mcp"
+            if es_nueva:
+                rep.info(f"App nueva: su ruta pública `{ruta}` se crea sola al desplegar, no hay que pedirla.")
     return datos
 
 
@@ -1639,7 +1731,7 @@ def imprimir(rep: Reporte, grupo: str, apps: list[dict], repo: Path) -> int:
             completas += 1
             print(f"  ✓ {a['id']}: completa. Contenedor `lab-{a['id']}`.")
             if a.get("url"):
-                print(f"      URL del MCP cuando el administrador agregue la ruta: {a['url']}")
+                print(f"      URL del MCP una vez desplegado (la ruta se crea sola): {a['url']}")
 
     print("\n## Veredicto\n")
     if errores:
