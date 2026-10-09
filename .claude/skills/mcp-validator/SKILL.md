@@ -184,6 +184,15 @@ Lo mismo aplica a lo que la rama haya tocado fuera de `grupos/grupoNN/`: si es
 algo generado o local, se le dice al administrador qué patrón falta; si es un
 cambio real a un archivo del repo, se deshace.
 
+## Las rutas públicas se crean solas
+
+Al desplegarse un servidor MCP de un grupo (carpeta con `server.py`), el
+servidor genera su ruta `/<grupo>/<app>` hacia el puerto 8000, y la de
+imágenes `/img/<grupo>-<tema>/` si `storage.py` tiene `IMG_BUCKET` y
+`PUBLIC_IMG_BASE_URL` escritos como texto fijo y empezando con el grupo. El
+alumno no tiene que pedirlas. Si esos nombres no cumplen, la app despliega
+pero sin ruta de imágenes, y solo el administrador ve el motivo.
+
 ## Cuándo avisar al administrador
 
 Cada grupo hace algo distinto, así que el servidor no puede adivinarlo. El
@@ -191,9 +200,9 @@ alumno debe avisar a **Julios Castillo Melchor** (en la descripción del PR)
 siempre que la entrega incluya algo de esta lista. El validador detecta la
 mayoría; tú completa lo que veas al leer el código:
 
-- Una app nueva (hay que crear su ruta pública en Caddy).
-- Imágenes o archivos generados (hay que crear la ruta `/img/...` de su bucket).
 - Un puerto distinto de 8000, o más de un servicio en el compose.
+- Una app que no sea un servidor MCP propio (una imagen ya hecha, una web) y
+  necesite ruta pública: esa no se crea sola.
 - Variables de entorno, tokens o claves de API. El despliegue solo entrega al
   compose `LAB_CONTAINER_NAME`, `LAB_PUBLIC_PATH` y `LAB_DOMAIN`; cualquier
   otra `${VAR}` llega vacía hasta que él la habilite.

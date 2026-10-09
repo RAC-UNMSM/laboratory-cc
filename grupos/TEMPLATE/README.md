@@ -48,11 +48,12 @@ Para un grupo nuevo (`grupoNN`):
    `grupos/<grupo>/<semana>/<tema>/docker-compose.yml` y despliega las
    carpetas que cambiaron, con el identificador completo del punto 2 —
    agregar la carpeta con su `docker-compose.yml` ya es suficiente.
-6. Si la app necesita ruta pública (para que el grupo la use en el
-   navegador), agregar la ruta correspondiente en `caddy/Caddyfile` del
-   repo de infraestructura (`handle ${LAB_PUBLIC_PATH}* { ... reverse_proxy
-   ${LAB_CONTAINER_NAME}:<puerto> }`) — esa parte sí la hace el profesor, no
-   va en este repo.
+6. La ruta pública de un servidor MCP propio (carpeta con `server.py`,
+   escuchando en el puerto 8000) se crea sola al desplegar:
+   `${LAB_PUBLIC_PATH}` hacia `${LAB_CONTAINER_NAME}:8000`, y la de imágenes
+   si tiene `storage.py`. Cualquier otra app que necesite ruta pública (una
+   imagen ya hecha, otro puerto) la agrega el profesor a mano en el repo de
+   infraestructura: hay que pedírsela.
 7. Abrir PR contra `main`. El profesor revisa y mergea (solo él
    puede actualizar `main`) — el despliegue real ocurre solo,
    automáticamente, al llegar el merge (nunca hay un botón de despliegue

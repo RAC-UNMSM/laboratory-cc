@@ -152,7 +152,7 @@ if __name__ == "__main__":
 - `transport="streamable-http"`: sin él, `mcp.run()` usa stdio y el
   contenedor termina al instante. `"sse"` no funciona en este laboratorio.
 - `host="0.0.0.0"`: con `127.0.0.1` Caddy no puede llegar al contenedor.
-- `port=8000`: es el que el administrador pone en la ruta de Caddy.
+- `port=8000`: la ruta pública se crea sola al desplegar y apunta a ese puerto.
 - Cada tool con docstring.
 - Nada de `app.run(debug=True)`, ni abrir archivos con el visor del sistema,
   ni interfaces web aparte: el entregable es el servidor MCP.
@@ -177,9 +177,10 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
 - Si esos valores se pasan por variables de entorno (`os.getenv`), cuenta el
   valor que definan el compose o el Dockerfile, no el valor por defecto del
   código. El compose gana sobre el Dockerfile.
-- La ruta `/img/grupoNN-<tema>/*` la crea el administrador en Caddy apuntando
-  al bucket. Hasta entonces las imágenes se suben pero no se ven: hay que
-  pedírsela.
+- La ruta `/img/grupoNN-<tema>/*` se crea sola al desplegar, leyendo esas dos
+  constantes de `storage.py`. Tienen que estar escritas como texto fijo (no
+  `os.getenv`) y empezar con el grupo; si no, la app despliega pero las
+  imágenes no se ven.
 - `server.py` tiene que usarlo: llamar a `subir_imagen()` y agregar la URL al
   texto de respuesta. Un `storage.py` que nadie importa no sube nada.
 - La subida es un `PUT` con los bytes como cuerpo (API S3), no un `POST` de
@@ -203,7 +204,8 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
    corriendo. Si falla, el contenedor anterior sigue en pie y el error queda
    en el log del servidor; el alumno no lo ve, hay que preguntarle al
    administrador.
-5. El administrador agrega la ruta pública (y la de imágenes) en Caddy.
+5. El servidor genera la ruta pública del MCP (y la de imágenes) y recarga
+   el proxy. No hay que pedirla.
 6. El grupo prueba con MCP Inspector o
    `claude mcp add --transport http <nombre> <URL>/mcp`.
 

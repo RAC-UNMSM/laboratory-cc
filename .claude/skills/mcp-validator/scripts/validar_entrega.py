@@ -1561,10 +1561,21 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
         elif bucket_ok:
             if not es_piloto and bucket_ok != f"{m.group(1)}-imgs":
                 rep.aviso(f"El bucket (`{bucket_ok}`) y la URL pública (`/img/{m.group(1)}`) no siguen el mismo nombre. Lo esperado: bucket `{m.group(1)}-imgs`.")
-            rep.para_admin(
-                f"Ruta pública de imágenes en Caddy (solo GET): `/img/{m.group(1)}/*` → bucket `{bucket_ok}` en `seaweedfs:8333` "
-                "(mismo bloque que `/img/derivadas1/*`)."
-            )
+            # La ruta de imágenes la genera sola el despliegue, leyendo estas dos
+            # constantes como texto fijo de storage.py (lab_deploy/routes.py).
+            if es_piloto:
+                pass
+            elif bucket[1] or publica[1]:
+                rep.aviso(
+                    "El bucket o la URL pública llegan por variable de entorno. La ruta de imágenes se crea sola al desplegar "
+                    "solo si `IMG_BUCKET` y `PUBLIC_IMG_BASE_URL` están escritos como texto fijo en `storage.py`."
+                )
+                rep.para_admin(
+                    f"Ruta de imágenes a mano en Caddy (no se genera sola porque los nombres vienen de variables de entorno): "
+                    f"`/img/{m.group(1)}/*` → bucket `{bucket_ok}`."
+                )
+            else:
+                rep.info(f"La ruta pública de imágenes `/img/{m.group(1)}/` se crea sola al desplegar.")
             rep.ok(f"Storage: bucket `{bucket_ok}`, URL pública `/img/{m.group(1)}`.")
 
     if seaweed is not None and isinstance(seaweed[0], str) and seaweed[0].rstrip("/") != SEAWEEDFS_URL and seaweed[1]:
@@ -1656,12 +1667,17 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
         prefijo = rel(app, repo) + "/"
         es_nueva = any(n == prefijo + "docker-compose.yml" for n in nuevos)
         ruta = f"/{grupo}/{app_id}"
-        rep.para_admin(
-            f"{'App NUEVA' if es_nueva else 'App'} `{app_id}`: ruta en Caddy `handle {ruta}*` → "
-            f"`reverse_proxy lab-{app_id}:{datos['puerto']}` (con `uri strip_prefix {ruta}`, sin login, igual que el piloto de g01)."
-            + ("" if es_nueva else " Solo hace falta si todavía no existe o cambió el puerto.")
-        )
-        datos["url"] = f"https://{DOMINIO}{ruta}/mcp"
+        # La ruta del MCP la genera sola el despliegue (lab_deploy/routes.py del
+        # repo de infraestructura), siempre hacia el puerto estándar.
+        if (app / "server.py").is_file() and datos["puerto"] != PUERTO_MCP:
+            rep.para_admin(
+                f"`{app_id}` escucha en el puerto {datos['puerto']}, no en {PUERTO_MCP}: la ruta automática no le sirve. "
+                f"Hay que escribirla a mano en Caddy: `handle {ruta}*` → `lab-{app_id}:{datos['puerto']}`."
+            )
+        elif (app / "server.py").is_file():
+            datos["url"] = f"https://{DOMINIO}{ruta}/mcp"
+            if es_nueva:
+                rep.info(f"App nueva: su ruta pública `{ruta}` se crea sola al desplegar, no hay que pedirla.")
     return datos
 
 
@@ -1715,7 +1731,7 @@ def imprimir(rep: Reporte, grupo: str, apps: list[dict], repo: Path) -> int:
             completas += 1
             print(f"  ✓ {a['id']}: completa. Contenedor `lab-{a['id']}`.")
             if a.get("url"):
-                print(f"      URL del MCP cuando el administrador agregue la ruta: {a['url']}")
+                print(f"      URL del MCP una vez desplegado (la ruta se crea sola): {a['url']}")
 
     print("\n## Veredicto\n")
     if errores:
