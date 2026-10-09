@@ -72,7 +72,7 @@ def _json_seguro(payload):
         "\u2029", "\\u2029")
 
 
-def documento(entradas, titulo="Informe de la sesión", refresco=SEGUNDOS_DE_REFRESCO,
+def documento(entradas, titulo="Informe del análisis", refresco=SEGUNDOS_DE_REFRESCO,
               datos_url=None):
     """El informe completo: la plantilla con los datos de la sesión dentro.
 
@@ -94,15 +94,3 @@ def documento(entradas, titulo="Informe de la sesión", refresco=SEGUNDOS_DE_REF
             f"La plantilla {PLANTILLA.name} ya no trae el marcador de datos; "
             "revise el <script id=\"datos\">.")
     return plantilla.replace(_MARCADOR, _json_seguro(payload), 1)
-
-
-def datos_sueltos(entradas, titulo="Informe de la sesión",
-                  refresco=SEGUNDOS_DE_REFRESCO, datos_url=None):
-    """El mismo JSON, aparte del HTML, para que la página lo pida y se actualice."""
-    return json.dumps({
-        "titulo": titulo,
-        "entradas": list(entradas),
-        "momento": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-        "refresco": int(refresco),
-        "datos_url": datos_url,
-    }, ensure_ascii=False, allow_nan=False)

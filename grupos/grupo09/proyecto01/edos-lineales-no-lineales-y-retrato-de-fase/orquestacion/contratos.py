@@ -397,8 +397,7 @@ def respuesta_fuera_de_alcance(mensaje, alcance, configuracion=None, motivo=None
         "motivo": motivo,
         "alcance": alcance,
         "configuracion": configuracion or {},
-        "advertencia": "No se resuelve: no pertenece a ninguno de los temas del proyecto. Transmita el mensaje "
-                       "al usuario; no lo resuelva por otra vía.",
+        "advertencia": "No se resuelve: no pertenece a ninguno de los temas del proyecto.",
     })
 
 
@@ -412,8 +411,8 @@ def respuesta_aclaracion(pregunta, opciones, configuracion=None, motivos=None):
         "opciones": opciones,
         "motivos": motivos or [],
         "configuracion": configuracion or {},
-        "advertencia": "No se emiten conclusiones: hay que preguntar al usuario antes "
-                       "de elegir una interpretación.",
+        "advertencia": "No se emiten conclusiones: la interpretación depende de la respuesta "
+                       "del usuario.",
     })
 
 

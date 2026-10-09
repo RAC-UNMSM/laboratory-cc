@@ -25,7 +25,6 @@ import logging
 import numpy as np
 import sympy as sp
 
-import storage
 from matematica import MAX_DIMENSION, DatoInvalido, FueraDeAlcance, MetodoNoAplicable
 from matematica.analisis_estabilidad import Equilibrio, buscar_equilibrios, linealizar
 from matematica.clasificacion import (anteponer_clasificacion, clasificar, describir_alcance, inventario,
@@ -39,19 +38,15 @@ from matematica.validacion_solucion import (verificar, verificar_integral_primer
 from orquestacion.contratos import (ALIAS_ANALISIS, SolicitudEDO, SolicitudEquilibrios, SolicitudTema,
                                     respuesta_aclaracion, respuesta_error, respuesta_fuera_de_alcance,
                                     respuesta_ok, serializable, solucion_a_datos)
-from orquestacion.informe import SESION
+from orquestacion import informe as informe_html
 from orquestacion.interpretacion import interpretar
-from visualizacion.html import (MAXIMO_PUNTOS_TRAZA, construir_figuras, figuras_del_desarrollo,
-                                generar_html)
+from visualizacion.html import MAXIMO_PUNTOS_TRAZA, construir_figuras, figuras_del_desarrollo
 from visualizacion.plantilla import figura_a_json
 
 registro = logging.getLogger("edos-grupo09")
 
 #: Puntos máximos de trayectoria que se devuelven como datos.
 MAXIMO_PUNTOS_DATOS = 1200
-
-#: Tamaño máximo del HTML que viaja inline por el transporte.
-LIMITE_HTML_INLINE = 400_000
 
 #: Cuánto puede alejarse de cero el campo en un punto para seguir siendo equilibrio.
 TOLERANCIA_EQUILIBRIO = 1e-9
@@ -80,15 +75,8 @@ def analizar_caos_y_fractales(solicitud):
 
 
 def _fuera_de_alcance(motivo, configuracion=None, no_matematico=False, enunciado=None):
-    """La respuesta, y el aviso en el informe si era una pregunta de matemáticas.
-
-    Una consulta que no es matemática no se registra: el informe es del trabajo
-    del usuario, y "dónde queda el baño" no lo es.
-    """
+    """La respuesta para lo que no pertenece al proyecto. No publica informe: no hay nada que dibujar."""
     mensaje = mensaje_de_alcance(motivo, no_matematico)
-    if not no_matematico:
-        _registrar_en_informe("Fuera del alcance del proyecto", configuracion or {}, ok=False,
-                              etapa="fuera_de_alcance", error=mensaje, enunciado=enunciado)
     return respuesta_fuera_de_alcance(mensaje, describir_alcance(), configuracion, motivo, no_matematico)
 
 
@@ -130,8 +118,8 @@ def resolver_problema(solicitud, enfoque="completo"):
             f"El sistema no es autónomo: depende explícitamente de "
             f"{solicitud.variable_independiente}, así que sus equilibrios no están definidos.",
             configuracion,
-            {"sugerencia": "Para un sistema no autónomo use `resolver_graficar_y_analizar_edo` "
-                           "(función analizar_edo), que lo resuelve o lo integra."})
+            {"sugerencia": "`resolver_graficar_y_analizar_edo` (función analizar_edo) resuelve o "
+                           "integra los sistemas no autónomos."})
 
     # --- 3 y 4. Clasificación y desarrollo ----------------------------------------
     clasificacion = clasificar(problema)
@@ -143,9 +131,7 @@ def resolver_problema(solicitud, enfoque="completo"):
         desarrollo = _desarrollar(problema, clasificacion)
     except DatoInvalido as exc:
         return respuesta_error("datos", exc, configuracion, {
-            "mensaje_para_el_usuario": f"Revise los datos del problema: {exc}",
-            "sugerencia": "Pídale al usuario el valor correcto y vuelva a llamar; no lo reemplace por uno "
-                          "inventado."})
+            "mensaje_para_el_usuario": f"Revise los datos del problema: {exc}"})
     except FueraDeAlcance as exc:
         return _fuera_de_alcance(exc.motivo, configuracion, enunciado=problema.enunciado)
 
@@ -154,22 +140,22 @@ def resolver_problema(solicitud, enfoque="completo"):
     if enfoque == "completo" and problema.tipo == "edo" and problema.ci is not None:
         numerico = _tratamiento_numerico(problema, solicitud, desarrollo)
         if numerico.get("error"):
-            _registrar_en_informe(_titulo(solicitud, desarrollo), configuracion, ok=False,
-                                  etapa="resolucion", error=numerico["error"],
-                                  desarrollo=desarrollo)
+            informe = _registrar_en_informe(_titulo(solicitud, desarrollo), configuracion, ok=False,
+                                            etapa="resolucion", error=numerico["error"],
+                                            desarrollo=desarrollo)
             return respuesta_error("resolucion", numerico["error"], configuracion, {
-                "sugerencia": "Si la solución explota, acorte el intervalo: puede haber una "
-                              "singularidad dentro del rango pedido.",
-                "desarrollo": desarrollo.a_dict()})
+                "sugerencia": "Una solución que explota indica una singularidad dentro del "
+                              "intervalo pedido; con un intervalo más corto se puede integrar.",
+                "desarrollo": desarrollo.a_dict(), **_enlace(informe)})
 
     # --- 6. Validación global: el portón -----------------------------------------------
     verificacion = _verificacion_global(desarrollo, numerico, problema, enfoque,
                                         getattr(solicitud, "equilibrios", None))
     if not verificacion["ok"]:
-        _registrar_en_informe(_titulo(solicitud, desarrollo), configuracion, ok=False,
-                              etapa="verificacion", error=verificacion["resumen"],
-                              verificacion=verificacion, desarrollo=desarrollo)
-        detalles = {"verificacion": verificacion}
+        informe = _registrar_en_informe(_titulo(solicitud, desarrollo), configuracion, ok=False,
+                                        etapa="verificacion", error=verificacion["resumen"],
+                                        verificacion=verificacion, desarrollo=desarrollo)
+        detalles = {"verificacion": verificacion, **_enlace(informe)}
         if numerico and numerico.get("solucion") is not None:
             detalles["solucion"] = solucion_a_datos(numerico["solucion"], solicitud.variables_estado,
                                                     MAXIMO_PUNTOS_DATOS)
@@ -195,26 +181,14 @@ def resolver_problema(solicitud, enfoque="completo"):
                                     verificacion=verificacion, analisis=analisis, notas=notas,
                                     desarrollo=desarrollo, figuras=figuras,
                                     enunciado=problema.enunciado)
-    if informe:
-        visualizacion["informe"] = informe
-        visualizacion["nota"] = (
-            "El documento no viaja en esta respuesta: no hay cliente de chat que dibuje el HTML "
-            "de una herramienta. Entréguele al usuario el enlace de `informe` como enlace "
-            "markdown; allí están las gráficas y el desarrollo con las fórmulas compuestas.")
-        notas = [*notas, f"Informe de la sesión: {informe}"]
-    elif numerico and getattr(solicitud, "visualizar", True):
-        visualizacion.update(_html_inline(problema, solicitud, numerico, analisis))
+    visualizacion.update(_enlace(informe))
 
     # --- 10. Respuesta -------------------------------------------------------------------
     return respuesta_ok(configuracion, _solucion_para_respuesta(problema, solicitud, desarrollo, numerico,
                                                                 analisis, enfoque),
                         verificacion, analisis, visualizacion, notas,
                         desarrollo=desarrollo.a_dict(), clasificacion=clasificacion.a_dict(),
-                        interpretacion=lectura,
-                        presentacion=("Presente el desarrollo siguiendo `desarrollo.secciones` en "
-                                      "orden: cada sección con su título y sus fórmulas (LaTeX). "
-                                      "Puede explicar y redactar transiciones, pero no agregue "
-                                      "operaciones que no estén en el desarrollo."))
+                        interpretacion=lectura)
 
 
 # ---------------------------------------------------------------------------
@@ -442,8 +416,8 @@ def _analisis_pedidos(solicitud, problema, clasificacion, desarrollo, enfoque):
                                 if desarrollo.familia in ("bifurcacion_1d", "hopf", "homoclinica",
                                                           "lineal_plano_parametrico") else
                                 {"disponible": False,
-                                 "nota": "Para estudiar una bifurcación indique en `parametro` el "
-                                         "parámetro que varía (y, si quiere, `rango_parametro`)."})
+                                 "nota": "El estudio de una bifurcación necesita el parámetro que varía "
+                                         "en `parametro` (y, opcionalmente, `rango_parametro`)."})
         elif nombre == "caos":
             analisis[nombre] = _bloque_caos(problema, desarrollo)
     return analisis
@@ -570,27 +544,17 @@ def _titulo(solicitud, desarrollo):
     return getattr(solicitud, "titulo", None) or desarrollo.nombre
 
 
-def _html_inline(problema, solicitud, numerico, analisis):
-    """Respaldo sin informe: el HTML de las figuras numéricas, acotado en tamaño."""
-    puntos = MAXIMO_PUNTOS_TRAZA
-    for intento in range(3):
-        resultado = generar_html(numerico["campo"], numerico["solucion"].t, numerico["solucion"].y, {},
-                                 solicitud.variables_estado, (), getattr(solicitud, "titulo", None),
-                                 solicitud.variable_independiente, maximo_puntos=puntos)
-        if resultado["bytes"] <= LIMITE_HTML_INLINE:
-            salida = {"html": resultado["html"], "bytes": resultado["bytes"], "puntos_por_traza": puntos}
-            if intento:
-                salida["nota"] = (f"Se redujo la resolución a {puntos} puntos por traza para que el "
-                                  "HTML cupiera en el transporte.")
-            return salida
-        puntos //= 4
-    return {"html_omitido": True, "motivo": "El HTML supera el límite del transporte."}
+def _enlace(informe):
+    """La URL del informe y su enlace markdown, o nada si no se pudo publicar."""
+    if not informe:
+        return {}
+    return {"informe": informe, "enlace": f"[Ver el informe con las gráficas]({informe})"}
 
 
 def _registrar_en_informe(titulo, configuracion, *, verificacion=None, analisis=None, notas=None,
                           ok=True, etapa=None, error=None, desarrollo=None, figuras=None,
                           enunciado=None):
-    """Agrega este análisis al informe de la sesión y devuelve su enlace. Nunca levanta."""
+    """Publica el informe de este análisis y devuelve su enlace, o None. Nunca levanta."""
     entrada = serializable({
         "titulo": titulo, "configuracion": configuracion, "ok": ok,
         "verificacion": verificacion, "analisis": analisis, "notas": notas,
@@ -607,7 +571,7 @@ def _registrar_en_informe(titulo, configuracion, *, verificacion=None, analisis=
         except Exception as exc:
             registro.warning("No se pudieron preparar las figuras del informe: %s", exc)
     try:
-        return SESION.registrar(entrada)
+        return informe_html.publicar(entrada)
     except Exception as exc:
         registro.warning("No se pudo registrar en el informe: %s", exc)
         return None
@@ -623,10 +587,10 @@ def _consultar_tipo_de_sistema(solicitud, configuracion):
             "saberlo antes de calcular.",
             [
                 {"respuesta": "Es una EDO continua, dx/dt = f(x)",
-                 "accion": "repetir la llamada con tipo_de_sistema='edo_continua'",
+                 "accion": "tipo_de_sistema='edo_continua'",
                  "consecuencia": "se desarrolla y se resuelve como ecuación diferencial"},
                 {"respuesta": "Es un mapa iterado, x_{n+1} = f(x_n)",
-                 "accion": "repetir la llamada con tipo_de_sistema='mapa_discreto'",
+                 "accion": "tipo_de_sistema='mapa_discreto'",
                  "consecuencia": "se itera como mapa: puntos fijos y exponente de Lyapunov (4.1), "
                                  "duplicación de periodo si tiene un parámetro (4.2) o, si es del plano, "
                                  "jacobiano, inverso y exponentes (5.3)"},
@@ -686,7 +650,7 @@ def describir_capacidades():
         "alias_aceptados": dict(sorted(ALIAS_ANALISIS.items())),
         "limites": {
             "dimension_maxima": 3,
-            "transporte": "stdio",
+            "transporte": "streamable-http",
             "solo_primer_orden": "Una EDO de orden n se reduce antes a un sistema de n ecuaciones "
                                  "de primer orden; el agente reconoce esa forma (y' = yp, yp' = ...) "
                                  "y la trata como EDO escalar de orden n.",

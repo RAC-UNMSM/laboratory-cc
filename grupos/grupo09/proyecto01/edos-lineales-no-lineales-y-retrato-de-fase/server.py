@@ -1,26 +1,17 @@
-"""Servidor MCP del agente de EDOs del grupo 09. Transporte stdio.
+"""Servidor MCP del agente de EDOs del grupo 09: el orquestador.
 
 Claude interpreta el pedido del usuario y llama a estas herramientas; el
 servidor calcula, verifica y devuelve resultados estructurados; Claude redacta
-la explicación final a partir de ellos.
+la explicación final a partir de ellos. Cada análisis publica además un
+informe HTML (gráficas, desarrollo y verificación) en el storage del
+laboratorio, y su enlace vuelve en `visualizacion.informe`.
 
-Registro en Claude Code (desde esta carpeta):
+Desplegado, escucha por streamable-http en 0.0.0.0:8000 y se conecta en:
 
-    claude mcp add edos-grupo09 -- python mcp_server.py
-
-Prueba con el inspector:
-
-    npx @modelcontextprotocol/inspector python mcp_server.py
-
-Sobre stdout: en el transporte stdio, stdout es el canal del protocolo JSON-RPC.
-Cualquier `print` de una dependencia lo corrompería, así que el cuerpo de cada
-herramienta se ejecuta con stdout redirigido a stderr.
+    https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
 """
 
-import contextlib
-import functools
 import hashlib
-import io
 import logging
 import sys
 from pathlib import Path
@@ -35,21 +26,20 @@ from orquestacion.capacidades import describir_capacidades
 from matematica.clasificacion import alcance_del_problema, describir_alcance
 from orquestacion.catalogo import cargar_catalogo
 from orquestacion.contratos import SeccionPoincare, Trozo
-from orquestacion.informe import MODO as MODO_INFORME
-from orquestacion.informe import SESION
+
 
 def _revision():
     """Huella corta del código que está corriendo.
 
-    Existe porque un cliente MCP arranca el servidor una vez y lo deja vivo: tras
-    editar el código es fácil creer que se está probando lo nuevo cuando el
-    proceso sigue siendo el de antes, y el síntoma es un comportamiento viejo sin
-    ninguna pista de por qué. Con esto basta pedir `ping` y comparar.
+    Existe porque el contenedor desplegado sigue vivo entre despliegues fallidos:
+    si un despliegue no levanta, sigue corriendo el anterior, y el síntoma es un
+    comportamiento viejo sin ninguna pista de por qué. Con esto basta pedir
+    `ping` y comparar.
     """
     raiz = Path(__file__).resolve().parent
     resumen = hashlib.sha256()
     for archivo in sorted(raiz.rglob("*.py")) + sorted(raiz.rglob("*.html")):
-        if "__pycache__" in archivo.parts or "tests" in archivo.parts:
+        if "__pycache__" in archivo.parts or "test" in archivo.parts or "tests" in archivo.parts:
             continue
         resumen.update(archivo.read_bytes())
     return resumen.hexdigest()[:8]
@@ -57,17 +47,15 @@ def _revision():
 
 REVISION = _revision()
 
-# El log va a stderr: stdout está reservado para el protocolo.
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
                     format="%(levelname)s %(name)s: %(message)s")
 registro = logging.getLogger("edos-grupo09")
 
-# Prepara el bucket de visualizaciones. Falla en silencio si no hay storage
-# (ejecución local por stdio): el HTML se sigue mandando inline.
+# El bucket lo crea el despliegue; esto no hace daño y falla en silencio.
 storage.ensure_bucket()
 
-servidor = MCPServer(
-    name="edos-grupo09",
+mcp = MCPServer(
+    "grupo09-edos-lineales-no-lineales-y-retrato-de-fase",
     title="Agente de EDOs y sistemas dinámicos (grupo 09)",
     instructions=(
         "Resuelve problemas de ecuaciones diferenciales ordinarias (1 a 3 variables), de "
@@ -164,138 +152,36 @@ servidor = MCPServer(
         "Lo que sí le toca a usted es redactar: ordenar y explicar el desarrollo, "
         "interpretar los equilibrios y la dinámica, y relacionar los resultados con la "
         "pregunta. Los números y las fórmulas salen de la respuesta, no de un cálculo suyo.\n\n"
-        "AL EMPEZAR UNA CONVERSACIÓN, LLAME A `nuevo_informe`. Este servidor sigue "
-        "vivo entre conversaciones: no se reinicia con cada chat. Si no lo llama, "
-        "las preguntas de este chat se acumulan en el mismo documento que las del "
-        "anterior y el usuario ve un informe que no empieza de cero. Una sola vez, "
-        "antes del primer análisis, y le devuelve ya el enlace que hay que "
-        "entregarle.\n\n"
-        "EL INFORME ENSEÑA LA ÚLTIMA PREGUNTA, no un historial: cada análisis "
-        "reemplaza al anterior en el mismo documento y en la misma dirección. El "
-        "usuario puede dejar la pestaña abierta toda la conversación. Si el laboratorio "
-        "lo configuró en modo acumulativo (lo dirá `informe` en su campo `modo`), las "
-        "secciones se apilan con la más reciente arriba.\n\n"
-        "EL INFORME ES LA ÚNICA FORMA EN QUE EL USUARIO VE SU TRABAJO. Ningún "
-        "cliente de chat dibuja el HTML que devuelve una herramienta: ese HTML es "
-        "texto que usted lee, no una figura que el usuario vea. Lo que sí puede "
-        "abrir es un enlace. Por eso cada análisis se agrega a un informe de la "
-        "conversación, y su dirección vuelve en `visualizacion.informe`.\n\n"
-        "  - ENTREGUE ESA DIRECCIÓN AL USUARIO la primera vez que aparezca, como "
-        "enlace markdown: `[Ver el informe](<direccion>)`. Dígale que puede dejar "
-        "la pestaña abierta: la página se recarga sola y los análisis siguientes "
-        "van apareciendo ahí.\n"
-        "  - Es una dirección fija para toda la conversación. No la repita en cada "
-        "respuesta; vuelva a darla solo si el usuario la pide o la pierde.\n"
-        "  - Es una URL: dese tal cual, como enlace markdown, para que se abra con "
-        "un clic. Una dirección 127.0.0.1 es del propio equipo del usuario y "
-        "funciona igual. Solo si llegara una ruta de archivo (el servidor no pudo "
-        "abrir su puerto) hay que decirle que abra ese archivo a mano.\n"
-        "  - `informe` como herramienta devuelve la dirección en cualquier momento, "
-        "y sirve para dársela ANTES del primer análisis si el usuario quiere mirar "
-        "cómo se va llenando.\n\n"
+        "EL INFORME ES LA FORMA EN QUE EL USUARIO VE SU TRABAJO. Ningún cliente de chat "
+        "dibuja el HTML que devuelve una herramienta. Por eso cada análisis publica su propia "
+        "página, con las gráficas interactivas, el desarrollo con las fórmulas compuestas y "
+        "la verificación, y su dirección vuelve en `visualizacion.informe` (y, ya como enlace "
+        "markdown, en `visualizacion.enlace`; en un fallo de resolución o de verificación, "
+        "en `detalles`). Entréguele ese enlace al usuario en cada respuesta que lo traiga: "
+        "cada análisis tiene el suyo. Si la respuesta no trae enlace, el storage no estaba "
+        "disponible; responda igual con el desarrollo.\n\n"
         "Use `ping` para obtener el inventario exacto de familias y de lo que queda fuera del "
         "proyecto."),
 )
 
 
-def sin_contaminar_stdout(funcion):
-    """Protege el canal del protocolo de cualquier `print` de una dependencia."""
-    @functools.wraps(funcion)
-    def envoltura(*args, **kwargs):
-        capturado = io.StringIO()
-        try:
-            with contextlib.redirect_stdout(capturado):
-                return funcion(*args, **kwargs)
-        finally:
-            escrito = capturado.getvalue()
-            if escrito:
-                registro.warning("Se descartó salida a stdout: %r", escrito[:500])
-    return envoltura
-
-
-@servidor.tool(
+@mcp.tool(
     description="Comprueba que el servidor responde y describe qué sabe hacer hoy. "
                 "Úsalo para verificar la conexión antes de un análisis largo.")
-@sin_contaminar_stdout
 def ping() -> dict:
     """Latido del servidor, con la versión y el inventario de capacidades."""
     return {
         "ok": True,
-        "servidor": "edos-grupo09",
+        "servidor": "grupo09-edos-lineales-no-lineales-y-retrato-de-fase",
         "revision": REVISION,
-        "transporte": "stdio",
-        "informe": {"modo": MODO_INFORME,
-                    "nota": ("Cada análisis reemplaza al anterior: el informe enseña "
-                             "solo la última pregunta."
-                             if MODO_INFORME != "acumula" else
-                             "Las secciones se acumulan, la más reciente arriba.")},
+        "transporte": "streamable-http",
+        "informe": "una página HTML por análisis, publicada en el storage del laboratorio",
         "mensaje": "El agente de EDOs responde.",
         "capacidades": describir_capacidades(),
     }
 
 
-@servidor.tool(
-    description="Abre un informe nuevo y vacío para esta conversación. Llámalo UNA vez, "
-                "al empezar un chat, antes del primer análisis: el servidor sigue vivo "
-                "entre conversaciones y si no, las preguntas de chats distintos se "
-                "acumulan en el mismo documento.")
-@sin_contaminar_stdout
-def nuevo_informe() -> dict:
-    """Cierra el informe en curso y empieza uno limpio.
-
-    Hace falta porque el cliente MCP levanta este servidor **una vez** y lo
-    mantiene vivo para todas las conversaciones: sin esto, el informe nunca
-    empieza de cero. El protocolo no le dice al servidor en qué conversación
-    está, así que quien lo sabe es usted.
-
-    No se pierde nada: el informe anterior queda en su archivo, con la fecha y
-    la hora en el nombre.
-
-    Returns:
-        `destino` con la dirección del informe nuevo, ya vacío y listo para que
-        el usuario lo abra desde el principio.
-    """
-    destino = SESION.empezar_de_nuevo()
-    return {"ok": bool(destino), "destino": destino, **SESION.estado(),
-            "nota": "Informe nuevo y vacío. Entréguele el enlace al usuario: puede "
-                    "dejarlo abierto y verá aparecer cada análisis."}
-
-
-@servidor.tool(
-    description="Devuelve el enlace a la página donde el usuario VE sus gráficas, ya "
-                "dibujadas por este servidor. Se actualiza sola con cada análisis. "
-                "Úsala para darle el enlace, incluso antes del primer análisis.")
-@sin_contaminar_stdout
-def informe() -> dict:
-    """Dónde está el informe de la sesión y qué lleva acumulado.
-
-    El informe existe porque el HTML que devuelve una herramienta no lo dibuja
-    ningún cliente de chat. Esta herramienta entrega la dirección que el usuario
-    sí puede abrir, y la publica vacía si todavía no hay ningún análisis, para
-    que pueda dejar la pestaña abierta desde el principio.
-
-    Returns:
-        `destino` con la URL o la ruta del archivo, `es_url` para distinguirlas,
-        `analisis_registrados` y los `titulos` ya incluidos.
-    """
-    destino = SESION.asegurar_publicado()
-    estado = SESION.estado()
-    if not destino:
-        return {**estado, "ok": False,
-                "nota": "No se pudo publicar el informe: no hay storage y tampoco se "
-                        "pudo escribir el archivo local."}
-    return {
-        **estado, "ok": True,
-        "nota": ("Entréguele esta dirección al usuario como enlace markdown. La "
-                 "página se recarga sola, así que puede dejarla abierta mientras "
-                 "siguen trabajando."
-                 if estado["es_url"] else
-                 "No se pudo servir por http, así que es una ruta de archivo: dígale "
-                 "al usuario que la abra a mano."),
-    }
-
-
-@servidor.tool(
+@mcp.tool(
     name="resolver_graficar_y_analizar_edo",
     description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, siempre que haya que "
                 "resolver una EDO o un sistema de EDOs (analíticamente o resolver "
@@ -314,7 +200,6 @@ def informe() -> dict:
                 "tu cuenta no pasa por esas verificaciones y no debe mostrarse al "
                 "usuario como resultado. Reduce EDOs de orden n a sistemas de primer "
                 "orden antes de llamarla.")
-@sin_contaminar_stdout
 def analizar_edo(
     ecuaciones: list[str],
     variables_estado: list[str],
@@ -451,7 +336,7 @@ def analizar_edo(
     })
 
 
-@servidor.tool(
+@mcp.tool(
     description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, para encontrar y clasificar "
                 "puntos de equilibrio y su estabilidad (nodo, silla, foco, centro, "
                 "estable o inestable) con Jacobiano y autovalores, o para estudiar una "
@@ -460,7 +345,6 @@ def analizar_edo(
                 "matemático completo. Es la indicada cuando la pregunta es sobre "
                 "equilibrios, estabilidad o bifurcaciones y NO hay condición inicial; si "
                 "la hay, usa `resolver_graficar_y_analizar_edo`.")
-@sin_contaminar_stdout
 def analizar_equilibrios(
     ecuaciones: list[str],
     variables_estado: list[str],
@@ -522,7 +406,7 @@ def analizar_equilibrios(
     })
 
 
-@servidor.tool(
+@mcp.tool(
     name="resolver_caos_fractales_y_atractores",
     description="USA ESTA HERRAMIENTA, NO ESCRIBAS CÓDIGO, para los problemas de caos, fractales y "
                 "atractores extraños: duplicación de periodo y diagrama de bifurcación del mapa "
@@ -534,7 +418,6 @@ def analizar_equilibrios(
                 "logístico, mapa tienda) el servidor usa sus ecuaciones con los valores que el "
                 "enunciado escribe, y si trae la ecuación, pásela. Hace el desarrollo paso a paso del "
                 "balotario, lo verifica numéricamente y lo dibuja en el informe.")
-@sin_contaminar_stdout
 def resolver_caos_fractales_y_atractores(
     enunciado: str,
     ecuaciones: list[str] | None = None,
@@ -620,11 +503,10 @@ def resolver_caos_fractales_y_atractores(
     })
 
 
-@servidor.tool(
+@mcp.tool(
     description="Lista los problemas del balotario del grupo, que definen qué resuelve el "
                 "agente, con su enunciado y su ecuación lista para pasar a las otras "
                 "herramientas.")
-@sin_contaminar_stdout
 def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) -> dict:
     """Problemas del balotario con su ecuación, condiciones iniciales y alcance.
 
@@ -679,11 +561,5 @@ def listar_balotario(tema: str | None = None, incluir_solucion: bool = False) ->
             "alcance": describir_alcance()}
 
 
-def main():
-    """Arranca el servidor sobre stdio."""
-    registro.info("Iniciando servidor MCP edos-grupo09 sobre stdio")
-    servidor.run(transport="stdio")
-
-
 if __name__ == "__main__":
-    main()
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)

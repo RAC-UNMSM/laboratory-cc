@@ -1,6 +1,6 @@
 # Agente de EDOs y sistemas dinámicos — Grupo 09
 
-Servidor MCP local que resuelve problemas de ecuaciones diferenciales
+Servidor MCP que resuelve problemas de ecuaciones diferenciales
 ordinarias (1 a 3 variables), de mapas iterados (1 y 2 variables) y de caos y
 geometría fractal **con el desarrollo matemático del balotario del grupo**. Claude interpreta el pedido del usuario y
 llama a las herramientas; el servidor clasifica el problema, elige el método
@@ -22,96 +22,42 @@ pertenece a ninguno de los cinco temas (una ecuación en derivadas parciales,
 una pregunta que no es de matemáticas) queda **fuera del alcance del proyecto**
 y el agente lo dice con un mensaje ordenado por temas, en vez de improvisar.
 
-## Instalación
+## Conectarse
 
-```bash
-python -m pip install -r requirements.txt
+El servidor corre desplegado en el laboratorio (streamable-http) y se conecta
+con esta URL:
+
+```
+https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
 ```
 
-## Registrar en Claude Code
+- **Claude (web o Desktop), ChatGPT u otro cliente:** agregar un conector MCP
+  personalizado con esa URL.
+- **Claude Code:**
 
-Desde esta carpeta:
+  ```bash
+  claude mcp add --transport http edos-grupo09 https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
+  ```
 
-```bash
-claude mcp add edos-grupo09 -- python mcp_server.py
-```
+- **MCP Inspector:** `npx @modelcontextprotocol/inspector`, transporte
+  "Streamable HTTP" y la misma URL. Muestra las herramientas, su esquema de
+  entrada y la respuesta cruda de cada llamada.
 
-Para que funcione desde cualquier directorio conviene usar rutas absolutas:
-
-```bash
-claude mcp add edos-grupo09 -- python /ruta/absoluta/a/mcp_server.py
-```
-
-Comprobar que quedó registrado y responde:
-
-```bash
-claude mcp list
-```
-
-Luego, dentro de Claude Code, basta pedir en lenguaje natural: *"resuelve la
+Luego basta pedir en lenguaje natural: *"resuelve la
 ecuación de Bernoulli y' + y = y³ con y(0) = 1"* o *"clasifica el equilibrio
 del oscilador ẍ + γẋ + 4x = 0 según γ ≥ 0"*. Claude traducirá el pedido a una
 llamada de `resolver_graficar_y_analizar_edo` o de `analizar_equilibrios`. Para
 los Temas 4 y 5 basta pegar el enunciado: *"Para el mapa de Hénon con a = 1.4 y
 b = 0.3, calcule el determinante jacobiano y el inverso"* va a
 `resolver_caos_fractales_y_atractores`, que ya conoce las ecuaciones de Hénon.
-
-## Registrar en Claude Desktop (la app de escritorio)
-
-Funciona sin cambiar nada del código: Claude Desktop usa servidores MCP locales
-por stdio, que es exactamente lo que este servidor es. No hace falta HTTP ni
-contenedor.
-
-Edita (o crea) el archivo de configuración:
-
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "edos-grupo09": {
-      "command": "C:\\Users\\USUARIO\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
-      "args": ["M:\\ruta\\al\\proyecto\\mcp_server.py"]
-    }
-  }
-}
-```
-
-Luego reinicia Claude Desktop por completo (cerrarlo, no solo la ventana).
-
-Tres detalles que hacen fallar el registro con más frecuencia:
-
-1. **Rutas absolutas, siempre.** Desktop lanza el proceso con un directorio de
-   trabajo propio, ajeno al proyecto. El servidor está preparado para eso —
-   `catalogo.py` localiza el balotario con `Path(__file__)`, no con el cwd — y
-   está probado arrancándolo desde `C:\Windows`.
-2. **Ruta completa de `python.exe`, no `"python"`.** La app de escritorio no
-   hereda el `PATH` de tu terminal, así que `"command": "python"` suele fallar
-   aunque funcione en la consola.
-3. **Barras invertidas dobles en el JSON.** `\\` en cada separador, o usa barras
-   normales (`M:/ruta/...`), que Windows también acepta.
-
-Si el servidor no aparece, los registros de Desktop muestran el error de
-arranque; el servidor escribe sus mensajes a `stderr`, que es donde Desktop los
-recoge.
-
-## Probar con MCP Inspector
-
-```bash
-npx @modelcontextprotocol/inspector python mcp_server.py
-```
-
-El inspector abre una interfaz web donde se ven las herramientas, su esquema de
-entrada y la respuesta cruda de cada llamada. Es la forma más rápida de
-diagnosticar un problema de protocolo.
+Cada análisis devuelve además el enlace a su informe, la página con las
+gráficas interactivas y el desarrollo.
 
 ## Herramientas expuestas
 
 | Herramienta | Qué hace | Cuándo |
 | --- | --- | --- |
 | `ping` | Conexión, revisión del código, los cinco temas e inventario de familias | Antes de un análisis largo |
-| `nuevo_informe` / `informe` | Abre un informe vacío / devuelve su enlace | Al empezar un chat / cuando el usuario lo pida |
 | `resolver_graficar_y_analizar_edo` | El recorrido completo: desarrollo, trayectoria si hay condición inicial, verificación y figuras | Resolver, hallar la solución general, graficar o analizar |
 | `analizar_equilibrios` | Equilibrios, estabilidad o una bifurcación, con su desarrollo, **sin integrar** | La pregunta es de equilibrios o de un parámetro y no hay condición inicial |
 | `resolver_caos_fractales_y_atractores` | Temas 4 y 5 con solo el enunciado: si no trae ecuación (Cantor, herradura, Feigenbaum, el teorema del espectro) o si nombra el sistema (Lorenz, Rössler, Hénon, logístico, tienda) | Caos, fractales, atractores extraños |
@@ -352,13 +298,15 @@ integrador, así que la prueba lo descuenta antes de denunciar nada.
 ## Organización
 
 ```
-mcp_server.py                  Servidor MCP (stdio): las siete herramientas
+server.py                      Servidor MCP (streamable-http, 0.0.0.0:8000): las cinco herramientas
+storage.py                     Sube cada informe al SeaweedFS del laboratorio (patrón del piloto)
+Dockerfile, docker-compose.yml, requirements.txt   Despliegue, con el contrato del laboratorio
 orquestacion/
   capacidades.py               El recorrido completo, etapa por etapa (no calcula: ordena)
   interpretacion.py            Solicitud → Problema; lee del enunciado el método y lo pedido
   contratos.py                 Qué puede pedir un cliente y la forma de la respuesta
   catalogo.py                  Carga y valida balotario/tema_*.json
-  informe.py, servidor_local.py   El informe de la sesión y su servidor http local
+  informe.py                   Compone y publica la página de cada análisis
 matematica/
   problema.py                  El problema interpretado (campo exacto, parámetro, CI, región…)
   clasificacion.py             Familias, selección del método, los cinco temas y lo que queda fuera
@@ -384,7 +332,7 @@ visualizacion/
 balotario/
   balotario.tex                Problemario original del grupo (25 problemas, 5 temas)
   tema_01.json .. tema_05.json Los 25 problemas convertidos
-tests/                         342 pruebas
+test/                          Pruebas locales (no se suben al repositorio)
 ```
 
 `capacidades` es quien ordena el recorrido y el único módulo que conoce a
@@ -409,76 +357,47 @@ uno (no su nombre) y se clasificó así:
 | `datos_validacion.py` | D. Redundante | Una función que solo usaba el integrador y repetía la validación de `contratos`: se fusionó en `modelo_edos.py` |
 | `buscar_equilibrios`, `es_autonomo` (en `orquestacion/capacidades.py`) | E. Mal ubicados | Era matemática dentro de la orquestación: se movieron a `analisis_estabilidad.py` |
 
-### El informe de la sesión
+### El informe de cada análisis
 
 Un resultado de herramienta MCP es **datos para el modelo**, no algo que la
 interfaz dibuje: ningún cliente de chat renderiza el HTML que devuelve una
 tool. Lo que sí funciona es un enlace.
 
-`orquestacion/informe.py` mantiene un documento por conversación. Cada análisis
-muestra **primero las gráficas** (las del desarrollo antes que las numéricas),
-después el enunciado y el desarrollo completo con las fórmulas compuestas por
-KaTeX, las conclusiones y la tabla de verificación. Una pregunta de matemáticas
-fuera de los temas se avisa arriba, con el mensaje ordenado por temas; una
-pregunta que no es de matemáticas no entra al informe. El documento se reescribe sobre la **misma** dirección: el usuario abre
-el enlace una vez y la página se actualiza sola.
+Por eso `orquestacion/informe.py` compone una página por análisis y
+`storage.py` la sube al SeaweedFS del laboratorio con un nombre aleatorio
+(`uuid`), el mismo patrón con que el piloto sube cada imagen. La página muestra
+**primero las gráficas** (las del desarrollo antes que las numéricas), después
+el enunciado y el desarrollo completo con las fórmulas compuestas por KaTeX, las
+conclusiones y la tabla de verificación. La respuesta trae su URL en
+`visualizacion.informe` y el enlace markdown en `visualizacion.enlace`.
 
-**Una sesión no es un proceso.** El cliente MCP levanta este servidor una vez y
-lo mantiene vivo para todas las conversaciones, y el protocolo no le dice al
-servidor en qué chat está. Dos mecanismos, en este orden:
+El servidor desplegado lo comparten todos los usuarios y atiende llamadas en
+paralelo, así que no hay un informe "de la conversación": cada análisis tiene su
+propia dirección. Un análisis que no supera la resolución o la verificación
+también tiene su página, con su etapa y su error, y el enlace viaja en
+`detalles`. Una pregunta fuera de los temas del proyecto no publica página.
 
-1. La herramienta **`nuevo_informe`**, que el agente llama al empezar una
-   conversación. Es el camino bueno: explícito y exacto.
-2. **Relevo por inactividad** (`EDOS_INACTIVIDAD_MIN`, 120 por defecto) como red
-   de seguridad para cuando el agente no lo haga.
+Nada se escribe a disco. Sin storage (en local) la herramienta responde igual,
+sin enlace.
 
-En local solo se conserva el último informe: al escribir uno nuevo se borran
-los anteriores de `informes/`, para que la carpeta no crezca sin límite.
+### Despliegue
 
-El destino depende de dónde corra el servidor:
+Sigue el contrato del laboratorio y el piloto `grupos/g01/semana01/derivadas1/`:
 
-| Entorno | Dónde queda | Qué recibe el usuario |
-| --- | --- | --- |
-| Contenedor en la red del lab | SeaweedFS, clave estable `informe-<sesion>.html` | URL pública |
-| Local por stdio | `informes/` junto al proyecto | `http://127.0.0.1:<puerto>/informe-...` |
-
-Un análisis que **no** supera una etapa también entra al informe, con su etapa
-y su error. Esconderlo dejaría el documento contando una historia más limpia
-que la real.
-
-### Cómo se conecta
-
-El transporte es **stdio**: el cliente MCP lanza el proceso y le habla por
-stdin/stdout. No es un servicio que quede escuchando, así que no hay puerto ni
-`docker compose up` que valga.
-
-| Forma | Archivo de ejemplo |
+| Archivo | Qué lleva |
 | --- | --- |
-| Proceso local | `conexion/claude_desktop_config.json` |
-| Dentro del contenedor | `conexion/claude_desktop_config_docker.json` |
+| `server.py` | `MCPServer("grupo09-edos-lineales-no-lineales-y-retrato-de-fase")` y `mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)` |
+| `storage.py` | `LAB_IMG_BUCKET` y `LAB_PUBLIC_IMG_URL`, que pone el despliegue; `PUT` a `seaweedfs:8333` con `uuid`, `timeout` y `None` si falla |
+| `Dockerfile` | `python:3.11-slim`, copia `server.py`, `storage.py` y las carpetas `matematica/`, `orquestacion/`, `visualizacion/`, `balotario/`; `CMD ["python", "server.py"]` |
+| `docker-compose.yml` | `container_name: ${LAB_CONTAINER_NAME}`, `mem_limit: 512m`, `restart: unless-stopped`, red `lab_net`, sin puertos ni volúmenes |
+| `requirements.txt` | `mcp==2.1.1` y lo que el código importa |
 
-```bash
-claude mcp add edos-grupo09 -- python mcp_server.py    # Claude Code
-docker build -t edos-grupo09 .                          # imagen
-docker compose run --rm edos                            # sesión stdio a mano
-```
+Medido con `mcp==2.1.1` sobre HTTP, el proceso no pasa de unos 205 MB ni con
+tres análisis pesados en paralelo (espectro de Lorenz y sección de Rössler).
 
 El cliente pide la lista de herramientas **una sola vez, al conectar**: después
-de cambiar el servidor hay que reiniciar el cliente, o se sigue viendo lo de
-antes. `ping` devuelve `revision`, una huella del código que está corriendo,
-para comprobarlo.
-
-Variables de entorno, todas opcionales. Sin ellas el agente funciona igual y el
-informe queda en `informes/`:
-
-| Variable | Para qué |
-| --- | --- |
-| `EDOS_INFORMES` | Dónde escribir el informe sin storage. En el contenedor apunta al volumen |
-| `EDOS_SIN_SERVIDOR_LOCAL` | Apaga el servidor http del informe; entonces se entrega la ruta del archivo |
-| `EDOS_INACTIVIDAD_MIN` | Minutos de silencio tras los cuales se abre un informe nuevo (120) |
-| `EDOS_INFORME_MODO` | `ultimo` (por defecto) o `acumula` |
-| `EDOS_STORAGE_URL` / `EDOS_STORAGE_BUCKET` | El SeaweedFS del laboratorio |
-| `EDOS_URL_PUBLICA` | La ruta pública que asigna el Caddyfile del curso |
+de un despliegue hay que reconectar el conector. `ping` devuelve `revision`,
+una huella del código que está corriendo, para comprobar qué versión responde.
 
 ### Seguridad de la frontera
 
@@ -490,8 +409,12 @@ quedaron símbolos libres ni funciones ajenas).
 
 ## Pruebas
 
+Las pruebas son locales: viven en `test/` y no se suben al repositorio. Desde
+esta carpeta:
+
 ```bash
-python -m unittest discover -s tests -v
+python -m pip install -r requirements.txt
+python -m unittest discover -s test -t . -v
 ```
 
 | Archivo | Cubre |
@@ -504,8 +427,8 @@ python -m unittest discover -s tests -v
 | `test_clasificacion.py` | Lectura del enunciado, selección y rechazo del método, cada tema a su familia, lo que queda fuera y el mensaje de alcance. |
 | `test_balotario.py` | Integridad del catálogo y que el agente reproduce cada problema del balotario solo con su enunciado (y corrige 2.5, 3.5, 5.3 y 5.4). |
 | `test_capacidades.py` | El recorrido completo, el portón, la degradación honesta y la serialización JSON. |
-| `test_mcp_server.py` | Registro y esquema de las herramientas, llamada por el protocolo y limpieza de stdout. |
-| `test_informe.py` | El informe: desarrollo con fórmulas, gráficas primero, dirección estable, sesión. |
+| `test_mcp_server.py` | Nombre del servidor, registro y esquema de las herramientas, llamada por el protocolo y resultados sin órdenes para el modelo. |
+| `test_informe.py` | El informe: una página por análisis, desarrollo con fórmulas, gráficas primero, `storage.py` y el caso sin storage. |
 | `test_visualizacion.py` | Escapado del HTML y roles de todas las figuras, numéricas y del desarrollo. |
 | `test_expresiones.py`, `test_catalogo.py` | Entrada hostil; procedencia del catálogo contra el `.tex`. |
 
@@ -564,7 +487,7 @@ Implementado: las 23 familias de la tabla, que cubren los 25 problemas del
 balotario, con su desarrollo, validaciones simbólicas y numéricas y figuras; el
 tratamiento numérico verificado para lo que no tiene familia; el mensaje
 ordenado por temas para lo que queda fuera del proyecto; el informe con el
-desarrollo compuesto; el servidor MCP sobre stdio y su contenedor.
+desarrollo compuesto; el servidor MCP por streamable-http y su despliegue.
 
 Límites conocidos de lo implementado:
 
@@ -585,21 +508,14 @@ Límites conocidos de lo implementado:
 - Los trayectos de un foco lineal no tienen ecuación cartesiana cerrada en el
   desarrollo (son espirales logarítmicas); se describen con la solución general.
 
-### Si alguna vez hay que exponerlo por red
+### Sobre el despliegue
 
-Hoy el alcance es stdio, que cubre Claude Code y Claude Desktop porque ambos
-lanzan el servidor como proceso local. El SDK acepta otros transportes —
-`servidor.run(transport="streamable-http")`— así que el cambio de transporte es
-una línea, pero **no basta con eso**. Faltaría:
-
-- **Autenticación.** El servidor no tiene ninguna: `MCPServer` soporta
-  `auth_server_provider`, `token_verifier` y `auth`, y hoy no se usan.
-- **Un tope de tiempo por llamada.** No existe. El caso más lento medido es el
-  3.5 (unos 8 s, por el disparo numérico); en local es irrelevante, pero
-  expuesto es un vector de agotamiento.
-- **Herramientas asíncronas.** Son síncronas: un cálculo largo bloquea el bucle
-  de eventos, de modo que un cliente puede dejar sin servicio a los demás.
-- **HTTPS y un host alcanzable**, si el destino es un conector remoto.
+- **Sin autenticación propia.** La URL es pública, como la de los demás grupos
+  del laboratorio; HTTPS y la ruta los pone el proxy del laboratorio.
+- **Sin tope de tiempo por llamada.** Los casos más lentos medidos rondan los
+  8 s (el disparo numérico del 3.5, la sección de Rössler). Las herramientas
+  son síncronas y el SDK las ejecuta en hilos, así que un cálculo largo no
+  bloquea a los demás clientes.
 
 ### Sobre borrar `balotario.tex`
 

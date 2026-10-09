@@ -6,7 +6,7 @@ La propuesta del grupo pide las visualizaciones en HTML, no en PNG: este es el
 Cada función devuelve una figura de plotly; `generar_html` las compone en un
 documento autocontenido. La malla se submuestrea antes de dibujar: una
 trayectoria de Lorenz con 20 000 puntos produce megabytes de JSON que no
-aportan nada visible y que tendrían que viajar por el transporte stdio.
+aportan nada visible y que inflarían el informe que se sube al storage.
 """
 
 import html as _html

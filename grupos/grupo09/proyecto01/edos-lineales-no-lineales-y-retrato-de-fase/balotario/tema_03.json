@@ -776,7 +776,7 @@
         "detalle": "Con el lazo y₀(x) = ±x√(1 − 2x/3), x ∈ [0, 3/2]: I₁ = 2∫₀^{3/2} x√(1 − 2x/3) dx = 6/5 (coincide con el .tex) e I₂ = 2∫₀^{3/2} x²√(1 − 2x/3) dx = 36/35. Entonces M(μ) = (6/5)μ + 36/35 y μ_M = −6/7 ≈ −0.857. Melnikov es una aproximación de primer orden y la perturbación μy + xy no es pequeña: el disparo sobre las variedades de la silla da μ* ≈ −0.86455.",
         "mecanismo": "El ciclo límite estable nace en el Hopf supercrítico de (1, 0) en μ = −1 (primer coeficiente de Lyapunov a = −1/8), existe para −1 < μ < μ*, y al acercarse a μ* su periodo diverge como −(1/λᵤ) ln|μ − μ*| hasta convertirse en el lazo homoclínico. Para μ > μ* no hay ciclo y las órbitas escapan. El .tex dice lo contrario ('al cruzar μc nace un ciclo límite').",
         "valores_corregidos": {"I1": 1.2, "I2": 1.0285714285714285, "mu_melnikov": -0.8571428571428571, "mu_numerico": -0.86455, "hopf_local": -1.0},
-        "verificado_por": "matematica.analisis_bifurcaciones.desarrollar_homoclinica (Melnikov exacto con sympy, disparo numérico, evidencia del ciclo a cada lado de μ* y ajuste de la divergencia del periodo); tests/test_tema3.py",
+        "verificado_por": "matematica.analisis_bifurcaciones.desarrollar_homoclinica (Melnikov exacto con sympy, disparo numérico, evidencia del ciclo a cada lado de μ* y ajuste de la divergencia del periodo); test/test_tema3.py",
         "tex_modificado": false
       },
       "ecuacion": {

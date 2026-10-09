@@ -141,7 +141,7 @@
         "resumen": "El segundo punto fijo de Hénon es x₋ ≈ −1.1314, no −1.1135.",
         "detalle": "x* = (−0.7 ± √6.09)/2.8 con √6.09 ≈ 2.46779: x₋ = −3.16779/2.8 ≈ −1.13135 (y* = b·x₋ ≈ −0.33941). El .tex escribe −1.1135, con dos cifras transpuestas; x₊ ≈ 0.6314 sí es correcto. La conclusión no cambia: los dos son sillas (en x₋ los autovalores de DT son ≈ 3.2598 y −0.0920).",
         "valores_corregidos": { "x_menos": -1.1313544770895048, "y_menos": -0.3394063431268514 },
-        "verificado_por": "matematica.atractores_fractales.desarrollar_mapa_2d (puntos fijos exactos con sympy y residuo T(P) − P); tests/test_tema5.py",
+        "verificado_por": "matematica.atractores_fractales.desarrollar_mapa_2d (puntos fijos exactos con sympy y residuo T(P) − P); test/test_tema5.py",
         "tex_modificado": false
       },
       "solicitud": {
@@ -205,7 +205,7 @@
           "rango_z_en_la_mitad_del_tex": [0.0827, 17.98],
           "maximo_de_g_en_u": 5.78
         },
-        "verificado_por": "matematica.atractores_fractales.desarrollar_seccion_poincare (prueba la mitad pedida, detecta que no deja un mapa unidimensional y usa la otra); tests/test_tema5.py",
+        "verificado_por": "matematica.atractores_fractales.desarrollar_seccion_poincare (prueba la mitad pedida, detecta que no deja un mapa unidimensional y usa la otra); test/test_tema5.py",
         "tex_modificado": false
       },
       "solicitud": {

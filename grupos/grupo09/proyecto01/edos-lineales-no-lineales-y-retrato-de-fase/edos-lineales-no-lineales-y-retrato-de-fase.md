@@ -107,7 +107,7 @@ Tres capas, sin dependencias hacia arriba. `matematica/` no sabe que existe
 
 ```text
 edos-lineales-no-lineales-y-retrato-de-fase/
-├── mcp_server.py              Las 7 herramientas MCP (transporte stdio)
+├── server.py                  Las 5 herramientas MCP (streamable-http, puerto 8000)
 ├── storage.py                 Publica el informe en el storage del laboratorio
 ├── matematica/                CAPA MATEMÁTICA — no sabe de MCP
 │   ├── problema.py            El problema interpretado (campo exacto, parámetro, CI, región)
@@ -133,13 +133,13 @@ edos-lineales-no-lineales-y-retrato-de-fase/
 │   ├── contratos.py           Qué se puede pedir y qué se devuelve (pydantic)
 │   ├── capacidades.py         El recorrido completo del agente
 │   ├── catalogo.py            Carga y valida el balotario
-│   └── informe.py             El informe de la conversación
+│   └── informe.py             La página HTML de cada análisis
 ├── visualizacion/             PRESENTACIÓN
 │   ├── html.py                Figuras de plotly (declaran su rol, no su color)
 │   ├── plantilla.py           Carga la plantilla e inyecta los datos
 │   └── plantillas/informe.html La plantilla (KaTeX para las fórmulas)
 ├── balotario/                 25 problemas en 5 temas + el .tex original
-└── tests/                     342 pruebas
+└── test/                      Pruebas locales (no se suben al repositorio)
 ```
 
 ### El recorrido de una pregunta
@@ -151,7 +151,7 @@ Usuario (lenguaje natural)
 Modelo del cliente MCP ── elige la herramienta; pasa el enunciado y los datos
         │
         ▼
-mcp_server.py ─────────── frontera MCP; protege stdout (es el canal JSON-RPC)
+server.py ─────────────── frontera MCP: define las herramientas y delega
         │
         ▼
 contratos.py ──────────── valida la solicitud; ¿mapa o EDO? si hay duda, pregunta
@@ -172,7 +172,7 @@ modelo_edos.py ────────── CÁLCULO NUMÉRICO si hay condici�
 validacion_solucion.py ── PORTÓN: si algo falla, se detiene sin conclusiones
         │
         ▼
-html.py + informe.py ──── VISUALIZACIÓN → informe de la sesión → enlace
+html.py + informe.py ──── VISUALIZACIÓN → página del análisis en el storage → enlace
         │
         ▼
 Modelo ── PRESENTACIÓN: sigue `desarrollo.secciones` y entrega el enlace
@@ -206,8 +206,6 @@ debe, rehacer el cálculo.
 | `analizar_equilibrios` | Equilibrios, estabilidad o una bifurcación, **sin** condición inicial; con `parametro` declarado, una sola llamada estudia la bifurcación entera |
 | `resolver_caos_fractales_y_atractores` | Temas 4 y 5 con solo el enunciado: con o sin ecuación, o nombrando el sistema (Lorenz, Rössler, Hénon, logístico, tienda) |
 | `listar_balotario` | Los 25 problemas del grupo, con su ecuación, cómo pedirlos, su alcance y las revisiones |
-| `informe` | La dirección del informe de la conversación |
-| `nuevo_informe` | Abre uno vacío al empezar un chat |
 | `ping` | Revisión del código, los cinco temas e inventario de familias |
 
 ## Verificación: el portón del agente
@@ -272,31 +270,24 @@ Un resultado de herramienta MCP es **datos para el modelo**, no algo que la
 interfaz dibuje: ningún cliente de chat renderiza el HTML que devuelve una
 tool. Lo que sí funciona es un enlace.
 
-Sin el storage del laboratorio el informe queda en un archivo, y una ruta
-`C:\...\informe.html` no se puede abrir con un clic. Por eso el agente sirve esa
-carpeta en `127.0.0.1`, en un puerto que elige el sistema: el enlace se abre con
-un clic y la página se actualiza igual que en el despliegue del laboratorio.
+Por eso cada análisis compone su página y `storage.py` la sube al SeaweedFS del
+laboratorio con un nombre aleatorio (`uuid`), igual que el piloto sube cada
+imagen. La respuesta trae la URL en `visualizacion.informe` y el enlace markdown
+en `visualizacion.enlace`. El servidor desplegado lo comparten todos los
+usuarios, así que no hay un informe "de la conversación": cada análisis tiene
+su propia dirección. Nada se escribe a disco; sin storage (en local) la
+herramienta responde igual, sin enlace.
 
 Cada análisis muestra, en este orden: **las gráficas** (las del desarrollo
 —solución analítica con la numérica encima, retrato de fase con nulclinas,
 variedades y separatrices, diagrama de bifurcación, plano traza-determinante,
 telaraña— antes que las numéricas), el enunciado, el desarrollo con las
 fórmulas compuestas por KaTeX, las conclusiones y la tabla de verificación. Una
-pregunta de matemáticas fuera de los temas se avisa arriba, con el mensaje
-ordenado por temas; una que no es de matemáticas no entra al informe.
+pregunta fuera de los temas del proyecto no publica página: la respuesta trae el
+mensaje ordenado por temas.
 
-El informe enseña **la última pregunta**, no un historial: cada análisis
-reemplaza al anterior en la misma dirección. Con `EDOS_INFORME_MODO=acumula`
-las secciones se apilan, la más reciente arriba, para comparar respuestas entre
-sí.
-
-**Una sesión no es un proceso.** El cliente levanta el servidor una vez y lo
-mantiene vivo para todas las conversaciones: el agente llama a `nuevo_informe`
-al abrir un chat, y hay un relevo por inactividad como red de seguridad. En
-local solo se conserva el último informe.
-
-Un análisis que **no** supera una etapa también entra al informe, con su etapa y
-su error.
+Un análisis que **no** supera la resolución o la verificación también tiene su
+página, con su etapa y su error, y el enlace viaja en `detalles`.
 
 La plantilla es un `.html` de verdad, separada del Python: los datos entran como
 JSON y el render ocurre en el navegador. Las figuras no llevan colores
@@ -312,9 +303,9 @@ cambia además de forma.
 | --- | --- | --- |
 | **Yanac Minaya Junior Alberto** | Modelado, resolución y simulación dinámica | `modelo_edos.py`, `analisis_caos.py` |
 | **Tisnado Yarleque Christian David** | Estabilidad y bifurcaciones | `analisis_estabilidad.py`, `analisis_bifurcaciones.py` |
-| **Quispe Gonzales Mark** | Orquestación, backend y datos | `mcp_server.py`, `capacidades.py`, `contratos.py`, `catalogo.py`, `storage.py` |
+| **Quispe Gonzales Mark** | Orquestación, backend y datos | `server.py`, `capacidades.py`, `contratos.py`, `catalogo.py`, `storage.py` |
 | **David Alejandro Tejada Ossio** | Visualización | `html.py`, `plantilla.py`, `plantillas/informe.html`, `informe.py` |
-| **Illescas Vicente Alexander George** | Verificación | `validacion_solucion.py`, `tests/` |
+| **Illescas Vicente Alexander George** | Verificación | `validacion_solucion.py`, `test/` |
 
 Módulos nuevos de esta etapa, todavía sin responsable asignado:
 `problema.py`, `clasificacion.py`, `desarrollo.py`, `primer_orden.py`,
@@ -324,7 +315,7 @@ Módulos nuevos de esta etapa, todavía sin responsable asignado:
 
 ## Casos de demostración y pruebas
 
-El balotario es la suite de aceptación: `tests/test_balotario.py` pasa cada
+El balotario es la suite de aceptación: `test/test_balotario.py` pasa cada
 problema por el agente tal como lo pediría un cliente y lo compara con la
 solución del `.tex` (y, en 2.5, 3.5, 5.3 y 5.4, con la corrección documentada).
 Los de los Temas 4 y 5 se le pasan con solo su enunciado. Las pruebas de cada
@@ -356,8 +347,9 @@ procedimiento.
 
 ```bash
 python -m pip install -r requirements.txt
-python -m unittest discover -s tests          # 342 pruebas
-claude mcp add edos-grupo09 -- python mcp_server.py
+python -m unittest discover -s test -t .       # pruebas locales
+claude mcp add --transport http edos-grupo09 \
+  https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
 ```
 
 ## Qué entrega el agente

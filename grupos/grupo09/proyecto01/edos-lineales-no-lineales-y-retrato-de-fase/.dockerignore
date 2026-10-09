@@ -1,15 +1,10 @@
-# Lo que no debe entrar a la imagen.
-# Sin esto, el COPY arrastra los .pyc del equipo (compilados con otra versión de
-# Python, inútiles dentro) y los informes de sesiones viejas.
+# Lo que no debe entrar a la imagen: caches, pruebas locales, informes viejos y
+# documentación. El Dockerfile copia solo lo que el servidor importa.
 __pycache__/
 *.py[cod]
 informes/
+test/
 tests/
-.gitignore
-.dockerignore
-Dockerfile
-docker-compose.yml
 conexion/
-README.md
 *.md
 balotario/*.tex

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Informe de sesión · Agente de EDOs · grupo 09</title>
+<title>Informe del análisis · Agente de EDOs · grupo 09</title>
 
 <!--
   PLANTILLA DEL INFORME. Es HTML de verdad: se abre, se edita y se previsualiza
@@ -422,7 +422,7 @@ figure.lamina figcaption{
 <div class="hoja">
   <header class="placa">
     <p class="marca">UNMSM · Laboratorio · Grupo 09</p>
-    <h1 id="titulo">Informe de sesión</h1>
+    <h1 id="titulo">Informe del análisis</h1>
     <p class="pie-placa">
       <span>Agente de EDOs y sistemas dinámicos</span>
       <span><span id="latido"></span><span id="resumen"></span></span>
@@ -443,7 +443,7 @@ figure.lamina figcaption{
   </footer>
 </div>
 
-<!-- El servidor reemplaza el contenido de este script por el JSON de la sesión. -->
+<!-- El servidor reemplaza el contenido de este script por el JSON del análisis. -->
 <script type="application/json" id="datos">{"entradas": [], "sesion": null, "refresco": 0, "datos_url": null}</script>
 
 <script>
@@ -1072,7 +1072,7 @@ figure.lamina figcaption{
     document.getElementById("resumen").textContent = !entradas.length
       ? "todavía sin análisis"
       : (entradas.length === 1
-           ? "actualizado " + (ESTADO.momento || "")
+           ? "generado " + (ESTADO.momento || "")
            : entradas.length + " análisis · actualizado " + (ESTADO.momento || ""));
     document.getElementById("colofon-izq").textContent =
       "Agente de EDOs y sistemas dinámicos · grupo 09 · UNMSM";
