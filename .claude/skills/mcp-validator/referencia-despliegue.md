@@ -199,7 +199,10 @@ PUBLIC_IMG_BASE_URL = os.environ.get("LAB_PUBLIC_IMG_URL", "")  # lo pone el des
   texto de respuesta. Un `storage.py` que nadie importa no sube nada.
 - La subida es un `PUT` con los bytes como cuerpo (API S3), no un `POST` de
   formulario, y cada archivo lleva un nombre aleatorio (`uuid`) para no pisar
-  el anterior. El bucket se crea al arrancar (`ensure_bucket()`).
+  el anterior.
+- El bucket lo crea el servidor al desplegar: la app no tiene permiso para
+  crearlo. El `ensure_bucket()` del piloto puede quedarse (no hace daño),
+  pero no es lo que lo crea.
 - Si el storage no responde, `subir_imagen()` devuelve `None` y la tool sigue
   respondiendo. Con `timeout` en cada llamada.
 - Nunca subir a servicios públicos de terceros (tmpfiles.org, imgur, etc.).

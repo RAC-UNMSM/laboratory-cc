@@ -1641,11 +1641,6 @@ def revisar_red_y_storage(app: Path, repo: Path, grupo: str, tema: str, rep: Rep
             "`storage.py` no genera un nombre distinto para cada archivo: cada resultado pisa al anterior y dos usuarios "
             "verían la imagen del otro. Usa una clave aleatoria como el piloto: `key = f\"{uuid.uuid4().hex}.png\"`."
         )
-    if "ensure_bucket" not in fuente and not re.search(r"BUCKET\}/[\"']", fuente):
-        rep.aviso(
-            "`storage.py` no crea su bucket. La primera subida falla si el bucket no existe: copia `ensure_bucket()` del piloto "
-            "y llámalo al arrancar `server.py`."
-        )
     if "seaweedfs" not in fuente:
         rep.error(f"`storage.py` no apunta a SeaweedFS. La URL interna es `{SEAWEEDFS_URL}` (el nombre `seaweedfs` se resuelve dentro de la red `lab_net`).")
     if "except" not in fuente:
