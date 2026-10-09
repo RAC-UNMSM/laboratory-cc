@@ -36,11 +36,11 @@ administrador.
 
 | Archivo | Se deja igual | Se cambia |
 |---|---|---|
-| `docker-compose.yml` | `build: .`, `container_name: ${LAB_CONTAINER_NAME}`, `restart: unless-stopped`, `mem_limit: 512m`, bloque `networks` | Solo el nombre del servicio |
+| `docker-compose.yml` | `build: .`, `container_name: ${LAB_CONTAINER_NAME}`, `restart: unless-stopped`, `mem_limit: 512m`, bloque `environment` con `LAB_IMG_BUCKET` y `LAB_PUBLIC_IMG_URL` (si hay `storage.py`), bloque `networks` | Solo el nombre del servicio |
 | `Dockerfile` | `FROM python:3.11-slim`, instalación de `requirements.txt`, `CMD` | La línea `COPY` con los módulos propios |
 | `requirements.txt` | `mcp==2.1.1` | Las librerías que el grupo importa |
 | `server.py` | El import de `MCPServer` y la línea `mcp.run(...)` | Nombre del servidor y las tools |
-| `storage.py` | `SEAWEEDFS_S3_URL` y la lógica de subida | `IMG_BUCKET` y `PUBLIC_IMG_BASE_URL` |
+| `storage.py` | Todo: el bucket y la URL llegan por `LAB_IMG_BUCKET` y `LAB_PUBLIC_IMG_URL` | Nada |
 
 ## `docker-compose.yml`
 
@@ -51,6 +51,9 @@ services:
     container_name: ${LAB_CONTAINER_NAME}
     restart: unless-stopped
     mem_limit: 512m
+    environment:                               # solo si hay storage.py
+      LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}
+      LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}
 
 networks:
   default:
@@ -71,7 +74,8 @@ networks:
   despliegue lo trata como un script que debe terminar solo, y a un servidor
   lo marca como fallido.
 - Variables: el despliegue solo entrega `${LAB_CONTAINER_NAME}`,
-  `${LAB_PUBLIC_PATH}` y `${LAB_DOMAIN}`. Cualquier otra `${VAR}` llega vacía
+  `${LAB_PUBLIC_PATH}`, `${LAB_DOMAIN}`, `${LAB_IMG_BUCKET}` y
+  `${LAB_PUBLIC_IMG_URL}`. Cualquier otra `${VAR}` llega vacía
   aunque exista en el servidor; si hace falta una, se pide al administrador.
 
 ## `Dockerfile`
@@ -90,6 +94,9 @@ CMD ["python", "server.py"]
 - La línea `COPY` debe incluir **todos** los módulos que `server.py` importa,
   directa o indirectamente. Las carpetas se copian aparte:
   `COPY tools/ tools/`. Lo que no se copia no existe en el contenedor.
+- El `CMD` es `["python", "server.py"]`. Con `fastmcp run server.py` (o
+  `mcp run`) el bloque `if __name__ == "__main__"` no se ejecuta, así que el
+  transporte, el host y el puerto serían los del `CMD`, no los de `mcp.run`.
 - Sin rutas de Windows ni nada de la laptop del alumno.
 - Si el código ejecuta un programa del sistema, se instala aquí con
   `RUN apt-get update && apt-get install -y --no-install-recommends <paquete> && rm -rf /var/lib/apt/lists/*`,
@@ -149,7 +156,7 @@ if __name__ == "__main__":
 - `transport="streamable-http"`: sin él, `mcp.run()` usa stdio y el
   contenedor termina al instante. `"sse"` no funciona en este laboratorio.
 - `host="0.0.0.0"`: con `127.0.0.1` Caddy no puede llegar al contenedor.
-- `port=8000`: es el que el administrador pone en la ruta de Caddy.
+- `port=8000`: la ruta pública se crea sola al desplegar y apunta a ese puerto.
 - Cada tool con docstring.
 - Nada de `app.run(debug=True)`, ni abrir archivos con el visor del sistema,
   ni interfaces web aparte: el entregable es el servidor MCP.
@@ -157,26 +164,45 @@ if __name__ == "__main__":
 ## `storage.py`
 
 Solo hace falta si la app genera imágenes o archivos. Se copia el del piloto
-y se cambian dos constantes:
+**tal cual**: ya no hay nombres que cambiar.
 
 ```python
-SEAWEEDFS_S3_URL = "http://seaweedfs:8333"                    # igual para todos
-IMG_BUCKET = "grupoNN-<tema>-imgs"                            # propio del grupo
-PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
+SEAWEEDFS_S3_URL = "http://seaweedfs:8333"                      # igual para todos
+IMG_BUCKET = os.environ.get("LAB_IMG_BUCKET", "")               # lo pone el despliegue
+PUBLIC_IMG_BASE_URL = os.environ.get("LAB_PUBLIC_IMG_URL", "")  # lo pone el despliegue
 ```
 
+- El despliegue calcula los dos nombres de la carpeta del proyecto: grupo +
+  nombre de la carpeta, con guiones en lugar de cualquier otro signo. Para
+  `grupos/grupo04/proyecto01/interpolacion/` son
+  `grupo04-interpolacion-imgs` y `https://rac-unmsm.vekthos.org/img/grupo04-interpolacion`.
+- Llegan al contenedor porque el `docker-compose.yml` los pasa. Este bloque
+  se copia tal cual dentro del servicio; sin él, llegan vacíos y no se sube
+  nada:
+
+  ```yaml
+      environment:
+        LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}
+        LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}
+  ```
+- La ruta pública `/img/grupoNN-<carpeta>/` se crea sola al desplegar, con
+  ese mismo nombre.
+- **Forma anterior, todavía válida:** escribir los dos nombres a mano en
+  `storage.py`. Tienen que seguir la misma regla (`grupoNN-<carpeta>-imgs` y
+  `/img/grupoNN-<carpeta>`); si no coinciden con lo que la app usa de verdad,
+  las imágenes no se ven. Quien ya lo tenga así no necesita cambiarlo.
 - `seaweedfs:8333` es la API S3 dentro de la red `lab_net`. No `localhost`
   (dentro del contenedor es el propio contenedor) ni el puerto 8888.
-- El bucket solo admite minúsculas, dígitos y `-` (de 3 a 63 caracteres) y
-  empieza con el grupo, igual que la URL pública: `grupoNN-<tema>-imgs` y
-  `/img/grupoNN-<tema>`. El piloto usa `derivadas1` a secas porque es el
-  ejemplo; los grupos no.
-- Si esos valores se pasan por variables de entorno (`os.getenv`), cuenta el
-  valor que definan el compose o el Dockerfile, no el valor por defecto del
-  código. El compose gana sobre el Dockerfile.
-- La ruta `/img/grupoNN-<tema>/*` la crea el administrador en Caddy apuntando
-  al bucket. Hasta entonces las imágenes se suben pero no se ven: hay que
-  pedírsela.
+- En local, sin esas variables, el módulo no sube nada y la tool responde
+  igual, sin enlace.
+- `server.py` tiene que usarlo: llamar a `subir_imagen()` y agregar la URL al
+  texto de respuesta. Un `storage.py` que nadie importa no sube nada.
+- La subida es un `PUT` con los bytes como cuerpo (API S3), no un `POST` de
+  formulario, y cada archivo lleva un nombre aleatorio (`uuid`) para no pisar
+  el anterior.
+- El bucket lo crea el servidor al desplegar: la app no tiene permiso para
+  crearlo. El `ensure_bucket()` del piloto puede quedarse (no hace daño),
+  pero no es lo que lo crea.
 - Si el storage no responde, `subir_imagen()` devuelve `None` y la tool sigue
   respondiendo. Con `timeout` en cada llamada.
 - Nunca subir a servicios públicos de terceros (tmpfiles.org, imgur, etc.).
@@ -195,7 +221,8 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
    corriendo. Si falla, el contenedor anterior sigue en pie y el error queda
    en el log del servidor; el alumno no lo ve, hay que preguntarle al
    administrador.
-5. El administrador agrega la ruta pública (y la de imágenes) en Caddy.
+5. El servidor genera la ruta pública del MCP (y la de imágenes) y recarga
+   el proxy. No hay que pedirla.
 6. El grupo prueba con MCP Inspector o
    `claude mcp add --transport http <nombre> <URL>/mcp`.
 
