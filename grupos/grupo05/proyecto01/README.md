@@ -1,5 +1,15 @@
 # Proyecto 01
 
+## Entrega del grupo 05
+
+Tema: **transformaciones lineales, invertibilidad y cifrado con matrices**.
+
+- [Propuesta](inversa_tl_mcp/inversa_tl_mcp.md).
+- [Instalación, herramientas y ejemplos](inversa_tl_mcp/README.md).
+
+
+## Convención de entrega
+
 Cada grupo debe crear, dentro de esta carpeta (`proyecto01/`), una nueva
 carpeta con el nombre de su tema, **en minúscula**.
 

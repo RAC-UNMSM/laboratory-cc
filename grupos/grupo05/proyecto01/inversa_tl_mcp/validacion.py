@@ -1,613 +1,146 @@
+"""Entradas matemáticas exactas, sin eval ni sympify de texto del usuario."""
 import ast
+import json
+import math
 import re
 
 import sympy as sp
 
+MAX_DIM = 8
 
-# ============================================================
-# LÍMITES DE CÓMPUTO
-# ============================================================
 
-MAX_DIMENSION = 6
-MAX_LONGITUD_COMPONENTE = 120
-MAX_NODOS_AST = 80
-MAX_VALOR_NUMERICO = 1_000_000
-MAX_EXPONENTE = 10
+class ErrorDeEntrada(ValueError):
+    """Error que puede explicarse al alumno o al cliente MCP."""
 
 
-# ============================================================
-# VALIDACIÓN DE DIMENSIÓN
-# ============================================================
-
-def validar_dimension(n):
-    """
-    Comprueba que n sea un entero positivo y que no exceda
-    el límite de cómputo permitido.
-
-    El proyecto trabaja con transformaciones:
-        T: R^n -> R^n
-    """
-
-    if isinstance(n, bool) or not isinstance(n, int):
-        raise ValueError(
-            "La dimensión n debe ser un número entero."
-        )
-
-    if n < 1:
-        raise ValueError(
-            "La dimensión n debe ser mayor que 0."
-        )
-
-    if n > MAX_DIMENSION:
-        raise ValueError(
-            f"La dimensión máxima permitida es {MAX_DIMENSION}."
-        )
-
-    return n
-
-
-def crear_variables_validacion(n):
-    """
-    Crea las variables:
-        x1, x2, ..., xn
-    """
-
-    return sp.symbols(f"x1:{n + 1}")
-
-
-# ============================================================
-# NORMALIZACIÓN DE LA REGLA
-# ============================================================
-
-def _separar_componentes(texto):
-    """
-    Separa una regla por comas respetando paréntesis.
-
-    Ejemplo:
-        x1, (x2+x3)/2, x2-x3
-    """
-
-    componentes = []
-    actual = []
-    nivel = 0
-
-    for caracter in texto:
-
-        if caracter in "([{":
-            nivel += 1
-
-        elif caracter in ")]}":
-            nivel -= 1
-
-            if nivel < 0:
-                raise ValueError(
-                    "La regla contiene paréntesis o corchetes mal cerrados."
-                )
-
-        if caracter == "," and nivel == 0:
-            componente = "".join(actual).strip()
-
-            if componente:
-                componentes.append(componente)
-
-            actual = []
-
-        else:
-            actual.append(caracter)
-
-    if nivel != 0:
-        raise ValueError(
-            "La regla contiene paréntesis o corchetes mal cerrados."
-        )
-
-    componente_final = "".join(actual).strip()
-
-    if componente_final:
-        componentes.append(componente_final)
-
-    return componentes
-
-
-def _separar_regla_texto(regla):
-    """
-    Convierte una regla escrita como texto en una lista.
-
-    Ejemplos admitidos:
-
-        [x1, x2+x3, x2-x3]
-
-        (x1, x2+x3, x2-x3)
-
-        x1, x2+x3, x2-x3
-    """
-
-    texto = regla.strip()
-
-    if not texto:
-        return []
-
-    if (
-        (texto.startswith("[") and texto.endswith("]"))
-        or
-        (texto.startswith("(") and texto.endswith(")"))
-    ):
-        texto = texto[1:-1].strip()
-
-    if not texto:
-        return []
-
-    return _separar_componentes(texto)
-
-
-def normalizar_regla(regla):
-    """
-    Convierte la regla recibida a una lista.
-
-    Se admiten:
-
-    1. Lista:
-        ["x1", "x2+x3", "x2-x3"]
-
-    2. Tupla:
-        ("x1", "x2+x3", "x2-x3")
-
-    3. Texto:
-        "[x1, x2+x3, x2-x3]"
-    """
-
-    if isinstance(regla, str):
-        return _separar_regla_texto(regla)
-
-    if isinstance(regla, (list, tuple)):
-        return list(regla)
-
-    raise ValueError(
-        "La regla de correspondencia debe enviarse "
-        "como una lista, tupla o texto."
-    )
-
-
-# ============================================================
-# NORMALIZACIÓN DE EXPRESIONES
-# ============================================================
-
-def _normalizar_expresion_texto(texto):
-    """
-    Realiza normalizaciones sencillas antes de analizar
-    la expresión.
-
-    Permite, por ejemplo:
-
-        2x1 + x2
-
-    convirtiéndolo internamente en:
-
-        2*x1 + x2
-    """
-
-    texto = texto.strip()
-
-    if not texto:
-        raise ValueError(
-            "Se recibió una componente vacía."
-        )
-
-    if len(texto) > MAX_LONGITUD_COMPONENTE:
-        raise ValueError(
-            "La componente supera la longitud máxima permitida "
-            f"de {MAX_LONGITUD_COMPONENTE} caracteres."
-        )
-
-    # Permitir ^ como forma habitual de escribir potencias.
-    texto = texto.replace("^", "**")
-
-    # 2x1 -> 2*x1
-    texto = re.sub(
-        r"(?<=\d)(?=x\d+\b)",
-        "*",
-        texto
-    )
-
-    # 2(x1+x2) -> 2*(x1+x2)
-    texto = re.sub(
-        r"(?<=\d)(?=\()",
-        "*",
-        texto
-    )
-
-    # x1(x2+x3) -> x1*(x2+x3)
-    texto = re.sub(
-        r"(x\d+)\s*(?=\()",
-        r"\1*",
-        texto
-    )
-
-    # )( -> )*(
-    texto = re.sub(
-        r"\)\s*(?=\()",
-        ")*",
-        texto
-    )
-
-    return texto
-
-
-# ============================================================
-# LÍMITES DEL ÁRBOL SINTÁCTICO
-# ============================================================
-
-def _validar_limites_ast(arbol):
-    """
-    Limita la complejidad de la expresión recibida para evitar
-    solicitudes excesivamente grandes.
-    """
-
-    nodos = list(ast.walk(arbol))
-
-    if len(nodos) > MAX_NODOS_AST:
-        raise ValueError(
-            "La expresión es demasiado compleja para ser procesada."
-        )
-
-    for nodo in nodos:
-
-        if isinstance(nodo, ast.Constant):
-
-            if isinstance(nodo.value, bool):
-                continue
-
-            if isinstance(nodo.value, (int, float)):
-                if abs(nodo.value) > MAX_VALOR_NUMERICO:
-                    raise ValueError(
-                        "La expresión contiene un valor numérico "
-                        "demasiado grande."
-                    )
-
-
-# ============================================================
-# EVALUACIÓN SEGURA DEL AST
-# ============================================================
-
-def _evaluar_ast(nodo, variables_permitidas):
-    """
-    Convierte un árbol sintáctico de Python a una expresión
-    de SymPy utilizando únicamente operaciones matemáticas
-    permitidas.
-
-    No se permiten llamadas a funciones, atributos, imports,
-    acceso a objetos ni ejecución de código.
-    """
-
-    if isinstance(nodo, ast.Expression):
-        return _evaluar_ast(
-            nodo.body,
-            variables_permitidas
-        )
-
-    if isinstance(nodo, ast.Constant):
-
-        if isinstance(nodo.value, bool):
-            raise ValueError(
-                "No se permiten valores booleanos."
-            )
-
-        if isinstance(nodo.value, int):
-            return sp.Integer(nodo.value)
-
-        if isinstance(nodo.value, float):
-            return sp.Rational(str(nodo.value))
-
-        raise ValueError(
-            "Solo se permiten constantes numéricas."
-        )
-
-    if isinstance(nodo, ast.Name):
-
-        if nodo.id not in variables_permitidas:
-            raise ValueError(
-                f"La variable '{nodo.id}' no está permitida."
-            )
-
-        return variables_permitidas[nodo.id]
-
-    if isinstance(nodo, ast.UnaryOp):
-
-        operando = _evaluar_ast(
-            nodo.operand,
-            variables_permitidas
-        )
-
-        if isinstance(nodo.op, ast.UAdd):
-            return operando
-
-        if isinstance(nodo.op, ast.USub):
-            return -operando
-
-        raise ValueError(
-            "Operación unaria no permitida."
-        )
-
-    if isinstance(nodo, ast.BinOp):
-
-        izquierda = _evaluar_ast(
-            nodo.left,
-            variables_permitidas
-        )
-
-        derecha = _evaluar_ast(
-            nodo.right,
-            variables_permitidas
-        )
-
-        if isinstance(nodo.op, ast.Add):
-            return izquierda + derecha
-
-        if isinstance(nodo.op, ast.Sub):
-            return izquierda - derecha
-
-        if isinstance(nodo.op, ast.Mult):
-            return izquierda * derecha
-
-        if isinstance(nodo.op, ast.Div):
-
-            if derecha == 0:
-                raise ValueError(
-                    "No se permite división entre cero."
-                )
-
-            return izquierda / derecha
-
-        if isinstance(nodo.op, ast.Pow):
-
-            if derecha.free_symbols:
-                raise ValueError(
-                    "El exponente debe ser numérico."
-                )
-
-            if not derecha.is_integer:
-                raise ValueError(
-                    "El exponente debe ser un número entero."
-                )
-
-            if abs(int(derecha)) > MAX_EXPONENTE:
-                raise ValueError(
-                    f"El exponente máximo permitido es {MAX_EXPONENTE}."
-                )
-
-            return izquierda ** derecha
-
-        raise ValueError(
-            "La expresión contiene una operación no permitida."
-        )
-
-    raise ValueError(
-        "La expresión contiene una construcción no permitida."
-    )
-
-
-def _interpretar_expresion_segura(texto, variables):
-    """
-    Interpreta una expresión matemática sin utilizar eval(),
-    sympify() ni parse_expr() sobre la entrada del usuario.
-    """
-
-    texto = _normalizar_expresion_texto(texto)
-
-    variables_permitidas = {
-        str(variable): variable
-        for variable in variables
-    }
-
+def leer_json(texto, etiqueta):
+    if not isinstance(texto, str) or len(texto) > 16000:
+        raise ErrorDeEntrada(f"{etiqueta}: se requiere texto JSON de hasta 16000 caracteres.")
     try:
-        arbol = ast.parse(
-            texto,
-            mode="eval"
-        )
-
-    except SyntaxError as error:
-        raise ValueError(
-            f"No se pudo interpretar la expresión: {texto}"
-        ) from error
-
-    _validar_limites_ast(arbol)
-
-    return sp.simplify(
-        _evaluar_ast(
-            arbol,
-            variables_permitidas
-        )
-    )
+        return json.loads(texto)
+    except (ValueError, RecursionError) as exc:
+        raise ErrorDeEntrada(f"{etiqueta}: JSON inválido; usa comillas dobles para expresiones.") from exc
 
 
-# ============================================================
-# INTERPRETACIÓN DE COMPONENTES
-# ============================================================
+def expresion_segura(texto, variables=()):
+    """Solo números racionales, variables permitidas y + - * / ** (o ^)."""
+    if isinstance(texto, bool) or not isinstance(texto, (str, int, float)):
+        raise ErrorDeEntrada("Se esperaba un número o una expresión aritmética.")
+    if isinstance(texto, float) and not math.isfinite(texto):
+        raise ErrorDeEntrada("Los números deben ser finitos.")
+    fuente = str(texto).strip().replace("^", "**")
+    if not fuente or len(fuente) > 512:
+        raise ErrorDeEntrada("Cada expresión debe contener entre 1 y 512 caracteres.")
+    if variables:
+        # Notación habitual del proyecto paralelo: 2x1, 2(x1+x2), (x1+x2)/2.
+        # Solo se inserta la multiplicación; el mismo AST valida todo después.
+        fuente = re.sub(r"(?<=[0-9)])\s*(?=x\d+\b|\()", "*", fuente)
+    try:
+        arbol = ast.parse(fuente, mode="eval")
+    except (SyntaxError, RecursionError) as exc:
+        raise ErrorDeEntrada("Expresión inválida; escribe, por ejemplo, 2*x1 + x2/3 o 2x1 + x2/3.") from exc
+    if sum(1 for _ in ast.walk(arbol)) > 100:
+        raise ErrorDeEntrada("La expresión es demasiado compleja.")
+    simbolos = {str(v): v for v in variables}
 
-def interpretar_componentes(regla, variables):
-    """
-    Convierte las componentes recibidas a expresiones de SymPy.
-    """
-
-    componentes_entrada = normalizar_regla(regla)
-
-    n = len(variables)
-
-    if len(componentes_entrada) != n:
-        raise ValueError(
-            f"Para una transformación de R^{n} a R^{n}, "
-            f"la regla debe tener exactamente {n} componentes. "
-            f"Se recibieron {len(componentes_entrada)}."
-        )
-
-    componentes = []
-
-    for i, componente in enumerate(
-        componentes_entrada,
-        start=1
-    ):
-
-        try:
-
-            if isinstance(componente, sp.Expr):
-                expresion = sp.simplify(componente)
-
+    def visitar(nodo, profundidad=0):
+        if profundidad > 16:
+            raise ErrorDeEntrada("Demasiados niveles de operaciones.")
+        if isinstance(nodo, ast.Constant) and type(nodo.value) in (int, float):
+            try:
+                resultado = sp.Rational(str(nodo.value))
+            except (ValueError, TypeError) as exc:
+                raise ErrorDeEntrada("Número inválido.") from exc
+        elif isinstance(nodo, ast.Name) and nodo.id in simbolos:
+            resultado = simbolos[nodo.id]
+        elif isinstance(nodo, ast.UnaryOp) and isinstance(nodo.op, (ast.UAdd, ast.USub)):
+            a = visitar(nodo.operand, profundidad + 1)
+            resultado = -a if isinstance(nodo.op, ast.USub) else a
+        elif isinstance(nodo, ast.BinOp):
+            a = visitar(nodo.left, profundidad + 1)
+            b = visitar(nodo.right, profundidad + 1)
+            if isinstance(nodo.op, ast.Add):
+                resultado = a + b
+            elif isinstance(nodo.op, ast.Sub):
+                resultado = a - b
+            elif isinstance(nodo.op, ast.Mult):
+                if a.free_symbols and b.free_symbols:
+                    raise ErrorDeEntrada("La regla no es lineal: no se permiten productos de variables.")
+                resultado = a * b
+            elif isinstance(nodo.op, ast.Div):
+                if not b.is_Rational or b == 0:
+                    raise ErrorDeEntrada("Solo se admite división entre constantes racionales no nulas.")
+                resultado = a / b
+            elif isinstance(nodo.op, ast.Pow):
+                if not b.is_Integer or abs(b) > 8:
+                    raise ErrorDeEntrada("El exponente debe ser un entero entre -8 y 8.")
+                if a.free_symbols and b not in (0,1):
+                    raise ErrorDeEntrada("La regla no es lineal: no se permiten potencias de variables.")
+                if a == 0 and b < 0:
+                    raise ErrorDeEntrada("No se puede dividir entre cero.")
+                resultado = a ** int(b)
             else:
-                expresion = _interpretar_expresion_segura(
-                    str(componente),
-                    variables
-                )
+                raise ErrorDeEntrada("Operador no permitido.")
+        else:
+            raise ErrorDeEntrada("Usa solo aritmética y las variables x1, x2, ...; no funciones ni código.")
+        if sp.count_ops(resultado) > 100:
+            raise ErrorDeEntrada("La expresión es demasiado compleja.")
+        if any(abs(int(v.p)).bit_length() > 256 or int(v.q).bit_length() > 256
+               for v in resultado.atoms(sp.Rational)):
+            raise ErrorDeEntrada("Número demasiado grande para esta herramienta educativa.")
+        return resultado
 
-        except ValueError as error:
-            raise ValueError(
-                f"Error en la componente {i}: {error}"
-            ) from error
-
-        componentes.append(expresion)
-
-    return componentes
+    return sp.expand(visitar(arbol.body))
 
 
-# ============================================================
-# VALIDACIÓN DE SÍMBOLOS
-# ============================================================
-
-def validar_simbolos(componentes, variables):
-    """
-    Comprueba que no aparezcan variables distintas de:
-        x1, x2, ..., xn.
-    """
-
-    variables_permitidas = set(variables)
-
-    for i, expresion in enumerate(
-        componentes,
-        start=1
-    ):
-
-        simbolos_extra = (
-            expresion.free_symbols
-            - variables_permitidas
-        )
-
-        if simbolos_extra:
-            nombres = ", ".join(
-                sorted(
-                    str(simbolo)
-                    for simbolo in simbolos_extra
-                )
-            )
-
-            raise ValueError(
-                f"La componente {i} contiene variables "
-                f"no permitidas: {nombres}."
-            )
-
-    return True
+def matriz_validada(texto, filas=None, columnas=None):
+    datos = leer_json(texto, "matriz")
+    if not isinstance(datos, list) or not 1 <= len(datos) <= MAX_DIM:
+        raise ErrorDeEntrada(f"La matriz debe tener entre 1 y {MAX_DIM} filas.")
+    if not all(isinstance(f, list) and 1 <= len(f) <= MAX_DIM for f in datos):
+        raise ErrorDeEntrada("La matriz debe ser una lista de filas no vacías.")
+    ancho = len(datos[0])
+    if any(len(f) != ancho for f in datos):
+        raise ErrorDeEntrada("Todas las filas deben tener la misma longitud.")
+    if (filas is not None and len(datos) != filas) or (columnas is not None and ancho != columnas):
+        raise ErrorDeEntrada(f"Se esperaba una matriz {filas} x {columnas}.")
+    return sp.Matrix([[expresion_segura(v) for v in f] for f in datos])
 
 
-# ============================================================
-# VALIDACIÓN DE LINEALIDAD
-# ============================================================
-
-def validar_linealidad(componentes, variables):
-    """
-    Verifica que cada componente sea lineal y homogénea
-    en x1, ..., xn.
-
-    Se permiten:
-
-        2*x1 + 3*x2
-        2x1 + 3x2
-        x1 - x3
-        x2/2
-        0
-
-    No se permiten:
-
-        x1*x2
-        x1**2
-        x1 + 5
-    """
-
-    sustitucion_cero = {
-        variable: 0
-        for variable in variables
-    }
-
-    for i, expresion in enumerate(
-        componentes,
-        start=1
-    ):
-
-        # Condición necesaria para una TL:
-        # T(0) = 0.
-        valor_en_cero = sp.simplify(
-            expresion.subs(sustitucion_cero)
-        )
-
-        if valor_en_cero != 0:
-            raise ValueError(
-                f"La componente {i} no es lineal porque "
-                f"contiene un término independiente distinto de 0."
-            )
-
-        try:
-            polinomio = sp.Poly(
-                expresion,
-                *variables
-            )
-
-        except sp.PolynomialError as error:
-            raise ValueError(
-                f"La componente {i} no es lineal: "
-                f"{expresion}."
-            ) from error
-
-        if polinomio.total_degree() > 1:
-            raise ValueError(
-                f"La componente {i} no es lineal: "
-                f"{expresion}."
-            )
-
-    return True
+def vector_validado(texto, dimension):
+    datos = leer_json(texto, "vector")
+    if not isinstance(datos, list) or len(datos) != dimension:
+        raise ErrorDeEntrada(f"El vector debe tener {dimension} componentes.")
+    return sp.Matrix([expresion_segura(v) for v in datos])
 
 
-# ============================================================
-# VALIDACIÓN COMPLETA
-# ============================================================
+def matriz_de_regla(texto, dimension_entrada, dimension_salida):
+    componentes = leer_json(texto, "regla")
+    if not isinstance(componentes, list) or len(componentes) != dimension_salida:
+        raise ErrorDeEntrada(f"La regla debe tener {dimension_salida} componentes.")
+    variables = sp.symbols(f"x1:{dimension_entrada + 1}")
+    filas = []
+    for componente in componentes:
+        expr = expresion_segura(componente, variables)
+        coeficientes = [sp.diff(expr, v) for v in variables]
+        if any(c.free_symbols for c in coeficientes) or expr != sum(c*v for c,v in zip(coeficientes, variables)):
+            raise ErrorDeEntrada("La regla no es lineal: debe tener coeficientes constantes y T(0)=0.")
+        filas.append(coeficientes)
+    return sp.Matrix(filas)
 
-def validar_transformacion(n, regla):
-    """
-    Valida completamente una transformación candidata:
 
-        T: R^n -> R^n
-
-    Si todo es correcto, devuelve los datos preparados
-    para los módulos matemáticos.
-    """
-
-    n = validar_dimension(n)
-
-    variables = crear_variables_validacion(n)
-
-    componentes = interpretar_componentes(
-        regla,
-        variables
-    )
-
-    validar_simbolos(
-        componentes,
-        variables
-    )
-
-    validar_linealidad(
-        componentes,
-        variables
-    )
-
-    return {
-        "n": n,
-        "variables": variables,
-        "componentes": componentes,
-        "valida": True
-    }
+def especificacion_espacio(texto):
+    nombre = str(texto).strip().upper().replace(" ", "").replace("^", "")
+    if re.fullmatch(r"R\d+", nombre):
+        n = int(nombre[1:]); tipo = "vector"; parametros = (n,)
+    elif re.fullmatch(r"P\d+", nombre):
+        grado = int(nombre[1:]); n = grado + 1; tipo = "polinomio"; parametros = (grado,)
+    elif re.fullmatch(r"M\d+X\d+", nombre):
+        p, q = map(int, nombre[1:].split("X")); n = p*q; tipo = "matriz"; parametros = (p, q)
+        if p < 1 or q < 1:
+            raise ErrorDeEntrada("Las dimensiones de una matriz deben ser positivas.")
+    else:
+        raise ErrorDeEntrada("Espacio inválido. Ejemplos: R2, P2 (grado <= 2), M2x3.")
+    if not 1 <= n <= MAX_DIM:
+        raise ErrorDeEntrada(f"La dimensión del espacio debe estar entre 1 y {MAX_DIM}.")
+    return {"nombre": nombre.replace("X", "x"), "tipo": tipo, "dimension": n, "parametros": parametros}
