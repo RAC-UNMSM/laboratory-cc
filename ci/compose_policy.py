@@ -1,15 +1,15 @@
 """Reglas de seguridad para los docker-compose.yml de `grupos/*/apps/*/`.
 
 COPIA — el original vive en el repo de infraestructura
-(`dagster_project/lab_pipelines/compose_policy.py`), donde además lo usa
-`docker_resource.py` como defensa en profundidad en el momento real del
+(`lab_deploy/compose_policy.py`), donde además lo usa
+`deployer.py` como defensa en profundidad en el momento real del
 despliegue. Este repo (`lab`) es público y solo tiene el contenido de los
 alumnos + su CI, así que se duplica el archivo en vez de acoplar este repo
 al de infraestructura (que puede ser privado). Si cambian las reglas, hay
 que actualizar los dos.
 
-Sin dependencias de Dagster a propósito: así el validador de CI no necesita
-instalar nada más que PyYAML.
+Solo depende de PyYAML a propósito: así el validador de CI no necesita
+instalar nada más.
 """
 
 from __future__ import annotations

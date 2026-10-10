@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "tema": {
+    "id": "tema_01",
+    "titulo": "EDOs Lineales y No Lineales",
+    "orden": 1,
+    "origen": {
+      "archivo": "balotario.tex",
+      "seccion_latex": "Tema 1: EDOs Lineales y No Lineales",
+      "lineas": [
+        115,
+        872
+      ]
+    },
+    "notas": "Transcripcion fiel del balotario del grupo. No se agregaron ni se reformularon enunciados. Las condiciones iniciales marcadas con ci_derivada=true no estan en el .tex: se eligieron para fijar un PVI concreto a partir de la solucion general que el .tex si demuestra."
+  },
+  "problemas": [
+    {
+      "id": "1.1",
+      "orden": 1,
+      "titulo": "EDO separable con intervalo maximal de existencia",
+      "enunciado": "Resuelva la ecuacion diferencial ordinaria separable $\\frac{dy}{dx} = 3xy^2$ con $y(0) = 1$ y determine el intervalo maximo de existencia de la solucion.",
+      "tipo": "separable",
+      "dificultad": "basica",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\frac{dy}{dx} = 3xy^2",
+        "forma": "primer_orden_escalar",
+        "dimension": 1,
+        "autonomo": false,
+        "variable_independiente": "x",
+        "variables_estado": [
+          "y"
+        ],
+        "campo": [
+          "3*x*y**2"
+        ],
+        "parametros": {}
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [
+          1.0
+        ],
+        "intervalo_sugerido": [
+          0.0,
+          0.7
+        ],
+        "ci_derivada": false,
+        "notas": "El intervalo sugerido se queda estrictamente dentro del intervalo maximal: la solucion explota en x = sqrt(2/3) ~ 0.8165."
+      },
+      "numerico": {
+        "metodo": "RK45",
+        "rtol": 1e-10,
+        "atol": 1e-12,
+        "puntos": 400
+      },
+      "solucion_esperada": {
+        "tipo": "analitica_explicita",
+        "latex": "y(x) = \\frac{2}{2 - 3x^2}, \\qquad I = \\left(-\\sqrt{2/3},\\, \\sqrt{2/3}\\right)",
+        "expresion": "2/(2 - 3*x**2)",
+        "componente": "y",
+        "tolerancia": 1e-07,
+        "error_observado": 2.6e-09,
+        "datos_adicionales": {
+          "intervalo_maximal": [
+            -0.816496580927726,
+            0.816496580927726
+          ],
+          "singularidad_positiva": 0.816496580927726,
+          "singularidad_expresion": "sqrt(2/3)"
+        },
+        "notas": "El .tex da C = -1 y el intervalo maximal centrado en x0 = 0.",
+        "solucion_en_tex": true
+      },
+      "verificacion": {
+        "comparacion_puntual": true,
+        "explosion_fuera_del_intervalo": true,
+        "notas": "Ademas de comparar punto a punto, se comprueba que integrar mas alla de la singularidad no produce una solucion valida."
+      }
+    },
+    {
+      "id": "1.2",
+      "orden": 2,
+      "titulo": "EDO de Bernoulli con solucion de equilibrio",
+      "enunciado": "Resuelva la ecuacion diferencial ordinaria de Bernoulli $y' + y = y^3$ con $y(0) = 1$.",
+      "tipo": "bernoulli",
+      "dificultad": "basica",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "y' + y = y^3",
+        "forma": "primer_orden_escalar",
+        "dimension": 1,
+        "autonomo": true,
+        "variable_independiente": "x",
+        "variables_estado": [
+          "y"
+        ],
+        "campo": [
+          "y**3 - y"
+        ],
+        "parametros": {}
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [
+          1.0
+        ],
+        "intervalo_sugerido": [
+          0.0,
+          5.0
+        ],
+        "ci_derivada": false
+      },
+      "numerico": {
+        "metodo": "RK45",
+        "rtol": 1e-10,
+        "atol": 1e-12,
+        "puntos": 300
+      },
+      "solucion_esperada": {
+        "tipo": "analitica_explicita",
+        "latex": "y(x) \\equiv 1, \\qquad \\forall x \\in \\mathbb{R}",
+        "expresion": "1",
+        "componente": "y",
+        "tolerancia": 1e-08,
+        "error_observado": 0.0,
+        "datos_adicionales": {
+          "es_equilibrio": true,
+          "estabilidad_equilibrio": "inestable",
+          "derivada_campo_en_equilibrio": 2.0
+        },
+        "notas": "La condicion inicial cae exactamente sobre el equilibrio y = 1 (C = 0 en el .tex). Es un equilibrio INESTABLE: f'(1) = 3y^2 - 1 = 2 > 0. El caso vale como prueba de regresion justamente porque cualquier error del integrador se amplifica como e^{2x} en vez de amortiguarse.",
+        "solucion_en_tex": true
+      },
+      "verificacion": {
+        "comparacion_puntual": true,
+        "equilibrio_exacto": true
+      }
+    },
+    {
+      "id": "1.3",
+      "orden": 3,
+      "titulo": "Cauchy-Euler no homogenea por variacion de parametros",
+      "enunciado": "Halle la solucion general de la ecuacion diferencial $x^2 y'' - 2x y' + 2y = x^3 \\ln x$, con $x > 0$.",
+      "tipo": "cauchy_euler",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "x^2 y'' - 2x y' + 2y = x^3 \\ln x, \\quad x > 0",
+        "forma": "sistema_primer_orden",
+        "orden_original": 2,
+        "dimension": 2,
+        "autonomo": false,
+        "variable_independiente": "x",
+        "variables_estado": [
+          "y",
+          "yp"
+        ],
+        "campo": [
+          "yp",
+          "(2*x*yp - 2*y + x**3*log(x))/x**2"
+        ],
+        "parametros": {},
+        "notas": "Reduccion estandar a primer orden con yp = y'. El campo exige x > 0 por el log y por la division entre x^2."
+      },
+      "condiciones_iniciales": {
+        "t0": 1.0,
+        "y0": [
+          -0.75,
+          -1.75
+        ],
+        "intervalo_sugerido": [
+          1.0,
+          3.0
+        ],
+        "ci_derivada": true,
+        "notas": "El .tex entrega la solucion GENERAL con c1 y c2 libres, que no define un PVI. Se fija el caso c1 = c2 = 0, que aisla la solucion particular y_p demostrada en el .tex. De y_p(x) = x^3 ln(x)/2 - 3x^3/4 se sigue y_p(1) = -3/4 y y_p'(1) = -7/4."
+      },
+      "numerico": {
+        "metodo": "RK45",
+        "rtol": 1e-11,
+        "atol": 1e-13,
+        "puntos": 400
+      },
+      "solucion_esperada": {
+        "tipo": "analitica_explicita",
+        "latex": "y(x) = c_1 x + c_2 x^2 + \\frac{1}{2}x^3 \\ln x - \\frac{3}{4}x^3, \\qquad x > 0",
+        "expresion": "0.5*x**3*log(x) - 0.75*x**3",
+        "componente": "y",
+        "tolerancia": 1e-09,
+        "error_observado": 2e-11,
+        "datos_adicionales": {
+          "solucion_homogenea_latex": "y_h(x) = c_1 x + c_2 x^2",
+          "solucion_particular_latex": "y_p(x) = \\frac{1}{2}x^3 \\ln x - \\frac{3}{4}x^3",
+          "wronskiano_latex": "W(x) = x^2",
+          "constantes_fijadas": {
+            "c1": 0.0,
+            "c2": 0.0
+          }
+        },
+        "notas": "La expresion comparada es y_p, no la general: es lo unico numericamente verificable sin inventar datos.",
+        "solucion_en_tex": true
+      },
+      "verificacion": {
+        "comparacion_puntual": true,
+        "solo_solucion_particular": true
+      }
+    },
+    {
+      "id": "1.4",
+      "orden": 4,
+      "titulo": "Riccati con solucion particular conocida",
+      "enunciado": "Considere la ecuacion diferencial no lineal de Riccati $\\frac{dy}{dx} = y^2 - 2xy + (x^2 + 1)$. Verifique que $y_1(x) = x$ es una solucion particular y determine la solucion general $y(x)$.",
+      "tipo": "riccati",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\frac{dy}{dx} = y^2 - 2xy + (x^2 + 1)",
+        "forma": "primer_orden_escalar",
+        "dimension": 1,
+        "autonomo": false,
+        "variable_independiente": "x",
+        "variables_estado": [
+          "y"
+        ],
+        "campo": [
+          "y**2 - 2*x*y + x**2 + 1"
+        ],
+        "parametros": {}
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [
+          -1.0
+        ],
+        "intervalo_sugerido": [
+          0.0,
+          3.0
+        ],
+        "ci_derivada": true,
+        "notas": "El .tex entrega la solucion general y(x) = x + 1/(C - x). Se elige y(0) = -1, que da C = -1 y por tanto y(x) = x - 1/(1 + x), rama sin singularidad para x > -1. La eleccion y(0) = 1 daria C = 1 y una explosion en x = 1, inservible para una prueba de regresion estable."
+      },
+      "numerico": {
+        "metodo": "RK45",
+        "rtol": 1e-11,
+        "atol": 1e-13,
+        "puntos": 400
+      },
+      "solucion_esperada": {
+        "tipo": "analitica_explicita",
+        "latex": "y(x) = x + \\frac{1}{C - x} = \\frac{Cx - x^2 + 1}{C - x}, \\qquad C \\in \\mathbb{R}",
+        "expresion": "x - 1/(1 + x)",
+        "componente": "y",
+        "tolerancia": 1e-09,
+        "error_observado": 1.5e-11,
+        "datos_adicionales": {
+          "solucion_particular_latex": "y_1(x) = x",
+          "solucion_particular_expresion": "x",
+          "sustitucion_latex": "y = y_1 + 1/u, \\quad u' = -1, \\quad u(x) = C - x",
+          "constante_fijada": {
+            "C": -1.0
+          }
+        },
+        "solucion_en_tex": true
+      },
+      "verificacion": {
+        "comparacion_puntual": true,
+        "solucion_particular_anula_residuo": true,
+        "notas": "Se comprueba por separado que y_1(x) = x satisface la EDO exactamente, que es la primera mitad de lo que pide el enunciado."
+      }
+    },
+    {
+      "id": "1.5",
+      "orden": 5,
+      "titulo": "Pendulo simple no lineal: energia, separatriz y periodo exacto",
+      "enunciado": "El movimiento de un pendulo simple no lineal sin amortiguamiento se rige por $\\ddot{\\theta} + \\omega_0^2 \\sin\\theta = 0$. Obtenga la primera integral de la energia, determine la ecuacion de la separatriz en el plano $(\\theta, \\dot{\\theta})$ y exprese el periodo exacto de oscilacion para una amplitud angular $\\theta_0 \\in (0, \\pi)$.",
+      "tipo": "sistema_conservativo_no_lineal",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\ddot{\\theta} + \\omega_0^2 \\sin\\theta = 0",
+        "forma": "sistema_primer_orden",
+        "orden_original": 2,
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": [
+          "theta",
+          "thetapunto"
+        ],
+        "campo": [
+          "thetapunto",
+          "-w0**2*sin(theta)"
+        ],
+        "parametros": {
+          "w0": 1.0
+        },
+        "notas": "w0 corresponde a omega_0. Se usa w0 = 1 para que el periodo teorico quede en unidades de 1/w0."
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [
+          1.0471975511965976,
+          0.0
+        ],
+        "intervalo_sugerido": [
+          0.0,
+          20.229004257751154
+        ],
+        "ci_derivada": true,
+        "notas": "Se elige la amplitud theta_0 = pi/3 (dentro del (0, pi) que pide el enunciado) soltada desde el reposo, y se integra exactamente 3 periodos teoricos para poder medir el retorno."
+      },
+      "numerico": {
+        "metodo": "RK45",
+        "rtol": 1e-12,
+        "atol": 1e-14,
+        "puntos": 3000
+      },
+      "solucion_esperada": {
+        "tipo": "invariantes",
+        "latex": "E = \\frac{1}{2}\\dot{\\theta}^2 - \\omega_0^2 \\cos\\theta = \\text{cte}; \\quad \\dot{\\theta}_{\\text{sep}} = \\pm 2\\omega_0\\cos(\\theta/2); \\quad T = \\frac{4}{\\omega_0}K(k),\\; k = \\sin(\\theta_0/2)",
+        "invariantes": [
+          {
+            "nombre": "energia",
+            "tipo": "conservado",
+            "expresion": "0.5*thetapunto**2 - w0**2*cos(theta)",
+            "latex": "E = \\frac{1}{2}\\dot{\\theta}^2 - \\omega_0^2\\cos\\theta",
+            "valor_inicial": -0.5,
+            "tolerancia": 1e-09,
+            "error_observado": 3.6e-12
+          },
+          {
+            "nombre": "periodo",
+            "tipo": "periodo",
+            "latex": "T = \\frac{4}{\\omega_0}K(k), \\qquad k = \\sin(\\theta_0/2)",
+            "valor": 6.743001419250384,
+            "recomputar_con": "4/w0 * scipy.special.ellipk(sin(theta0/2)**2)",
+            "comprobacion": "retorno_al_estado_inicial_tras_3_periodos",
+            "tolerancia": 1e-08,
+            "error_observado": 4e-12,
+            "notas": "scipy.special.ellipk usa el parametro m = k^2, no el modulo k. El test recomputa T con scipy y exige que coincida con el valor almacenado, de modo que el JSON no sea la unica fuente de verdad."
+          },
+          {
+            "nombre": "limite_pequenas_oscilaciones",
+            "tipo": "limite_analitico",
+            "latex": "\\lim_{k \\to 0} K(k) = \\frac{\\pi}{2} \\implies T_0 = \\frac{2\\pi}{\\omega_0}",
+            "valor": 6.283185307179586,
+            "tolerancia": 1e-06
+          }
+        ],
+        "datos_adicionales": {
+          "separatriz_latex": "\\dot{\\theta}_{\\text{sep}}(\\theta) = \\pm 2\\omega_0\\cos(\\theta/2)",
+          "separatriz_expresion": "2*w0*cos(theta/2)",
+          "energia_separatriz": 1.0,
+          "notas_separatriz": "La separatriz corresponde a E = +w0^2, la orbita homoclinica que une los equilibrios inestables theta = +-pi."
+        },
+        "notas": "No hay solucion explicita en terminos elementales: la verificacion es por invariantes conservados y por el periodo, no por comparacion puntual.",
+        "solucion_en_tex": true
+      },
+      "verificacion": {
+        "comparacion_puntual": false,
+        "conservacion_invariante": true,
+        "periodo_vs_integral_eliptica": true,
+        "separatriz_sobre_nivel_de_energia": true
+      }
+    }
+  ]
+}
