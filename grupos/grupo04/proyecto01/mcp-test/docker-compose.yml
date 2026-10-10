@@ -1,0 +1,16 @@
+services:
+  mcp-test:
+    build: .
+    container_name: ${LAB_CONTAINER_NAME}
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      LAB_DOMAIN: ${LAB_DOMAIN:-localhost:8000}
+      LAB_PUBLIC_PATH: ${LAB_PUBLIC_PATH:-}
+    ports:
+      - "8000"
+
+networks:
+  default:
+    name: lab_net
+    external: true
