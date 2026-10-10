@@ -135,17 +135,35 @@
 
       function normalizeToolOutput(raw) {
         let data = raw;
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 8; i++) {
           if (typeof data === "string") {
             try { data = JSON.parse(data); continue; } catch { return null; }
           }
           if (!data || typeof data !== "object") return null;
-          if (data.structuredContent) { data = data.structuredContent; continue; }
-          if (typeof data.text === "string") { data = data.text; continue; }
-          if (data.result && typeof data.result === "object") { data = data.result; continue; }
+          if (data.structuredContent && typeof data.structuredContent === "object") {
+            const { structuredContent, ...envelope } = data;
+            data = { ...envelope, ...structuredContent };
+            continue;
+          }
+          if (typeof data.text === "string") {
+            const { text, ...envelope } = data;
+            try { data = { ...envelope, ...JSON.parse(text) }; continue; }
+            catch { return null; }
+          }
           if (Array.isArray(data.content)) {
             const textBlock = data.content.find(item => item?.type === "text" && typeof item.text === "string");
-            if (textBlock) { data = textBlock.text; continue; }
+            if (textBlock) {
+              const { content, ...envelope } = data;
+              try { data = { ...envelope, ...JSON.parse(textBlock.text) }; continue; }
+              catch { return null; }
+            }
+          }
+          // `result` suele contener solo métricas; conserva también los campos
+          // hermanos (inputs, lagrange, newton, reports, diagnostics, etc.).
+          if (data.result && typeof data.result === "object") {
+            const { result, ...envelope } = data;
+            data = { ...envelope, ...result };
+            continue;
           }
           break;
         }
@@ -153,17 +171,37 @@
         if (data.lagrange && data.newton) {
           const lagrange = data.lagrange;
           const newton = data.newton;
-          const lagrangeValue = lagrange.value;
-          const newtonValue = newton.value;
-          const points = newton.points?.length ? newton.points : (lagrange.points || []);
+          const lagrangeValue = lagrange.value ?? data.lagrange_value;
+          const newtonValue = newton.value ?? data.newton_value;
+          const points = data.inputs?.points?.length
+            ? data.inputs.points
+            : (newton.points?.length ? newton.points : (lagrange.points || []));
+          const advertisedReports = Array.isArray(data.reports) ? data.reports : [];
+          const reportFor = (label, calculation, index) => {
+            const nested = calculation.report && typeof calculation.report === "object"
+              ? calculation.report : {};
+            const advertised = advertisedReports[index] || {};
+            return {
+              ...nested,
+              ...advertised,
+              label,
+              status: nested.status ?? calculation.report_status ?? advertised.status,
+              message: nested.message ?? advertised.message,
+              error: nested.error ?? calculation.report_error ?? advertised.error,
+              preview_url: nested.preview_url ?? calculation.pdf_preview_url ?? advertised.preview_url,
+              download_url: nested.download_url ?? calculation.pdf_url ?? advertised.download_url
+            };
+          };
           return {
             ...newton,
             method: "Comparación Newton y Lagrange",
-            x_eval: data.x_eval ?? newton.x_eval ?? lagrange.x_eval,
+            x_eval: data.x_eval ?? data.inputs?.x_eval ?? newton.x_eval ?? lagrange.x_eval,
             value: newtonValue ?? lagrangeValue,
             lagrange_value: lagrangeValue,
             newton_value: newtonValue,
-            difference: data.difference ?? Math.abs((lagrangeValue ?? 0) - (newtonValue ?? 0)),
+            difference: data.absolute_difference ?? data.difference
+              ?? data.diagnostics?.absolute_difference
+              ?? Math.abs((lagrangeValue ?? 0) - (newtonValue ?? 0)),
             polynomial: `Lagrange: ${lagrange.polynomial ?? "—"} | Newton: ${newton.polynomial ?? "—"}`,
             points,
             basis: lagrange.basis || [],
@@ -172,8 +210,8 @@
             lagrange_development: lagrange.lagrange_development || [],
             newton_development: newton.newton_development || [],
             reports: [
-              { label: "Informe de Lagrange", ...(lagrange.report || {}) },
-              { label: "Informe de Newton", ...(newton.report || {}) }
+              reportFor("Informe de Lagrange", lagrange, 0),
+              reportFor("Informe de Newton", newton, 1)
             ]
           };
         }
@@ -430,30 +468,61 @@
         const box = qs("#report-list");
         box.innerHTML = "";
 
-        let reports = Array.isArray(data.reports) ? data.reports : [];
+        let reports = Array.isArray(data.reports) ? data.reports.map(item => ({
+          ...item,
+          status: item.status ?? item.report_status ?? data.report_status,
+          error: item.error ?? item.report_error ?? data.report_error,
+          preview_url: item.preview_url ?? item.pdf_preview_url,
+          download_url: item.download_url ?? item.pdf_url
+        })) : [];
         if (!reports.length && data.report && typeof data.report === "object") {
-          reports = [{ label: data.report.name || "Informe PDF", ...data.report }];
+          reports = [{
+            label: data.report.name || "Informe PDF",
+            ...data.report,
+            status: data.report.status ?? data.report_status,
+            error: data.report.error ?? data.report_error,
+            preview_url: data.report.preview_url ?? data.report.pdf_preview_url ?? data.pdf_preview_url,
+            download_url: data.report.download_url ?? data.report.pdf_url ?? data.pdf_url
+          }];
         }
         if (!reports.length && (data.pdf_preview_url || data.pdf_url)) {
-          reports = [{ label: "Informe PDF", preview_url: data.pdf_preview_url, download_url: data.pdf_url }];
+          reports = [{
+            label: "Informe PDF", status: data.report_status, error: data.report_error,
+            preview_url: data.pdf_preview_url, download_url: data.pdf_url
+          }];
         }
-        const usable = reports.filter(item => item && (item.preview_url || item.download_url));
-        if (!usable.length) {
+        if (!reports.length) {
           const empty = document.createElement("div");
           empty.className = "empty";
           empty.textContent = data.report_status === "error"
             ? "No se pudo generar el informe: " + (data.report_error || "error desconocido")
-            : "Esta respuesta no contiene un PDF generado.";
+            : data.report_status === "skipped"
+              ? "La generación del PDF se omitió por solicitud."
+              : "Esta respuesta no contiene información de un PDF.";
           box.appendChild(empty);
           return;
         }
 
-        for (const item of usable) {
+        for (const item of reports) {
           const card = document.createElement("div");
           card.className = "card pdf-card";
           const heading = document.createElement("h3");
           heading.textContent = item.label || item.name || "Informe PDF";
           card.appendChild(heading);
+
+          if (item.status === "skipped" || item.status === "error" || item.error || item.message
+              || (!item.preview_url && !item.download_url)) {
+            const status = document.createElement("div");
+            status.className = "empty";
+            if (item.status === "skipped") {
+              status.textContent = item.message || "PDF omitido por solicitud.";
+            } else if (item.status === "error" || item.error) {
+              status.textContent = "No se pudo generar el PDF: " + (item.error || item.message || "error desconocido");
+            } else if (!item.preview_url && !item.download_url) {
+              status.textContent = item.message || "El servidor no devolvió enlaces para este PDF.";
+            }
+            card.appendChild(status);
+          }
 
           const actions = document.createElement("div");
           actions.className = "pdf-actions";

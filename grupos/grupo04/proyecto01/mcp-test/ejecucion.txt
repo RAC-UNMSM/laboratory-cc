@@ -4,10 +4,13 @@ GUÍA DE EJECUCIÓN — MCP GRUPO04 (DOCKER)
 Carpeta del proyecto:
 C:\Users\User\Desktop\laboratory-cc-grupo04\grupos\grupo04\proyecto01\mcp-test
 
-El único modo incluido en este proyecto es Docker Compose. El contenedor inicia
-server.py, atiende MCP en el puerto interno 8000 y conserva los PDFs en
-SeaweedFS. app.py, host.exe y config.yml fueron retirados: el túnel personal de
-Cloudflare no forma parte de este flujo.
+El modo de ejecución de este proyecto es Docker Compose. El contenedor inicia
+server.py y atiende MCP en el puerto interno 8000. Los PDF se guardan en
+SeaweedFS cuando ese servicio está activo y conectado a lab_net; Compose no lo
+inicia por sí solo. app.py ya no forma parte del proyecto. host.exe y config.yml
+pueden permanecer en la carpeta local, pero están ignorados por Git y no se
+copian a la imagen Docker. El túnel personal de Cloudflare no forma parte de
+este flujo.
 
 1. REQUISITOS Y PREPARACIÓN
 ---------------------------
@@ -124,14 +127,22 @@ grupo04-mcp-test-imgs. La generación del PDF ocurre en memoria, se sube al
 bucket y las rutas /reports/<archivo>/preview y /reports/<archivo>/download
 lo recuperan desde allí.
 
-En Docker local, Compose puede asignar un puerto de Windows aleatorio. Si
-preview_url o download_url apunta a localhost:8000, reemplaza solo el host y
-puerto por 127.0.0.1:<puerto-asignado>, manteniendo el resto de la ruta.
+En Docker local, Compose asigna un puerto de Windows aleatorio porque el archivo
+publica el puerto interno 8000 sin fijar uno en el host. Inspector debe usar el
+puerto que informa `docker compose port`. La configuración local de enlaces PDF
+usa `LAB_DOMAIN` (por defecto, `localhost:8000`), así que esos enlaces pueden
+apuntar a un puerto distinto del que Docker asignó. El PDF puede haberse
+generado y guardado aunque su enlace de previsualización local no abra. Para que
+la previsualización embebida funcione, configura un puerto fijo en el mapeo de
+Docker (por ejemplo, `8000:8000`, si el puerto 8000 del equipo está libre) y usa
+ese mismo origen en `LAB_DOMAIN` (por ejemplo, `127.0.0.1:8000`). Si solo vas a
+abrir el enlace manualmente, puedes sustituir el host y puerto de la URL por
+`127.0.0.1:<puerto-asignado>` y conservar la ruta `/reports/...`.
 
-En producción, el despliegue proporciona LAB_DOMAIN y LAB_PUBLIC_PATH y Caddy
-debe enviar las rutas de la app, incluyendo /mcp y /reports, al contenedor.
+En producción, el despliegue proporciona `LAB_DOMAIN` y `LAB_PUBLIC_PATH`; Caddy
+debe enviar las rutas de la app, incluyendo `/mcp` y `/reports`, al contenedor.
 La publicación pública del laboratorio la administra infraestructura; no se
-inicia host.exe ni un túnel desde esta carpeta.
+inicia `host.exe` ni un túnel desde esta carpeta.
 
 6. DETENER Y REINICIAR
 ----------------------
