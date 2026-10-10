@@ -1,0 +1,10 @@
+# Lo que no debe entrar a la imagen: caches, pruebas locales, informes viejos y
+# documentación. El Dockerfile copia solo lo que el servidor importa.
+__pycache__/
+*.py[cod]
+informes/
+test/
+tests/
+conexion/
+*.md
+balotario/*.tex
