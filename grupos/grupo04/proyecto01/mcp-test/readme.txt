@@ -1,29 +1,24 @@
-GRUPO04 MCP — MÉTODOS NUMÉRICOS
-================================
+MCP GRUPO04 — EJECUCIÓN DOCKER
 
-La documentación principal está en README.md. El plan, diseños de interfaz y documentos técnicos están en la carpeta docs.
+Este proyecto se ejecuta con Docker Compose. Ya no se usa app.py, host.exe ni
+config.yml. El contenedor inicia server.py; los PDF se generan en memoria y se
+guardan en SeaweedFS.
 
-HERRAMIENTAS
-Se conservan las cuatro de interpolación Newton/Lagrange. Nuevas herramientas: analizar_aritmetica_flotante, analizar_error_numerico, propagar_error_numerico, resolver_raiz, resolver_sistema_lineal, resolver_sistema_disperso, ajustar_datos, derivar_numericamente, derivar_tabla_numericamente, integrar_numericamente, integrar_tabla_numericamente, resolver_edo, resolver_valores_propios, optimizar_funcion, resolver_problema_frontera y resolver_pde.
+Desde PowerShell:
 
-ACTUALIZAR DEPENDENCIAS LOCALES
-Desde PowerShell, dentro de mcp-test:
-    .\.ENTORNO\Scripts\Activate.ps1
-    python -m pip install -r requirements.txt
-    python app.py
-
-DOCKER
-Inicia Docker Desktop. En PowerShell:
+    cd C:\Users\User\Desktop\laboratory-cc-grupo04\grupos\grupo04\proyecto01\mcp-test
     $env:LAB_CONTAINER_NAME = "lab-grupo04_proyecto01_mcp-test"
-    docker network create lab_net
+    docker network inspect lab_net
     docker compose up --build
-Si lab_net ya existe, omite la creación. No ejecutes app.py y Docker al mismo tiempo.
 
-INSPECTOR
-Con el servidor activo, conecta Streamable HTTP a http://localhost:8000/mcp. Selecciona grupo04-mcp-test y abre Tools.
+Si lab_net no existe, créala una vez con docker network create lab_net. La red no inicia SeaweedFS; sin ese servicio usa include_report=false para probar los cálculos sin generar PDF.
 
-PDF
-Las nuevas herramientas devuelven enlaces report.preview_url y report.download_url. Cloudflare debe enrutar /mcp y /reports al puerto 8000. Docker guarda informes en el volumen reports_data.
+En otra ventana, consulta el puerto publicado:
 
-LÍMITES
-Expresiones matemáticas permitidas, no código Python. Sistemas densos limitados a 250x250; el solver disperso admite COO/CSR hasta 5000x5000 y 100000 entradas. BVP y PDE están acotados a casos 1D según docs/CATALOGO_HERRAMIENTAS.md. Revisa status y diagnostics, sobre todo cuando no converja.
+    docker compose port mcp-test 8000
+
+Inicia MCP Inspector con npx @modelcontextprotocol/inspector@latest y conecta
+por Streamable HTTP a http://127.0.0.1:<puerto>/mcp.
+
+Detén con Ctrl+C y luego docker compose down. Los PDF nuevos quedan en
+SeaweedFS y no dependen de un volumen local.

@@ -1,19 +1,14 @@
 services:
   mcp-test:
     build: .
-    container_name: ${LAB_CONTAINER_NAME:-lab-grupo04_proyecto01_mcp-test}
+    container_name: ${LAB_CONTAINER_NAME}
     restart: unless-stopped
     mem_limit: 512m
     environment:
-      MCP_REPORTS_DIR: /app/reports
-      MCP_PUBLIC_BASE_URL: "${MCP_PUBLIC_BASE_URL:-https://wiadeuserrant.win}"
-    volumes:
-      - reports_data:/app/reports
+      LAB_DOMAIN: ${LAB_DOMAIN:-localhost:8000}
+      LAB_PUBLIC_PATH: ${LAB_PUBLIC_PATH:-}
     ports:
-      - "8000:8000"
-
-volumes:
-  reports_data:
+      - "8000"
 
 networks:
   default:

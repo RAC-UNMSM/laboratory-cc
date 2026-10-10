@@ -1,9 +1,11 @@
 # Plan de ampliación del MCP: Métodos Numéricos I y II
 
+**Nota de vigencia (2026-10-10):** este archivo registra el plan histórico de ampliación. La ejecución vigente es solo con Docker; el uso local de app.py/host.exe/config.yml fue retirado y los PDF ahora se guardan en SeaweedFS. Consulta docs/GUIA_DESPLIEGUE.md y docs/ESTADO_IMPLEMENTACION.md para el flujo actual.
+
 **Estado:** alcance implementado en la primera versión; ver docs/ESTADO_IMPLEMENTACION.md para los límites y verificaciones pendientes  
 **Proyecto:** grupo04 / proyecto01 / mcp-test
 
-## 1. Objetivo y estado actual
+## 1. Objetivo de la ampliación inicial (histórico)
 
 Ampliar el MCP desde su alcance inicial de interpolación polinómica para cubrir las familias principales de Métodos Numéricos I y II. Antes del cambio existían cuatro herramientas; la primera versión ampliada registra 20 en total. interpolation.py conserva interpolación; numerical_methods.py implementa los métodos nuevos; server.py registra tools, interfaz y rutas PDF; report.py y storage.py generan y conservan informes; app.py inicia servidor local y Cloudflare; Docker empaqueta el mismo MCP.
 

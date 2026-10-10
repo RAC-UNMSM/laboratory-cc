@@ -43,15 +43,32 @@ En comparaciones, mostrar métodos lado a lado y no llamar error verdadero a la 
 
 ## 5. storage y enlaces
 
-storage.py será la capa única para guardar y resolver PDFs; nombres impredecibles y rutas confinadas al directorio configurado. Preview usa inline; download, attachment. Docker monta volumen nombrado. app.py configura carpeta local y base HTTPS antes de iniciar server.py. Cloudflare ingress debe enrutar /mcp y /reports antes del fallback 404. Documentar que borrar el volumen elimina los informes. URLs configurables por entorno.
+storage.py es la capa única para persistir y recuperar PDFs. report.py construye cada
+PDF en memoria con BytesIO; no escribe archivos temporales ni requiere un volumen
+local. storage.py sube los bytes con urllib a SeaweedFS en
+http://seaweedfs:8333, bucket grupo04-mcp-test-imgs, con timeout en cada llamada.
+La clave incluye un nombre normalizado y un token aleatorio. La descarga valida
+que el nombre sea un archivo PDF directo, sin separadores ni controles.
+
+Las rutas /reports/<archivo>/preview y /reports/<archivo>/download leen el objeto
+desde SeaweedFS. Preview usa application/pdf y Content-Disposition inline;
+download usa attachment. La URL pública se forma con LAB_DOMAIN y
+LAB_PUBLIC_PATH, variables que inyecta el despliegue. Caddy debe enviar /mcp y
+/reports al mismo contenedor. La infraestructura ofrece la ruta pública de
+imágenes https://rac-unmsm.vekthos.org/img/grupo04-mcp-test.
+
+Si SeaweedFS no está disponible, el cálculo matemático se mantiene y la respuesta
+reporta el fallo del PDF. No se guarda una copia local temporal persistente.
+La retención del archivo depende del storage de SeaweedFS, no del ciclo de vida
+del contenedor Docker.
 
 ## 6. Documentación que acompaña las versiones
 
-- README.md: alcance, requisitos, modo local/Docker, Inspector, persistencia y errores comunes.
+- README.md: alcance, ejecución Docker, Inspector, persistencia y errores comunes.
 - CATALOGO_HERRAMIENTAS.md: argumentos, defaults, métodos, límites y ejemplos por tool.
 - GUIA_DE_USO.md: solicitudes en lenguaje natural y lectura de resultados, tablas, gráficas y PDF.
 - REFERENCIA_ALGORITMOS.md: fórmulas, pseudocódigo, supuestos y orden de error solo de métodos implementados.
-- GUIA_DESPLIEGUE.md: server local, Docker, túnel, rutas, volumen y reinicio.
+- GUIA_DESPLIEGUE.md: Docker, red, puerto local aleatorio, variables de despliegue, storage y rutas públicas.
 - HISTORIAL_CAMBIOS.md: versiones, tools y cambios incompatibles.
 - Cada ejecución puede producir PDF específico y, opcionalmente, JSON reproducible.
 
@@ -59,8 +76,16 @@ La documentación distingue lo implementado, lo planificado y lo que está fuera
 
 ## Contrato 1.1 y nivel explicativo
 
-El sobre común incluye `schema_version`, `problem_type`, `status`, `method`, `level`, `inputs`, `result`, `diagnostics`, `steps`, `tables`, `charts`, `warnings` y `report`. Las tools de interpolación conservan además sus campos históricos para no romper el recurso UI anterior.
+El sobre común incluye schema_version, problem_type, status, method, level, inputs,
+result, diagnostics, steps, tables, charts, warnings y report. Las tools de
+interpolación conservan además sus campos históricos para no romper el recurso UI
+anterior.
 
-`level` puede ser `inicial` o `intermedio`; indica la profundidad de explicación que presenta la interfaz y el PDF. Ambos niveles conservan los valores calculados por el método. `include_report=false` devuelve el resultado sin compilar ni persistir un PDF; el valor predeterminado sigue generando el reporte.
+level puede ser inicial o intermedio; indica la profundidad de explicación que
+presenta la interfaz y el PDF. Ambos niveles conservan los valores calculados por
+el método. include_report=false devuelve el resultado sin generar ni persistir
+un PDF.
 
-El reporte ofrece `preview_url` y `download_url` cuando la generación termina. ReportLab procesa reportes de forma serializada; tablas extensas y trazos se acotan para mantener un consumo controlado. `storage.py` genera nombres aleatorios, valida que la ruta permanezca dentro de `reports/` y sirve vista previa/descarga.
+El reporte ofrece preview_url y download_url cuando la subida termina. ReportLab
+serializa la generación PDF; tablas extensas y trazos se acotan para mantener un
+consumo controlado.

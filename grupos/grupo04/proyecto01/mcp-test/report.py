@@ -1,5 +1,4 @@
-from pathlib import Path
-
+from io import BytesIO
 import threading
 
 from storage import persist_pdf
@@ -46,8 +45,6 @@ def _generar_reporte_numerico_unlocked(result, report_name="resolucion_numerica"
     """Genera un informe PDF común para cualquier familia del MCP."""
     import json
     import math
-    import tempfile
-    from pathlib import Path
     from xml.sax.saxutils import escape
 
     from reportlab.lib import colors
@@ -239,16 +236,15 @@ def _generar_reporte_numerico_unlocked(result, report_name="resolucion_numerica"
         "y el diagnóstico antes de usarlo en una aplicación sensible.",
         styles["Italic"]))
 
-    with tempfile.TemporaryDirectory() as temp:
-        pdf_path = Path(temp) / "resultado.pdf"
-        document = SimpleDocTemplate(
-            str(pdf_path), pagesize=A4,
-            rightMargin=18 * mm, leftMargin=18 * mm,
-            topMargin=18 * mm, bottomMargin=18 * mm,
-            title="Informe de resolución numérica",
-            author="grupo04-mcp-test")
-        document.build(story)
-        return persist_pdf(pdf_path, report_name)
+    pdf_buffer = BytesIO()
+    document = SimpleDocTemplate(
+        pdf_buffer, pagesize=A4,
+        rightMargin=18 * mm, leftMargin=18 * mm,
+        topMargin=18 * mm, bottomMargin=18 * mm,
+        title="Informe de resolución numérica",
+        author="grupo04-mcp-test")
+    document.build(story)
+    return persist_pdf(pdf_buffer.getvalue(), report_name)
 
 
 def generar_reporte_numerico(result, report_name="resolucion_numerica"):

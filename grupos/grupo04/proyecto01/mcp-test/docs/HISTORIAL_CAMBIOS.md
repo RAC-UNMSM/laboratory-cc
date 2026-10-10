@@ -18,3 +18,11 @@ Matrices densas; BVP finite_difference solo y''=f(x); PDE limitada a calor/onda 
 - Corregido `resolver_pde`; normalizada la salida de interpolación y el nivel inicial/intermedio.
 - Migrados los PDF de interpolación a ReportLab, serializado su renderizado y validada la vista previa/descarga.
 - Adaptadas la UI, Docker y las guías; build y llamadas MCP reales completados.
+
+## 2026-10-10 — ejecución solo con Docker y PDFs en SeaweedFS
+
+- Retirados app.py, host.exe y config.yml; el túnel personal de Cloudflare queda fuera del proyecto.
+- Docker Compose usa LAB_CONTAINER_NAME, LAB_DOMAIN y LAB_PUBLIC_PATH, la red lab_net y un puerto local dinámico para Inspector.
+- report.py produce bytes PDF en memoria; storage.py los sube y recupera desde SeaweedFS.
+- Las rutas HTTP de preview/descarga entregan los bytes del storage sin depender del disco del contenedor.
+- README, ejecución y guía de despliegue actualizados para el flujo Docker.

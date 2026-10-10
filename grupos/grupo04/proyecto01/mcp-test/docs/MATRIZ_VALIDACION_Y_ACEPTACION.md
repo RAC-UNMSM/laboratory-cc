@@ -1,71 +1,82 @@
 # Matriz de validación y aceptación
 
-Lista de aceptación para la ampliación implementada. La lista documenta verificaciones recomendadas; no afirma que ya se ejecutaron.
+Lista de aceptación de las 27 herramientas y del despliegue Docker.
 
 ## 1. Controles comunes
 
-Validar forma, tipos, dimensiones, dominio y números finitos; comparar con solución conocida o referencia; verificar método, tolerancia, máximo de iteraciones, residuo y estado; controlar límites antes de reservar memoria; evitar que un fallo numérico detenga el servidor; conservar resultado si falla el PDF; comparar datos de UI con respuesta MCP.
+Validar forma, tipos, dimensiones, dominio y números finitos; comparar con
+solución conocida o referencia; verificar método, tolerancia, máximo de
+iteraciones, residuo y estado; controlar límites antes de reservar memoria;
+evitar que un fallo numérico detenga el servidor; conservar el resultado
+matemático si falla el PDF; comparar UI con la respuesta MCP.
 
-## 2. Casos iniciales
+## 2. Familias cubiertas
 
 | Familia | Caso de aceptación |
 |---|---|
-| Error | exacto 1/3 frente a aproximación decimal; error absoluto/relativo correcto |
-| Propagación | suma y producto con incertidumbres independientes; revisar incertidumbre combinada y supuesto declarado |
+| Error | exacto 1/3 frente a aproximación decimal; errores absoluto y relativo correctos |
+| Propagación | suma y producto con incertidumbres independientes |
 | Raíz | x²−2 en [1,2]; raíz y residuo dentro de tolerancia |
-| Sistema | matriz pequeña densa con solución conocida; residuo correcto |
-| Iterativos | matriz diagonalmente dominante; converge y muestra historial |
-| Disperso | tripletas COO pequeñas; CG/GMRES coinciden con referencia y respetan índice base 0 |
+| Sistema | matriz pequeña densa con solución conocida |
+| Disperso | sistema COO; CG/GMRES coinciden con referencia |
 | Interpolación | datos de y=x²; Newton y Lagrange coinciden |
-| Ajuste | datos lineales con ruido; coeficientes y residuos reproducibles; QR/SVD revelan rango y condición |
-| Derivación | derivada de x² en 3; mejora al reducir h hasta redondeo; diferencias tabulares en malla uniforme y no uniforme |
-| Integración | integral de x² de 0 a 1; Simpson dentro de tolerancia; tablas por trapecio/Simpson y requisitos de malla |
-| ODE | y'=y, y(0)=1; error baja al reducir paso |
+| Ajuste | datos lineales con ruido; coeficientes y residuos reproducibles |
+| Derivación | derivada de x² en 3; derivadas tabulares en mallas uniformes y no uniformes |
+| Integración | integral de x² en [0,1]; resultado 1/3 y condiciones de malla |
+| EDO | y'=y, y(0)=1; error baja al reducir el paso |
 | Valores propios | matriz diagonal 2x2; valores y residuos correctos |
 | Optimización | cuadrática definida positiva; minimizador y gradiente correctos |
 | Frontera | solución fabricada 1D; error disminuye al refinar |
-| PDE | calor 1D; frontera y estabilidad respetadas |
-
-Guardar referencias esperadas junto con pruebas detalladas al implementar cada módulo.
+| PDE | casos 1D/2D del catálogo; frontera, estabilidad y límites respetados |
 
 ## 3. Interfaz y clientes
 
-- Cada problem_type abre diseño correcto.
+- Cada problem_type abre el diseño correcto.
 - No aparecen campos vacíos silenciosos por una envoltura distinta del resultado.
-- Diferencia éxito, advertencia, no convergencia y entrada inválida.
-- Tabla truncada lo indica; gráficas tienen ejes y leyendas.
+- Se distinguen éxito, advertencia, no convergencia y entrada inválida.
+- Tablas truncadas lo indican; gráficas tienen ejes y leyendas.
 - Resultado, desarrollo, tabla, gráfica y PDF corresponden a una ejecución.
-- Probar Inspector y clientes disponibles; documentar diferencias de host.
-- La respuesta sigue útil sin MCP App.
+- La respuesta MCP sigue siendo útil aunque el cliente no renderice MCP Apps.
 
 ## 4. PDF y persistencia
 
-PDF legible por familia; preview inline y download adjunto; ruta manipulada no escapa del directorio; volumen sobrevive a recrear contenedor mientras no se borre; ruta pública /reports funciona; REPORT_FAILED no reemplaza estado matemático.
+- El PDF se genera en memoria y no se escribe en el sistema de archivos.
+- La subida al bucket grupo04-mcp-test-imgs usa timeout y devuelve un error claro
+  si SeaweedFS no responde.
+- Vista previa devuelve application/pdf con Content-Disposition inline.
+- Descarga devuelve application/pdf con Content-Disposition attachment.
+- Una clave manipulada no puede convertirse en una ruta ni escapar del bucket.
+- Un PDF sigue disponible después de recrear el contenedor mientras permanezca
+  en SeaweedFS.
+- Las rutas públicas /reports llegan al mismo contenedor que /mcp.
 
 ## 5. Ejecución
 
-**app.py:** intérprete esperado, servidor y túnel iniciados, URL pública correcta, Ctrl+C detiene procesos.  
-**Docker:** build con dependencias declaradas, puerto/transporte documentados, límites de recursos, volumen de reportes, sin .ENTORNO/cachés/archivos locales en imagen salvo decisión expresa, ingress para /mcp y /reports.
+Docker Compose: imagen construye desde requirements.txt, inicia server.py,
+limita memoria, usa lab_net y recibe LAB_CONTAINER_NAME, LAB_DOMAIN y
+LAB_PUBLIC_PATH. La prueba local consulta el puerto asignado con
+docker compose port mcp-test 8000. No deben incluirse entornos virtuales,
+cachés, PDF locales, app.py, host.exe ni config.yml en la imagen.
 
-## 6. Liberación de cada módulo
+Despliegue público: Caddy enruta el prefijo LAB_PUBLIC_PATH al contenedor en
+lab_net; /mcp y /reports deben llegar al servidor. SeaweedFS debe ser
+resoluble como seaweedfs:8333 desde el contenedor.
 
-Liberar solo cuando haya ejemplos documentados, referencias numéricas correctas, diagnósticos/límites visibles, vista completa, PDF funcional, modos local y Docker verificados y documentación actualizada.
+## 6. Herramientas nuevas
 
-## Casos de aceptación de las siete herramientas nuevas
-
-| Herramienta | Caso verificado |
+| Herramienta | Caso recomendado |
 |---|---|
-| `resolver_sistema_no_lineal` | Sistema `x0²+x1²=5`, `x0−x1=1`, inicial (2,1) |
-| `analizar_condicionamiento` | Matriz diagonal con condición elevada y una perturbación pequeña en b |
-| `resolver_edo_multipaso` | y'=y, y(0)=1; ABM4 se aproxima a e en t=1 |
-| `resolver_pde_2d` | Laplace con frontera u(x,y)=x; interior reproduce el perfil lineal |
-| `optimizar_funcion_restringida` | Cuadrática con igualdad x0+x1=3 y desigualdad x0>=0 |
-| `resolver_valores_propios_dispersos` | Matriz diagonal simétrica COO; el valor propio dominante coincide |
-| `integrar_adaptativamente` | Integral de x² entre 0 y 1; compara con 1/3 y revisa error estimado |
+| resolver_sistema_no_lineal | x0²+x1²=5, x0−x1=1, inicial (2,1) |
+| analizar_condicionamiento | matriz diagonal con condición elevada y perturbación pequeña en b |
+| resolver_edo_multipaso | y'=y, y(0)=1; comparar ABM4 con e en t=1 |
+| resolver_pde_2d | Laplace con frontera u(x,y)=x |
+| optimizar_funcion_restringida | cuadrática con igualdad x0+x1=3 y desigualdad x0>=0 |
+| resolver_valores_propios_dispersos | matriz simétrica diagonal COO |
+| integrar_adaptativamente | integral de x² entre 0 y 1, comparar con 1/3 |
 
-También se valida que cada tool aparezca en el registro MCP con docstring descriptivo y esquema de argumentos; las 27 herramientas aceptan omitir el PDF y devuelven el nivel solicitado. Se comprueba tanto el PDF genérico como el PDF legado de interpolación.
+## 7. Estado de la verificación
 
-
-## Resultado de verificación 2026-10-10
-
-Verificación completada: 27 esquemas MCP y docstrings válidos; llamadas de humo a las 27 herramientas; referencias numéricas conocidas correctas; interfaz JavaScript válida; PDF común, interpolación y PDE 2D creados; `docker compose config` y build de imagen correctos; el contenedor temporal anunció 27 herramientas por HTTP y ejecutó integración adaptativa y `resolver_pde`. El contenedor temporal fue detenido después de la prueba.
+La batería anterior verificó las 27 herramientas y un build Docker antes de
+migrar el almacenamiento a SeaweedFS. La migración descrita requiere una
+verificación de integración con SeaweedFS activo y la prueba de las rutas PDF
+en el despliegue.

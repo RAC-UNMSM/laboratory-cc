@@ -1,19 +1,26 @@
 # Estado de implementación
 
-**Implementación integrada y verificada el 2026-10-10.** El servidor registra 27 herramientas MCP: las 20 anteriores y siete nuevas para sistemas no lineales, condicionamiento, EDO multipaso, PDE 2D, optimización restringida, valores propios dispersos e integración adaptativa.
+El servidor registra 27 herramientas para Métodos Numéricos I y II y ofrece
+dos interfaces MCP App. El contrato de resultados permite nivel inicial o
+intermedio, tablas, gráficas y generación opcional de informes PDF.
 
-Todas las herramientas tienen docstrings en español usados como descripción MCP, además de esquemas de argumentos válidos. Las respuestas usan el esquema 1.1 y admiten `level` (`inicial`/`intermedio`) e `include_report` para omitir el PDF en llamadas que no lo necesiten. La interpolación mantiene sus campos antiguos además del esquema común.
+## Modo de ejecución actual
 
-Se corrigió el adaptador de `resolver_pde`. Los PDFs comunes y de interpolación se generan con ReportLab, `storage.py` proporciona preview/download, el renderizado PDF se serializa y el volumen Docker conserva los reportes. Docker ya no instala TeX Live. `docker-compose.yml` tiene un nombre de contenedor local predeterminado válido.
+El modo soportado es Docker Compose. app.py, host.exe y config.yml se retiran
+del flujo del proyecto. Docker inicia server.py en 0.0.0.0:8000. El Compose
+usa las variables LAB_CONTAINER_NAME, LAB_DOMAIN y LAB_PUBLIC_PATH que admite
+la infraestructura, la red externa lab_net y un puerto de host asignado por
+Docker para las pruebas locales.
 
-## Verificaciones completadas
+## Informes
 
-- Registro MCP: 27 herramientas descubiertas por `tools/list` desde la imagen Docker en ejecución temporal.
-- Esquemas y descripciones: válidos para las 27 tools.
-- Cálculos: prueba de llamada para las 27 herramientas y comparación de casos conocidos de raíces, sistemas, integración, Newton multivariable, EDO, PDE, optimización y valores propios.
-- Interfaz: sintaxis JavaScript válida y soporte de respuestas heredadas/nuevas.
-- Reportes: PDF genérico, interpolación heredada y mapa de calor 2D; almacenamiento y enlaces preview/download verificados.
-- Protocolo: llamada HTTP real a `integrar_adaptativamente` devolvió 1/3; `resolver_pde` aceptó `problem_type` sin colisión.
-- Docker: `docker compose config --quiet` y `docker compose build` completados correctamente.
+report.py construye PDF con ReportLab en un objeto BytesIO. storage.py los
+sube a SeaweedFS, bucket grupo04-mcp-test-imgs, con límites de tiempo. Las
+rutas HTTP de vista previa y descarga recuperan los bytes del storage; no
+dependen de un archivo ni de un volumen local del contenedor. LAB_DOMAIN y
+LAB_PUBLIC_PATH forman los enlaces públicos en producción.
 
-La prueba pública en `wiadeuserrant.win` no forma parte del build local; requiere iniciar `app.py`/Cloudflare o el contenedor en la máquina del propietario.
+La verificación anterior de las 27 herramientas corresponde a una versión
+previa al cambio de almacenamiento. La integración actualizada con SeaweedFS
+requiere que el usuario la levante en su Docker/lab_net para confirmar el
+acceso real al bucket y a las rutas PDF.

@@ -1,13 +1,15 @@
 """Servidor MCP del grupo04 para Métodos Numéricos I y II."""
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from mcp.server import MCPServer
 from mcp.server.apps import Apps, ResourceCsp
 from starlette.requests import Request
-from starlette.responses import FileResponse, PlainTextResponse
+from starlette.responses import PlainTextResponse, Response
 
 from interpolation import solve_interpolation
 from numerical_methods import (
@@ -19,7 +21,7 @@ from numerical_methods import (
     solve_pde, pack_result,
 )
 from report import generar_reporte_latex, generar_reporte_numerico
-from storage import public_origin, resolve_pdf
+from storage import load_pdf, public_origin, resolve_pdf
 
 BASE_DIR = Path(__file__).resolve().parent
 SERVER_NAME = "grupo04-mcp-test"
@@ -778,24 +780,41 @@ apps.add_html_resource(
 mcp = MCPServer(SERVER_NAME, extensions=[apps])
 
 
+async def _report_response(request: Request, disposition: str):
+    filename = request.path_params["filename"]
+    key = resolve_pdf(filename)
+    if key is None:
+        return PlainTextResponse("PDF no encontrado.", status_code=404)
+    try:
+        pdf_bytes = await asyncio.to_thread(load_pdf, key)
+    except Exception:
+        return PlainTextResponse(
+            "El almacenamiento de reportes no está disponible.",
+            status_code=502,
+        )
+    if pdf_bytes is None:
+        return PlainTextResponse("PDF no encontrado.", status_code=404)
+
+    safe_name = quote(key, safe="")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{safe_name}",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
 @mcp.custom_route("/reports/{filename}/preview", methods=["GET"], include_in_schema=False)
 async def preview_report(request: Request):
-    path = resolve_pdf(request.path_params["filename"])
-    if path is None:
-        return PlainTextResponse("PDF no encontrado.", status_code=404)
-    return FileResponse(path, media_type="application/pdf", filename=path.name,
-                        content_disposition_type="inline",
-                        headers={"X-Content-Type-Options": "nosniff"})
+    return await _report_response(request, "inline")
 
 
 @mcp.custom_route("/reports/{filename}/download", methods=["GET"], include_in_schema=False)
 async def download_report(request: Request):
-    path = resolve_pdf(request.path_params["filename"])
-    if path is None:
-        return PlainTextResponse("PDF no encontrado.", status_code=404)
-    return FileResponse(path, media_type="application/pdf", filename=path.name,
-                        content_disposition_type="attachment",
-                        headers={"X-Content-Type-Options": "nosniff"})
+    return await _report_response(request, "attachment")
 
 
 if __name__ == "__main__":

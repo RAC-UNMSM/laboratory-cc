@@ -18,3 +18,8 @@ __pycache__/
 # Reportes creados al usar la aplicación
 reports/*
 !reports/.gitkeep
+
+# Archivos exclusivos del antiguo túnel local del MCP grupo04
+/proyecto01/mcp-test/app.py
+/proyecto01/mcp-test/host.exe
+/proyecto01/mcp-test/config.yml

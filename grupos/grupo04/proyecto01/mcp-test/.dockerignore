@@ -7,6 +7,8 @@ __pycache__
 *.py[cod]
 reports
 **/*.pdf
+app.py
+config.yml
 host.exe
 cloudflared.exe
 docs

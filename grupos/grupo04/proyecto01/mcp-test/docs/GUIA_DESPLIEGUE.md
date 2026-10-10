@@ -1,45 +1,64 @@
 # Guía de ejecución y despliegue
 
-## Local con app.py
-1. Abre PowerShell en mcp-test.
-2. Activa .ENTORNO si existe.
-3. Instala/actualiza: python -m pip install -r requirements.txt.
-4. Confirma hostname y rutas /mcp y /reports en config.yml.
-5. Ejecuta python app.py y conserva abierta esa consola.
-6. Inspector local: http://127.0.0.1:8000/mcp. Público: https://<hostname>/mcp.
-7. Ctrl+C detiene MCP y cloudflared.
+## Modo local: Docker Compose
 
-No ejecutar app.py y Docker al mismo tiempo por el puerto 8000. No subir credenciales del túnel.
+Este proyecto se ejecuta en Docker. app.py, host.exe y config.yml no son parte
+del modo de ejecución. El contenedor inicia server.py; para producción, la
+infraestructura del laboratorio configura el acceso público.
 
-## Docker
-1. Inicia Docker Desktop.
-2. Define LAB_CONTAINER_NAME en la misma ventana PowerShell.
-3. Crea lab_net si falta.
-4. Ejecuta docker compose up --build.
-5. Usa http://localhost:8000/mcp para la prueba local.
-6. Para público, ejecuta host.exe/cloudflared con config.yml desde otra ventana.
-7. Mantén servidor y túnel activos.
-8. Ctrl+C y docker compose down para detener.
+En PowerShell, desde mcp-test:
 
-reports_data es volumen nombrado. docker compose down -v elimina el volumen y los informes.
+    $env:LAB_CONTAINER_NAME = "lab-grupo04_proyecto01_mcp-test"
+    docker network inspect lab_net
+    docker compose up --build
 
-## Cloudflare ingress
-Antes del fallback 404 deben existir:
-- hostname + path ^/mcp(/.*)?$ a http://127.0.0.1:8000
-- hostname + path ^/reports(/.*)?$ a http://127.0.0.1:8000
-- fallback http_status:404
+Si lab_net no existe, créala una vez con docker network create lab_net. Crear
+la red no inicia SeaweedFS. Para generar PDF localmente, SeaweedFS también debe
+estar activo y conectado a lab_net. Sin ese servicio, usa include_report=false
+para probar los cálculos. El Compose publica el puerto interno 8000 en un puerto
+local aleatorio. En una segunda ventana consulta el asignado:
 
-Reinicia cloudflared después de modificar config. Un GET /mcp en navegador no ejecuta una sesión MCP. Si /reports da 404, comprueba que PDF exista y que ingress incluya esa ruta.
+    docker compose port mcp-test 8000
 
-## Problemas frecuentes
-Connection refused: servidor/contendor apagado o puerto incorrecto.
-LAB_CONTAINER_NAME vacío: definir variable en esa ventana.
-lab_net no existe: crear red externa.
-404 de sesión MCP vieja: reconectar el Inspector.
-404 PDF: revisar enlace nuevo, storage/volumen e ingress.
+Abre Inspector en otra ventana con npx @modelcontextprotocol/inspector@latest
+y conecta por Streamable HTTP a http://127.0.0.1:<puerto>/mcp. Reemplaza
+<puerto> por el valor de docker compose port.
 
-## Reportes y recursos de ejecución
+Para detener: Ctrl+C en la ventana de Docker y luego docker compose down.
+Los informes PDF están en SeaweedFS y permanecen al recrear el contenedor.
 
-Los PDF se generan con ReportLab; no hace falta `pdflatex` ni instalar TeX Live. Docker Compose conserva los reportes en `reports_data` y usa `lab-grupo04_proyecto01_mcp-test` si no se define `LAB_CONTAINER_NAME`. La red externa `lab_net` debe existir en la máquina para el modo local del laboratorio.
+## Despliegue del laboratorio
 
-`app.py` inicia el mismo `server.py` desde el entorno `.ENTORNO` y puede levantar `host.exe`/cloudflared usando `config.yml`. El servicio MCP escucha en 8000; el ingress de Cloudflare debe dirigir el hostname a `http://127.0.0.1:8000`, de modo que funcionen tanto `/mcp` como `/reports/...`. Mantén el proceso activo mientras quieras acceso público.
+El servidor escucha en 0.0.0.0:8000 dentro del contenedor y usa la red externa
+lab_net. En producción, el agente del curso inyecta LAB_CONTAINER_NAME,
+LAB_DOMAIN y LAB_PUBLIC_PATH. Caddy reenvía la ruta pública de la app al
+contenedor y elimina el prefijo antes de enviar la solicitud. El acceso MCP
+termina en /mcp; las rutas /reports/<archivo>/preview y
+/reports/<archivo>/download deben llegar al mismo contenedor.
+
+No se requiere puerto fijo en el host. Compose publica el puerto 8000 sin fijar
+un puerto de Windows; el despliegue de producción usa el puerto interno del
+contenedor en lab_net.
+
+## Informes y persistencia
+
+ReportLab genera los PDF en memoria. storage.py los sube con timeout al
+SeaweedFS de lab_net, al bucket grupo04-mcp-test-imgs. El servidor los recupera
+desde SeaweedFS y entrega la vista previa con Content-Disposition inline o la
+descarga como attachment. No hay volumen local reports_data ni archivos
+temporales persistentes en el contenedor.
+
+Las URL de informes se construyen con LAB_DOMAIN y LAB_PUBLIC_PATH. El acceso
+público requiere que Caddy enrute también /reports hacia este servidor y que
+SeaweedFS esté disponible. Si la subida falla, el cálculo numérico se conserva
+y la respuesta indica que el PDF no pudo generarse o almacenarse.
+
+## Diagnóstico
+
+- Herramientas MCP: en Inspector, abre Tools después de conectar.
+- Puerto local: docker compose port mcp-test 8000.
+- Estado: docker compose ps.
+- Logs: docker compose logs --since 5m --timestamps mcp-test.
+- 400 Missing session ID en un navegador: usa Inspector; /mcp no es una web.
+- Sesión desconocida luego de reiniciar: reconecta el Inspector.
+- HTTP 502 en reportes: revisa SeaweedFS y la red lab_net.
