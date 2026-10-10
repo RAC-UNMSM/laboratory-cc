@@ -1,0 +1,209 @@
+GUÍA DE EJECUCIÓN — MCP GRUPO04
+================================
+
+Carpeta del proyecto:
+C:\Users\User\Desktop\laboratory-cc-grupo04\grupos\grupo04\proyecto01\mcp-test
+
+El servidor MCP escucha en el puerto 8000 y su endpoint es /mcp.
+El dominio público configurado es https://wiadeuserrant.win/mcp.
+
+IMPORTANTE: hay dos modos para ejecutar el MCP. Escoge uno a la vez.
+No ejecutes app.py y Docker simultáneamente en el puerto 8000: ambos intentan
+publicar el mismo MCP y el Inspector podría conectarse al proceso equivocado.
+host.exe solo levanta el túnel de Cloudflare; no es el servidor MCP.
+
+
+1. MODO LOCAL: app.py (Python + túnel)
+--------------------------------------
+
+app.py busca automáticamente .ENTORNO\Scripts\python.exe y host.exe.
+Arranca server.py con el entorno virtual del proyecto y también inicia el
+túnel de Cloudflare.
+
+En PowerShell:
+
+    cd C:\Users\User\Desktop\laboratory-cc-grupo04\grupos\grupo04\proyecto01\mcp-test
+    python app.py
+
+Mantén abierta la ventana. Deben aparecer mensajes de Uvicorn indicando que
+escucha en http://0.0.0.0:8000 y mensajes de cloudflared como
+"Registered tunnel connection".
+
+En este modo NO ejecutes Docker ni vuelvas a iniciar host.exe aparte:
+app.py ya inicia el MCP y el túnel. Pulsa Ctrl+C para detener ambos.
+
+
+2. MODO DOCKER: contenedor + túnel por separado
+-----------------------------------------------
+
+Usa este modo para probar la ejecución en Docker. Abre dos ventanas de
+PowerShell. Asegúrate de que Docker Desktop esté iniciado.
+
+El docker-compose.yml declara lab_net como red externa. Comprueba si existe:
+
+    docker network inspect lab_net
+
+Si Docker informa que no existe, créala una sola vez:
+
+    docker network create lab_net
+
+VENTANA 1 — construir e iniciar el contenedor:
+
+    cd C:\Users\User\Desktop\laboratory-cc-grupo04\grupos\grupo04\proyecto01\mcp-test
+    $env:LAB_CONTAINER_NAME = "lab-grupo04_proyecto01_mcp-test"
+    $env:MCP_PUBLIC_BASE_URL = "https://wiadeuserrant.win"
+    docker compose up --build --force-recreate
+
+Deja esta ventana abierta. Debe aparecer:
+    Uvicorn running on http://0.0.0.0:8000
+
+VENTANA 2 — iniciar Cloudflare Tunnel hacia el puerto publicado:
+
+    cd C:\Users\User\Desktop\laboratory-cc-grupo04\grupos\grupo04\proyecto01\mcp-test
+    .\host.exe tunnel --config .\config.yml run
+
+Deja también esta ventana abierta y espera "Registered tunnel connection".
+La regla de config.yml dirige las rutas /mcp y /reports de wiadeuserrant.win
+hacia http://127.0.0.1:8000. Para que el túnel llegue a Docker, no debe quedar
+activo al mismo tiempo el servidor Python local de app.py/server.py en ese
+puerto.
+
+La variable LAB_CONTAINER_NAME dura solo en la ventana donde se asignó.
+Asígnala de nuevo si abres otra ventana de PowerShell.
+
+Para detener Docker, pulsa Ctrl+C en la ventana del compose. Para detener solo
+el túnel, pulsa Ctrl+C en la ventana de host.exe. No uses "docker compose down -v"
+si quieres conservar los PDFs guardados en el volumen reports_data.
+
+
+3. CÓMO ABRIR MCP INSPECTOR
+----------------------------
+
+Abre una ventana aparte de PowerShell. No hace falta estar dentro de la carpeta
+del proyecto. Inicia el Inspector con:
+
+    npx @modelcontextprotocol/inspector@latest
+
+En la primera ejecución, npm puede preguntar si instala el paquete. Responde:
+
+    y
+
+Espera el mensaje "MCP Inspector Web is up and running". Normalmente se abre
+el navegador automáticamente. Si no se abre, copia en el navegador la dirección
+completa que imprime esa terminal, normalmente empieza así:
+
+    http://127.0.0.1:6274/?MCP_INSPECTOR_API_TOKEN=...
+
+Deja abierta la terminal del Inspector mientras lo uses. La dirección incluye
+un token de acceso local; no compartas una captura que lo muestre ni publiques
+esa URL completa.
+4. CÓMO PROBAR EN MCP INSPECTOR
+-------------------------------
+
+Direcciones según el servidor que se quiera comprobar:
+
+  Python local:
+    http://127.0.0.1:8000/mcp
+
+  Docker (en este equipo, ruta IPv6 observada):
+    http://[::1]:8000/mcp
+
+  Dominio público a través de Cloudflare:
+    https://wiadeuserrant.win/mcp
+
+En Inspector:
+  1. Abre Servers y selecciona Add Servers > Streamable HTTP.
+  2. Crea una conexión nueva con un nombre identificable y una de las
+     direcciones anteriores.
+  3. Deja autenticación vacía si el servidor continúa sin autenticación.
+  4. Conecta, abre Tools y selecciona una herramienta.
+  5. Para probar interpolacion_lagrange, activa Edit as JSON, pega los
+     argumentos siguientes y pulsa Execute Tool.
+
+Prueba de interpolación:
+
+    {
+      "points": [
+        {"x": 0, "y": 1},
+        {"x": 1, "y": 2},
+        {"x": 2, "y": 5}
+      ],
+      "x_eval": 1.5,
+      "level": "inicial",
+      "include_report": false
+    }
+
+Resultado esperado:
+    P(x) = x^2 + 1
+    P(1.5) = 3.25
+
+Para probar el dominio público, deja activo el túnel y conecta Inspector a
+https://wiadeuserrant.win/mcp. El dominio prueba el proceso al que apunte
+config.yml; si se desea probar Docker, detén primero el Python local.
+
+
+5. COMANDOS DE COMPROBACIÓN Y DIAGNÓSTICO
+-----------------------------------------
+
+Comprobar si el puerto responde por TCP (esto no verifica por sí solo MCP):
+
+    Test-NetConnection 127.0.0.1 -Port 8000
+
+Ver el estado del contenedor:
+
+    docker compose ps
+
+Ver registros recientes del servicio (el servicio se llama mcp-test):
+
+    docker compose logs --since 5m --timestamps mcp-test
+
+Ver los registros del contenedor por nombre:
+
+    docker logs --since 10m --timestamps lab-grupo04_proyecto01_mcp-test
+
+Ver consumo de memoria:
+
+    docker stats --no-stream lab-grupo04_proyecto01_mcp-test
+
+Ver estado OOM, código de salida y reinicios:
+
+    docker inspect --format 'OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}} Restarts={{.RestartCount}}' lab-grupo04_proyecto01_mcp-test
+
+Ver eventos del contenedor:
+
+    docker events --since 5m --filter container=lab-grupo04_proyecto01_mcp-test
+
+Identificar los procesos que escuchan en el puerto 8000:
+
+    Get-NetTCPConnection -LocalPort 8000 -State Listen | ForEach-Object {
+      $conexion = $_
+      $proceso = Get-CimInstance Win32_Process -Filter "ProcessId=$($conexion.OwningProcess)"
+      [pscustomobject]@{
+        Direccion  = $conexion.LocalAddress
+        PID        = $conexion.OwningProcess
+        Ejecutable = $proceso.ExecutablePath
+        Comando    = $proceso.CommandLine
+      }
+    } | Format-List
+
+En la salida, 0.0.0.0 indica escucha IPv4; :: o ::1 indica una ruta IPv6.
+En este equipo aparecieron procesos de Python, Docker Desktop y WSL en el puerto
+8000. Usa direcciones explícitas en Inspector para no confundir los servidores.
+
+
+6. RESPUESTAS QUE PUEDEN SER NORMALES
+-------------------------------------
+
+Si se abre /mcp directamente en el navegador puede aparecer
+"Bad Request: Missing session ID". /mcp es un endpoint de protocolo MCP, no una
+página web normal. Usa MCP Inspector para comprobar las herramientas.
+
+Después de reiniciar el servidor, Inspector puede intentar reutilizar una
+sesión antigua y mostrar "unknown or expired session ID" o un GET /mcp 400/404.
+Desconecta y vuelve a conectar el servidor en Inspector. Para verificar la lista
+real, revisa Tools o la respuesta TOOLS/LIST en Protocol.
+
+Cloudflare Tunnel solo reenvía el tráfico al servicio configurado. No arranca
+el MCP ni construye la imagen Docker.
+
+

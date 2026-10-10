@@ -1,0 +1,169 @@
+<div id="numerical-app">
+<style>
+#numerical-app{font:14px system-ui,-apple-system,"Segoe UI",sans-serif;color:#e8edf4;background:#151922;padding:18px;border-radius:14px}
+#numerical-app *{box-sizing:border-box}#numerical-app .head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+#numerical-app h2,#numerical-app h3{margin:0 0 10px}#numerical-app .muted{color:#aab4c3;font-size:12px}
+#numerical-app .badge{display:inline-block;padding:5px 10px;border-radius:16px;background:#283246;margin-right:6px}
+#numerical-app .status{padding:6px 10px;border-radius:16px;background:#214d38}
+#numerical-app .status.warning{background:#594716}#numerical-app .status.error{background:#632b31}
+#numerical-app .tabs{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+#numerical-app button{color:#e8edf4;background:#252d3a;border:1px solid #485569;border-radius:8px;padding:8px 12px;cursor:pointer}
+#numerical-app button.active{background:#365a8b}
+#numerical-app .panel{display:none}#numerical-app .panel.active{display:block}
+#numerical-app .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+#numerical-app .card{background:#202632;border:1px solid #3c4758;border-radius:10px;padding:14px;margin:10px 0}
+#numerical-app .value{font-size:21px;font-weight:650;overflow-wrap:anywhere;margin:6px 0 2px}
+#numerical-app .key{color:#afbed1;font-size:12px;text-transform:capitalize}
+#numerical-app .formula{white-space:pre-wrap;overflow-wrap:anywhere;background:#151a22;border-radius:8px;padding:12px;font:13px/1.6 Consolas,monospace}
+#numerical-app .scroll{overflow:auto;max-height:460px}#numerical-app table{border-collapse:collapse;width:100%;font-size:12px}
+#numerical-app th,#numerical-app td{border-bottom:1px solid #3d4654;padding:7px;text-align:left;white-space:nowrap}
+#numerical-app th{position:sticky;top:0;background:#2a3444}
+#numerical-app canvas{width:100%;height:340px;background:#111720;border-radius:8px}
+#numerical-app .pdf{width:100%;height:70vh;min-height:420px;border:1px solid #495365;border-radius:8px;background:white}
+#numerical-app a{display:inline-block;color:#e8f1ff;background:#31415a;border-radius:7px;padding:8px 12px;margin:8px 8px 8px 0;text-decoration:none}
+#numerical-app .empty{color:#aab4c3;font-style:italic}
+@media(max-width:640px){#numerical-app{padding:12px}#numerical-app canvas{height:260px}}
+</style>
+<div class="head"><div><div class="muted">RESOLUCIÓN NUMÉRICA</div><h2 id="title">Esperando resultado del MCP</h2></div><span id="level" class="badge">Nivel inicial</span><span id="status" class="status">Sin resultado</span></div>
+<div class="muted" id="subtitle">La respuesta detallada aparecerá cuando se ejecute una herramienta.</div>
+<div class="tabs">
+<button class="active" data-tab="result">Resultado</button><button data-tab="steps">Desarrollo</button>
+<button data-tab="tables">Tablas</button><button data-tab="charts">Gráficas</button>
+<button data-tab="diagnostics">Diagnóstico</button><button data-tab="report">Informe PDF</button>
+</div>
+<section class="panel active" id="panel-result"><div class="grid" id="summary"></div><div class="card"><h3>Datos del problema</h3><div id="inputs" class="formula empty">Sin datos.</div></div><div class="card"><h3>Lectura del resultado</h3><div id="guide" class="formula empty">La interpretación aparecerá al recibir una respuesta válida.</div></div></section>
+<section class="panel" id="panel-steps"><div class="card"><h3>Desarrollo</h3><div id="steps" class="formula empty">No se recibió desarrollo.</div></div></section>
+<section class="panel" id="panel-tables"><div id="tables"></div></section>
+<section class="panel" id="panel-charts"><div id="charts"></div></section>
+<section class="panel" id="panel-diagnostics"><div class="grid" id="diagnostics"></div><div class="card"><h3>Advertencias</h3><div id="warnings" class="empty">Sin advertencias.</div></div></section>
+<section class="panel" id="panel-report"><div class="card"><h3>Informe generado</h3><div id="report-links" class="empty">El informe PDF aparecerá aquí.</div><div id="pdf-view"></div></div></section>
+<script>
+(() => {
+ const root=document.querySelector("#numerical-app"); if(!root||root.dataset.ready==="1")return; root.dataset.ready="1";
+ const $=s=>root.querySelector(s), $$=s=>[...root.querySelectorAll(s)]; let currentData=null;
+ const escText=v=>v===null?"No aplica":typeof v==="object"?JSON.stringify(v):String(v);
+ function normalize(raw){
+   let d=raw;
+   for(let i=0;i<8;i++){
+     if(typeof d==="string"){try{d=JSON.parse(d);continue}catch{return null}}
+     if(!d||typeof d!=="object")return null;
+     if(d.structuredContent){d=d.structuredContent;continue}
+     if(d.structured_content){d=d.structured_content;continue}
+     if(typeof d.text==="string"){d=d.text;continue}
+     if(d.result&&typeof d.result==="object"&&!d.problem_type){d=d.result;continue}
+     if(d.data&&typeof d.data==="object"){d=d.data;continue}
+     if(Array.isArray(d.content)){
+       const item=d.content.find(x=>x&&x.type==="text"&&typeof x.text==="string");
+       if(item){d=item.text;continue}
+     }
+     break;
+   }
+   return d;
+ }
+ function card(key,value){
+   const el=document.createElement("div");el.className="card";
+   const k=document.createElement("div");k.className="key";k.textContent=key.replaceAll("_"," ");
+   const v=document.createElement("div");v.className="value";v.textContent=escText(value);
+   el.append(k,v);return el;
+ }
+ function renderTables(data){
+   const host=$("#tables");host.replaceChildren();
+   (data.tables||[]).forEach(t=>{
+     const box=document.createElement("div");box.className="card";
+     const h=document.createElement("h3");h.textContent=t.name||"Tabla";box.append(h);
+     const sc=document.createElement("div");sc.className="scroll";
+     const table=document.createElement("table"),thead=document.createElement("thead"),tr=document.createElement("tr");
+     (t.columns||[]).forEach(c=>{const th=document.createElement("th");th.textContent=c;tr.append(th)});
+     thead.append(tr);table.append(thead);
+     const body=document.createElement("tbody");
+     (t.rows||[]).slice(0,1000).forEach(row=>{const line=document.createElement("tr");row.forEach(value=>{const td=document.createElement("td");td.textContent=escText(value);line.append(td)});body.append(line)});
+     table.append(body);sc.append(table);box.append(sc);
+     if(t.truncated){const note=document.createElement("div");note.className="muted";note.textContent="La tabla se recortó para limitar el tamaño de la respuesta.";box.append(note)}
+     host.append(box);
+   });
+   if(!host.children.length)host.innerHTML='<div class="card empty">No se recibió tabla.</div>';
+ }
+ function drawChart(canvas,chart){
+   const ctx=canvas.getContext("2d"),w=canvas.width=canvas.clientWidth*devicePixelRatio,h=canvas.height=canvas.clientHeight*devicePixelRatio;
+   ctx.scale(devicePixelRatio,devicePixelRatio);const W=canvas.clientWidth,H=canvas.clientHeight;
+   ctx.clearRect(0,0,W,H);ctx.fillStyle="#111720";ctx.fillRect(0,0,W,H);
+   if(chart.type==="heatmap"&&Array.isArray(chart.z)&&chart.z.length){const z=chart.z,flat=z.flat().filter(Number.isFinite),mn=Math.min(...flat),mx=Math.max(...flat),p=34,cw=(W-2*p)/(z[0]?.length||1),ch=(H-2*p)/z.length;z.forEach((row,j)=>row.forEach((v,i)=>{const t=(v-mn)/(mx-mn||1);ctx.fillStyle="hsl("+(235-225*t)+",75%, "+(30+35*t)+"%)";ctx.fillRect(p+i*cw,H-p-(j+1)*ch,cw+1,ch+1)}));ctx.fillStyle="#ccd4df";ctx.font="11px system-ui";ctx.fillText(String(chart.x_label||"x"),W-24,H-8);ctx.fillText(String(chart.y_label||"t"),6,14);ctx.fillText(String(chart.name||"Mapa"),p,18);return}
+   const series=chart.series||[],allX=[],allY=[];
+   series.forEach(s=>(s.x||[]).forEach((x,i)=>{const y=s.y?.[i];if(Number.isFinite(x)&&Number.isFinite(y)){allX.push(x);allY.push(y)}}));
+   if(!allX.length){ctx.fillStyle="#aaa";ctx.fillText("Sin datos para graficar",20,30);return}
+   let xmin=Math.min(...allX),xmax=Math.max(...allX),ymin=Math.min(...allY),ymax=Math.max(...allY);
+   if(xmin===xmax){xmin-=1;xmax+=1}if(ymin===ymax){ymin-=1;ymax+=1}
+   const p=36,sx=x=>p+(x-xmin)/(xmax-xmin)*(W-2*p),sy=y=>H-p-(y-ymin)/(ymax-ymin)*(H-2*p);
+   ctx.strokeStyle="#536071";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p,p);ctx.lineTo(p,H-p);ctx.lineTo(W-p,H-p);ctx.stroke();
+   const colors=["#69aaf7","#ffbd66","#71d99b","#d290ff"];
+   series.forEach((s,index)=>{
+     ctx.strokeStyle=colors[index%colors.length];ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=2;ctx.beginPath();
+     let started=false;(s.x||[]).forEach((x,i)=>{const y=s.y?.[i];if(!Number.isFinite(x)||!Number.isFinite(y))return;
+       const X=sx(x),Y=sy(y);if(s.type==="scatter"){ctx.beginPath();ctx.arc(X,Y,4,0,Math.PI*2);ctx.fill()}
+       else if(!started){ctx.moveTo(X,Y);started=true}else ctx.lineTo(X,Y)});
+     if(s.type!=="scatter")ctx.stroke();
+     ctx.fillText(s.label||"serie",p+8,index*16+16);
+   });
+   ctx.fillStyle="#b9c5d4";ctx.font="11px system-ui";ctx.fillText(String(chart.name||""),p,H-8);
+ }
+ function renderCharts(data){
+   const host=$("#charts");host.replaceChildren();
+   (data.charts||[]).forEach(c=>{
+     const box=document.createElement("div");box.className="card";
+     const h=document.createElement("h3");h.textContent=c.name||"Gráfica";box.append(h);
+     const canvas=document.createElement("canvas");canvas.style.height="340px";box.append(canvas);host.append(box);drawChart(canvas,c);
+   });
+   if(!host.children.length)host.innerHTML='<div class="card empty">No se recibió gráfica.</div>';
+ }
+ function renderReport(data){
+   const holder=$("#report-links"),view=$("#pdf-view");holder.replaceChildren();view.replaceChildren();
+   const report=data.report||{},preview=report.preview_url||data.pdf_preview_url,download=report.download_url||data.pdf_url;
+   if(preview||download){
+     if(preview){const a=document.createElement("a");a.href=preview;a.target="_blank";a.rel="noopener";a.textContent="Abrir vista previa";holder.append(a)}
+     if(download){const a=document.createElement("a");a.href=download;a.textContent="Descargar PDF";a.setAttribute("download","");holder.append(a)}
+     if(preview){const frame=document.createElement("iframe");frame.className="pdf";frame.src=preview;frame.title="Vista previa del informe PDF";view.append(frame)}
+   }else holder.textContent=report.error||"No se generó el PDF para esta resolución.";
+ }
+ function render(data){
+   if(!data)return;
+   currentData=data;
+   const labels={floating_point:"Aritmética de punto flotante",error:"Error numérico",error_propagation:"Propagación de incertidumbre",roots:"Búsqueda de raíces",linear_system:"Sistema lineal",sparse_linear_system:"Sistema disperso",approximation:"Ajuste de datos",differentiation:"Derivación numérica",tabular_differentiation:"Derivación tabular",quadrature:"Integración numérica",tabular_quadrature:"Integración tabular",adaptive_quadrature:"Integración adaptativa",ode:"Ecuaciones diferenciales ordinarias",ode_multistep:"EDO multipaso",eigenvalues:"Valores propios",sparse_eigenvalues:"Valores propios dispersos",conditioning:"Condicionamiento",optimization:"Optimización",constrained_optimization:"Optimización restringida",boundary_value:"Problema de frontera",pde:"PDE 1D",pde_2d:"PDE 2D",nonlinear_system:"Sistema no lineal",interpolacion:"Interpolación"};
+   const level=(data.level||"inicial").toLowerCase()==="intermedio"?"intermedio":"inicial";
+   $("#title").textContent=labels[data.problem_type]||(data.problem_type||"problema").replaceAll("_"," ");
+   $("#level").textContent=level==="inicial"?"Nivel inicial":"Nivel intermedio";
+   $("#subtitle").textContent="Método: "+(data.method||"sin especificar")+" · Esquema "+(data.schema_version||"heredado");
+   const guide={roots:"La raíz es una aproximación de x donde la función se acerca a cero. Revise el residuo para medir el ajuste.",linear_system:"La solución es el vector x que aproxima A·x=b. El residuo indica cuánto difiere al sustituirla.",nonlinear_system:"La solución hace que todas las ecuaciones residuales se acerquen a cero. Revise la norma del residuo y la convergencia.",conditioning:"El número de condición estima cuánto puede amplificarse un cambio pequeño en los datos.",ode:"La tabla y la gráfica muestran cómo evoluciona el estado desde las condiciones iniciales.",ode_multistep:"Adams usa valores de pasos previos; los primeros pasos se iniciaron con RK4.",pde_2d:"El mapa de calor muestra la aproximación u(x,y) dentro del dominio y sus fronteras.",adaptive_quadrature:"La integral incluye una estimación numérica del error y el refinamiento de subintervalos.",constrained_optimization:"La solución debe minimizar la función y satisfacer las restricciones declaradas.",sparse_eigenvalues:"Cada par propio se acompaña de un residuo; la matriz se procesó en forma dispersa."};
+   const common=guide[data.problem_type]||"Revise los datos de entrada, el resultado y el diagnóstico del método antes de interpretar la aproximación.";
+   $("#guide").textContent=level==="intermedio"?common+" El nivel intermedio conserva los residuos, iteraciones, tablas y advertencias disponibles.":common+" El nivel inicial destaca qué se calculó y cómo leer el resultado.";
+   const status=$("#status");status.textContent=data.status||"resultado";
+   status.className="status"+(["warning","no_convergence","invalid_input","resource_limit"].includes(data.status)?" warning":"");
+   if(["invalid_input","resource_limit","calculation_error"].includes(data.status))status.className="status error";
+   const summary=$("#summary");summary.replaceChildren();
+   Object.entries(data.result||{}).forEach(([key,value])=>{
+     if(Array.isArray(value)){if(value.length<=20&&!value.some(v=>Array.isArray(v))){summary.append(card(key,value));}else{summary.append(card(key,value.length+" elementos"));}return;}
+     if(value&&typeof value==="object")Object.entries(value).forEach(([k,v])=>{if(!Array.isArray(v)&&!(v&&typeof v==="object"))summary.append(card(k,v))});
+     else summary.append(card(key,value));
+   });
+   if(!summary.children.length)summary.append(card("resultado",data.result||"Sin datos"));
+   $("#inputs").textContent=JSON.stringify(data.inputs||{},null,2);
+   $("#steps").textContent=(data.steps||[]).map((s,i)=>(i+1)+". "+s).join("\n")||"No se recibió desarrollo.";
+   renderTables(data);renderCharts(data);renderReport(data);
+   const diag=$("#diagnostics");diag.replaceChildren();
+   Object.entries(data.diagnostics||{}).forEach(([k,v])=>{if(!Array.isArray(v)&&!(v&&typeof v==="object"))diag.append(card(k,v))});if(data.error)diag.append(card("error",data.error.message||data.error));
+   const warnings=$("#warnings");warnings.replaceChildren();
+   if(data.warnings?.length){data.warnings.forEach(w=>{const p=document.createElement("p");p.textContent="• "+w;warnings.append(p)})}
+   else warnings.textContent="Sin advertencias.";
+ }
+ $$(".tabs button").forEach(button=>button.addEventListener("click",()=>{
+   $$(".tabs button").forEach(b=>b.classList.toggle("active",b===button));
+   $$(".panel").forEach(p=>p.classList.toggle("active",p.id==="panel-"+button.dataset.tab));
+   if(button.dataset.tab==="charts"&&currentData)requestAnimationFrame(()=>renderCharts(currentData));
+ }));
+ function receive(raw){const data=normalize(raw);if(data){render(data);return}$("#title").textContent="No se pudo interpretar la respuesta";$("#status").textContent="Formato no reconocido";$("#status").className="status error";$("#subtitle").textContent="El MCP respondió, pero la interfaz no encontró la estructura numérica esperada.";$("#guide").textContent=typeof raw==="string"?raw.slice(0,1200):JSON.stringify(raw||{},null,2).slice(0,1200)}
+ const first=window.openai?.toolOutput;if(first)receive(first);
+ window.addEventListener("openai:set_globals",e=>{const raw=e.detail?.globals?.toolOutput;if(raw)receive(raw)});
+ window.addEventListener("message",e=>{if(e.source!==window.parent||e.data?.method!=="ui/notifications/tool-result")return;
+   receive(e.data.params?.toolResult??e.data.params?.result??e.data.params)});
+})();
+</script>
+</div>

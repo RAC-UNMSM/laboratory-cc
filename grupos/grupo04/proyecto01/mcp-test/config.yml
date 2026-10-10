@@ -1,0 +1,11 @@
+tunnel: 5414ffd6-db6d-4178-b5c2-1e01f0098d51
+credentials-file: C:\Users\User\.cloudflared\5414ffd6-db6d-4178-b5c2-1e01f0098d51.json
+
+ingress:
+  - hostname: wiadeuserrant.win
+    path: ^/mcp(/.*)?$
+    service: http://127.0.0.1:8000
+  - hostname: wiadeuserrant.win
+    path: ^/reports(/.*)?$
+    service: http://127.0.0.1:8000
+  - service: http_status:404

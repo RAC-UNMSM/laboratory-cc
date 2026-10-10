@@ -1,0 +1,14 @@
+.git
+.claude
+.ENTORNO
+**/.ENTORNO
+__pycache__
+**/__pycache__
+*.py[cod]
+reports
+**/*.pdf
+host.exe
+cloudflared.exe
+docs
+pruebas.txt
+readme.txt
