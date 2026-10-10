@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # SECCION 3 de server.py), asi que la carpeta se copia completa. skill/ tambien
 # se copia: los 3 contextos de comportamiento se leen en tiempo de ejecucion.
 COPY server.py .
+COPY storage.py .
+COPY visualizacion.py .
 COPY tools/ tools/
 COPY skill/ skill/
 

@@ -7,6 +7,8 @@
 # import viejo tambien. El pin evita las dos condiciones.
 mcp==2.1.1
 
-# Motores matematicos. sympy es el que hace los calculos exactos; es la unica
-# libreria que el codigo importa de verdad.
-sympy>=1.12
+# Motores matematicos. sympy es el que hace los calculos exactos;
+# matplotlib y numpy generan los graficos en memoria (visualizacion.py).
+sympy==1.12
+matplotlib==3.9.2
+numpy==2.1.3

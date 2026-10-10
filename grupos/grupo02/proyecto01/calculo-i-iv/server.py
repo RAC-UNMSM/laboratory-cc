@@ -37,8 +37,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import sympy as sp
 from mcp.server.mcpserver import MCPServer
+
+import storage
+import visualizacion
+
+storage.ensure_bucket()
 
 # --- Rutas base del proyecto -------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
@@ -114,6 +120,11 @@ TOOLS_BASE: set[str] = {
     "calcular_gradiente",
     "verificar_respuesta",
     "estado_del_servidor",
+    # SECCION 2b: graficos bajo demanda (visualizacion.py + storage.py)
+    "graficar_funciones",
+    "graficar_superficie",
+    "graficar_curva",
+    "graficar_campo_vectorial",
 }
 _TOOLS_REGISTRADAS: set[str] = set(TOOLS_BASE)
 
@@ -342,7 +353,308 @@ async def estado_del_servidor() -> dict[str, Any]:
         "modulos_cargados": sorted(_MODULOS_CARGADOS),
         "modulos_faltantes": sorted(set(MODULOS_CALCULO) - set(_MODULOS_CARGADOS)),
         "total_tools": len(await mcp.list_tools()),
+        # False en local (python server.py): los graficos se generan pero no
+        # se suben. True en el despliegue, donde el compose pasa las variables.
+        "storage_configurado": bool(storage.IMG_BUCKET and storage.PUBLIC_IMG_BASE_URL),
     }
+
+
+# =========================================================================
+# SECCION 2b: GRAFICOS BAJO DEMANDA (visualizacion.py -> storage.py)
+# =========================================================================
+# Flujo: la tool valida la entrada, `visualizacion.py` genera el PNG en
+# memoria, `storage.py` lo sube a SeaweedFS con una clave aleatoria y la
+# respuesta incluye el link Markdown publico.
+#
+# Por que el link y no solo la imagen: el bloque ImageContent de MCP llega al
+# modelo, pero ningun cliente de chat lo dibuja en el hilo principal. Una URL
+# https en Markdown si se renderiza sola (mismo razonamiento que el piloto
+# grupos/g01/semana01/derivadas1/server.py).
+#
+# Seguridad: el link se devuelve como un DATO mas del resultado, sin ninguna
+# orden del tipo "debes mostrar esto". La indicacion de como tratarlo vive en
+# el docstring (metadata de confianza), no en el resultado (datos no
+# confiables). Meter imperativos en el resultado tiene forma de prompt
+# injection.
+_MAX_FUNCIONES = 5
+
+
+def _numero(texto: str, nombre: str) -> float:
+    """Limite de un intervalo: acepta valores exactos como "pi" o "2*pi"."""
+    try:
+        valor = float(sp.sympify(texto))
+    except Exception as exc:
+        raise visualizacion.GraficoError(f"'{nombre}' no es un numero valido: {texto!r}") from exc
+    if not np.isfinite(valor):
+        raise visualizacion.GraficoError(f"'{nombre}' debe ser finito (para graficar no sirve oo)")
+    return valor
+
+
+def _intervalo(minimo: str, maximo: str, nombre: str) -> tuple[float, float]:
+    a, b = _numero(minimo, f"{nombre}_min"), _numero(maximo, f"{nombre}_max")
+    if a >= b:
+        raise visualizacion.GraficoError(f"{nombre}_min debe ser menor que {nombre}_max")
+    return a, b
+
+
+def _expresion_en(texto: str, variables: list[str]) -> sp.Expr:
+    """Parsea `texto` y exige que solo use las variables permitidas.
+
+    Sin este control, "a*x**2" se aceptaria y luego fallaria al evaluar con
+    un error de numpy incomprensible para el alumno.
+    """
+    simbolos = {n: sp.Symbol(n) for n in variables}
+    try:
+        expr = sp.sympify(texto, locals=simbolos)
+    except Exception as exc:
+        raise visualizacion.GraficoError(
+            f"no se pudo leer {texto!r}: usa sintaxis sympy (x**2, sin(x), sqrt(x), exp(x))"
+        ) from exc
+    sobrantes = {str(s) for s in expr.free_symbols} - set(variables)
+    if sobrantes:
+        raise visualizacion.GraficoError(
+            f"{texto!r} usa variables no permitidas {sorted(sobrantes)}; "
+            f"solo puede depender de {variables}"
+        )
+    return expr
+
+
+def _publicar(png: bytes, descripcion: str) -> dict[str, Any]:
+    """Sube el PNG y arma los campos de imagen de la respuesta."""
+    url = storage.subir_imagen(png)
+    if url:
+        return {"imagen_url": url, "imagen_markdown": f"![{descripcion}]({url})"}
+    return {
+        "imagen_url": None,
+        "imagen_markdown": None,
+        "nota_imagen": (
+            "grafico generado pero no publicado: el storage no esta configurado "
+            "(modo local) o no respondio"
+        ),
+        "bytes_png": len(png),
+    }
+
+
+_DOC_IMAGEN = """
+    Si la respuesta trae "imagen_markdown" (una linea "![...](https://...)"),
+    esa imagen es el grafico que este servidor acaba de generar y subir al
+    storage del laboratorio: incluyela tal cual, en formato Markdown, en tu
+    respuesta al usuario en lugar de solo describirla. Si viene null, el
+    grafico no se pudo publicar: continua con la solucion sin imagen.
+
+    Grafica SOLO cuando aporte: problemas geometricos (areas, volumenes,
+    tangentes, superficies, campos, curvas) o cuando el usuario lo pida. No
+    grafiques por defecto en ejercicios puramente algebraicos.
+"""
+
+
+def _con_guia_de_imagen(fn: Any) -> Any:
+    """Agrega `_DOC_IMAGEN` al docstring de una tool de graficos.
+
+    Va DEBAJO de `@mcp.tool(...)`: los decoradores se aplican de abajo hacia
+    arriba, asi que el docstring ya esta completo cuando `mcp.tool` lo lee
+    como descripcion. Modificarlo despues del registro no tendria efecto.
+    """
+    fn.__doc__ = (fn.__doc__ or "") + _DOC_IMAGEN
+    return fn
+
+
+@mcp.tool(name="graficar_funciones")
+@_con_guia_de_imagen
+def graficar_funciones(
+    funciones: list[str],
+    variable: str = "x",
+    x_min: str = "-5",
+    x_max: str = "5",
+    sombrear_desde: str | None = None,
+    sombrear_hasta: str | None = None,
+    marcar_x: list[str] | None = None,
+    titulo: str | None = None,
+) -> dict[str, Any]:
+    """Grafica una o varias funciones y = f(x) en el plano (Calculo I y II).
+
+    Casos tipicos:
+      - curva + recta tangente: funciones=["x**2", "4*x - 4"], marcar_x=["2"]
+      - area bajo una curva: funciones=["x**2"], sombrear_desde="0", sombrear_hasta="1"
+      - area ENTRE dos curvas: funciones=["sqrt(x)", "x**2"], sombrear_desde="0",
+        sombrear_hasta="1" (se sombrea entre las dos PRIMERAS funciones)
+      - extremos / puntos criticos: marcar_x=["-1", "1"] (se marcan sobre la
+        primera funcion)
+
+    Las funciones van en sintaxis sympy ("x**2", "sin(x)", "log(x)", "sqrt(x)")
+    y solo pueden depender de `variable`. Los limites aceptan valores exactos
+    ("pi", "2*pi", "-1/2"). Maximo 5 funciones por grafico.
+    """
+    try:
+        if not funciones:
+            raise visualizacion.GraficoError("'funciones' no puede estar vacia")
+        if len(funciones) > _MAX_FUNCIONES:
+            raise visualizacion.GraficoError(f"maximo {_MAX_FUNCIONES} funciones por grafico")
+        x = sp.Symbol(variable)
+        exprs = [_expresion_en(f, [variable]) for f in funciones]
+        a, b = _intervalo(x_min, x_max, "x")
+
+        sombrear = None
+        if (sombrear_desde is None) != (sombrear_hasta is None):
+            raise visualizacion.GraficoError("para sombrear hay que pasar sombrear_desde y sombrear_hasta")
+        if sombrear_desde is not None:
+            sombrear = (_numero(sombrear_desde, "sombrear_desde"),
+                        _numero(sombrear_hasta, "sombrear_hasta"))
+        marcas = [_numero(m, "marcar_x") for m in (marcar_x or [])]
+
+        png = visualizacion.funciones_2d(exprs, x, a, b, sombrear, marcas, titulo)
+        return {
+            "estado": "exito",
+            "tipo": "funciones_2d",
+            "funciones": [_normalizar(e) for e in exprs],
+            "intervalo": [a, b],
+            **_publicar(png, "Grafico de " + ", ".join(sp.sstr(e) for e in exprs)),
+        }
+    except Exception as exc:  # la tool nunca debe tumbar el servidor
+        return _error(exc)
+
+
+@mcp.tool(name="graficar_superficie")
+@_con_guia_de_imagen
+def graficar_superficie(
+    expresion: str,
+    x_min: str = "-3",
+    x_max: str = "3",
+    y_min: str = "-3",
+    y_max: str = "3",
+    punto_x: str | None = None,
+    punto_y: str | None = None,
+    titulo: str | None = None,
+) -> dict[str, Any]:
+    """Grafica en 3D la superficie z = f(x, y) (Calculo III).
+
+    Si se pasan `punto_x` y `punto_y`, ademas calcula con SymPy el plano
+    tangente en ese punto, lo dibuja sobre la superficie y devuelve su
+    ecuacion exacta. Ej: expresion="x**2 + y**2", punto_x="1", punto_y="2".
+
+    `expresion` en sintaxis sympy, solo con las variables x e y.
+    """
+    try:
+        x, y = sp.symbols("x y")
+        f = _expresion_en(expresion, ["x", "y"])
+        rx = _intervalo(x_min, x_max, "x")
+        ry = _intervalo(y_min, y_max, "y")
+
+        if (punto_x is None) != (punto_y is None):
+            raise visualizacion.GraficoError("para el plano tangente hay que pasar punto_x y punto_y")
+        plano = punto = None
+        extra: dict[str, Any] = {}
+        if punto_x is not None:
+            x0, y0 = sp.sympify(punto_x), sp.sympify(punto_y)
+            z0 = sp.simplify(f.subs({x: x0, y: y0}))
+            fx0 = sp.simplify(sp.diff(f, x).subs({x: x0, y: y0}))
+            fy0 = sp.simplify(sp.diff(f, y).subs({x: x0, y: y0}))
+            plano = sp.expand(z0 + fx0 * (x - x0) + fy0 * (y - y0))
+            punto = (float(x0), float(y0), float(z0))
+            extra = {
+                "punto": [_normalizar(x0), _normalizar(y0), _normalizar(z0)],
+                "plano_tangente": f"z = {_normalizar(plano)}",
+                "latex": f"z = {sp.latex(plano)}",
+            }
+
+        png = visualizacion.superficie_3d(f, x, y, rx, ry, plano, punto, titulo)
+        return {
+            "estado": "exito",
+            "tipo": "superficie_3d",
+            "superficie": f"z = {_normalizar(f)}",
+            **extra,
+            **_publicar(png, f"Superficie z = {sp.sstr(f)}"),
+        }
+    except Exception as exc:  # la tool nunca debe tumbar el servidor
+        return _error(exc)
+
+
+@mcp.tool(name="graficar_curva")
+@_con_guia_de_imagen
+def graficar_curva(
+    componentes: list[str],
+    parametro: str = "t",
+    t_min: str = "0",
+    t_max: str = "2*pi",
+    titulo: str | None = None,
+) -> dict[str, Any]:
+    """Grafica una curva parametrizada r(t) en el plano o en el espacio
+    (Calculo III: funciones vectoriales; Calculo IV: curvas de integracion).
+
+    `componentes` son 2 expresiones (curva plana) o 3 (curva en el espacio):
+      - circunferencia: ["cos(t)", "sin(t)"]
+      - helice: ["cos(t)", "sin(t)", "t"], t_max="4*pi"
+    Se marca el punto inicial y, en el plano, el sentido de recorrido.
+    """
+    try:
+        if len(componentes) not in (2, 3):
+            raise visualizacion.GraficoError("'componentes' debe tener 2 (plano) o 3 (espacio) expresiones")
+        t = sp.Symbol(parametro)
+        exprs = [_expresion_en(c, [parametro]) for c in componentes]
+        a, b = _intervalo(t_min, t_max, "t")
+
+        png = visualizacion.curva_parametrica(exprs, t, a, b, titulo)
+        return {
+            "estado": "exito",
+            "tipo": "curva_3d" if len(exprs) == 3 else "curva_2d",
+            "curva": [_normalizar(e) for e in exprs],
+            "intervalo_parametro": [a, b],
+            **_publicar(png, "Curva r(t) = (" + ", ".join(sp.sstr(e) for e in exprs) + ")"),
+        }
+    except Exception as exc:  # la tool nunca debe tumbar el servidor
+        return _error(exc)
+
+
+@mcp.tool(name="graficar_campo_vectorial")
+@_con_guia_de_imagen
+def graficar_campo_vectorial(
+    P: str,
+    Q: str,
+    x_min: str = "-3",
+    x_max: str = "3",
+    y_min: str = "-3",
+    y_max: str = "3",
+    curva_x: str | None = None,
+    curva_y: str | None = None,
+    t_min: str = "0",
+    t_max: str = "2*pi",
+    titulo: str | None = None,
+) -> dict[str, Any]:
+    """Grafica el campo vectorial F(x, y) = (P, Q) en el plano (Calculo IV).
+
+    Opcionalmente dibuja encima una curva orientada C: (curva_x(t), curva_y(t))
+    para t en [t_min, t_max] -- util para integrales de linea y para el
+    Teorema de Green. Ej: P="-y", Q="x", curva_x="cos(t)", curva_y="sin(t)".
+
+    P y Q solo pueden depender de x e y; la curva solo de t.
+    """
+    try:
+        x, y, t = sp.symbols("x y t")
+        p = _expresion_en(P, ["x", "y"])
+        q = _expresion_en(Q, ["x", "y"])
+        rx = _intervalo(x_min, x_max, "x")
+        ry = _intervalo(y_min, y_max, "y")
+
+        curva = None
+        if (curva_x is None) != (curva_y is None):
+            raise visualizacion.GraficoError("para dibujar la curva hay que pasar curva_x y curva_y")
+        if curva_x is not None:
+            ta, tb = _intervalo(t_min, t_max, "t")
+            curva = (_expresion_en(curva_x, ["t"]), _expresion_en(curva_y, ["t"]), t, ta, tb)
+
+        png = visualizacion.campo_vectorial_2d(p, q, x, y, rx, ry, curva, titulo)
+        rotacional = sp.simplify(sp.diff(q, x) - sp.diff(p, y))
+        return {
+            "estado": "exito",
+            "tipo": "campo_vectorial_2d",
+            "campo": [_normalizar(p), _normalizar(q)],
+            # Dato de contexto, no reemplaza a calculo4: rot = 0 en una region
+            # simplemente conexa => el campo es conservativo.
+            "rotacional_escalar": _normalizar(rotacional),
+            **_publicar(png, f"Campo F = ({sp.sstr(p)}, {sp.sstr(q)})"),
+        }
+    except Exception as exc:  # la tool nunca debe tumbar el servidor
+        return _error(exc)
 
 
 # =========================================================================
