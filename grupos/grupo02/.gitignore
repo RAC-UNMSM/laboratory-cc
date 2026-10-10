@@ -1,0 +1,55 @@
+# .gitignore del GRUPO 02 -- un solo archivo por grupo, no uno por proyecto.
+#
+# El del repositorio (raiz) es del profesor y no se toca: aqui solo se agrega
+# lo especifico de este grupo. Lo que se instala o se genera en la laptop de
+# cada uno se queda fuera; al repo solo sube lo que el despliegue necesita para
+# construir la app.
+#
+# Referencia: .claude/skills/mcp-validator/SKILL.md
+
+# --- Pruebas locales ---------------------------------------------------------
+# El profesor pide que las pruebas locales vivan en `proyecto01/<proyecto>/test/`
+# y no se suban al repositorio: son de trabajo, no parte de la entrega.
+proyecto01/*/test/
+proyecto01/*/*/test/
+
+# --- Entornos virtuales -----------------------------------------------------
+# El .gitignore de la raiz ya los cubre, pero el validador de entrega los
+# revisa contra ESTE archivo, asi que se repiten aqui.
+.venv/
+.venv*
+venv/
+venv*
+env/
+virtualenv/
+pyvenv.cfg*
+**/site-packages/
+
+# --- Caches de Python --------------------------------------------------------
+__pycache__/
+__pycache__*
+*.py[cod]*
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# --- Credenciales: nunca al repositorio -------------------------------------
+.env
+.env*
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Datos y salidas generadas en ejecución ---------------------------------
+*.log
+salida*.txt
+resultado*.txt
+*.sqlite
+*.db
+*.bak
+
+# Si mas adelante el grupo mete imagenes o datos generados en runtime, se
+# agregan aqui sus extensiones (png, jpg, pdf generado, etc.).
