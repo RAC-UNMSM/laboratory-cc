@@ -140,8 +140,23 @@ resultado final, no una lista de pasos.
 
 No hay tool para Stokes ni para regiones que no sean rectángulos o cuboides.
 
-**`calculo2.py` y `calculo3.py`** aún no están en el repositorio: mientras no
-carguen, se aplica la sección 6.
+**`calculo2.py` (Cálculo II).** Integración indefinida, definida y aplicaciones.
+
+- `calculo2_calcular_integral_indefinida(expresion, variable, modo)`: primitiva simbólica inmediata o por partes.
+- `calculo2_tecnicas_avanzadas_integracion(expresion, variable, tecnica, modo)`: fracciones parciales, sustitución trigonométrica.
+- `calculo2_riemann_y_teorema_fundamental(expresion, a_str, b_str, n_particiones, regla_riemann, variable, modo)`: Teorema Fundamental y sumas de Riemann.
+- `calculo2_aplicaciones_geometricas(tipo, f_str, g_str, a_str, b_str, eje_giro, variable, modo)`: áreas entre curvas, volúmenes y longitud de arco.
+- `calculo2_centro_masa_e_integracion_num(operacion_tipo, expresion, a_str, b_str, g_str, n_tramos, variable, modo)`: centroides y aproximaciones numéricas.
+- `calculo2_integrales_impropias_gamma_beta(expresion, a_str, b_str, variable, modo)`: convergencia de impropias, Gamma y Beta.
+
+**`calculo3.py` (Cálculo III).** Geometría en R³ y cálculo diferencial multivariable.
+
+- `calculo3_geometria_analitica_r3(u_str, v_str)`: producto escalar y cruz en R³.
+- `calculo3_superficies(ecuacion_str, variables)`: superficies de nivel y vector normal / gradiente.
+- `calculo3_frenet_serret_curvatura_torsion(r_str, t_var)`: triedro T, N, B, curvatura y torsión.
+- `calculo3_derivadas_parciales_gradiente(expr_str, variables)`: derivadas parciales y gradiente multivariable.
+- `calculo3_plano_tangente(expr_str, x0, y0)`: plano tangente y recta normal a superficies.
+- `calculo3_optimizacion_lagrange_hessiano(expr_str, variables, restriccion)`: matriz Hessiana y multiplicadores de Lagrange.
 
 ## 6. Si el módulo no está disponible
 

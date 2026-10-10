@@ -31,12 +31,16 @@ de álgebra simbólica: no calcula, **deduce**. `integral(x*exp(x), x)` da
    (Claude Code,    |                                       |
     Claude Desktop, |  SECCION 1  skill/*.md  -> prompts     |
     Inspector)      |                                       |
-                    |  SECCION 2  tools base (SymPy)         |
+                    |  SECCION 2  tools base (SymPy + Matplotlib)|
                     |            - calcular_derivada         |
                     |            - calcular_integral         |
                     |            - calcular_gradiente        |
                     |            - verificar_respuesta        |
                     |            - estado_del_servidor        |
+                    |            - graficar_funciones        |
+                    |            - graficar_superficie       |
+                    |            - graficar_curva            |
+                    |            - graficar_campo_vectorial  |
                     |                                       |
                     |  SECCION 3  carga dinamica:            |
                     |    tools/calculo1.py  -> calculo1_*    |
@@ -45,8 +49,10 @@ de álgebra simbólica: no calcula, **deduce**. `integral(x*exp(x), x)` da
                     |    tools/calculo4.py  -> calculo4_*    |
                     +---------------------------------------+
                                       |
-                                      v
-                                    SymPy
+                     +----------------+----------------+
+                     |                                 |
+                     v                                 v
+                   SymPy                     SeaweedFS / Matplotlib
 ```
 
 **Lo importante de este diseño:** los módulos de `tools/` se cargan **en tiempo
@@ -58,25 +64,32 @@ que 5 personas trabajen en paralelo.
 ## Estructura
 
 ```text
-mcp-calculo/
-  server.py               # orquestador: skills + tools base + carga dinamica
-  requirements.txt        # mcp==2.1.1 (pinned), sympy, numpy
+calculo-i-iv/
+  server.py               # orquestador: skills + tools base + carga dinamica (35 tools)
+  storage.py              # subida de imagenes a SeaweedFS con URLs publicas
+  visualizacion.py        # graficador headless (2D, 3D, curvas, campos vectoriales)
+  requirements.txt        # mcp==2.1.1 (pinned), sympy, matplotlib, numpy
   Dockerfile              # python:3.11-slim
-  docker-compose.yml      # mem_limit 512m, red lab_net
+  docker-compose.yml      # mem_limit 512m, red lab_net, storage envs
   .dockerignore
+  calculo-i-iv.md         # propuesta formal del proyecto (24 temas y equipo)
   skill/                  # contextos de comportamiento (Markdown)
     skill_resolver_examen.md
     skill_paso_a_paso.md
     skill_tutor_interactivo.md
-  tools/                  # motores matematicos, uno por area
+  tools/                  # motores matematicos, uno por area (26 tools)
     README.md             # EL CONTRATO -- leer antes de escribir tu modulo
-    _plantilla.py         # copiar -> calculo<N>.py
-    calculo1.py           # (Saico Cristhian)
-    calculo2.py           # (Rosales Yhin)
-    calculo3.py           # (Vilcapoma Jefferson)
-    calculo4.py           # (Meza Angel)
-  tests/                  # pruebas de estructura (no necesitan sympy)
+    _plantilla.py         # plantilla de inicio
+    calculo1.py           # (Saico Cristhian - 8 tools)
+    calculo2.py           # (Rosales Yhin - 6 tools)
+    calculo3.py           # (Vilcapoma Jefferson - 6 tools)
+    calculo4.py           # (Meza Angel - 6 tools)
+  test/                   # pruebas locales (unificadas, en .gitignore global)
     test_estructura.py
+    test_skills.py
+    _smoke.py
+    _prueba_matematica.py
+    _cliente.py
   README.md
 ```
 
@@ -119,10 +132,22 @@ terminal):
 python tools/calculo1.py
 ```
 
-Tests de estructura (no necesitan SymPy ni PyYAML, corren en 1 segundo):
+Tests de estructura y skills (en `test/`, corren en 1 segundo):
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s test -v
+```
+
+Pruebas de correctitud matemática con SymPy (40 casos de Cálculo I a IV):
+
+```bash
+python test/_prueba_matematica.py
+```
+
+Smoke test del servidor completo (35 tools y 3 contextos):
+
+```bash
+python test/_smoke.py
 ```
 
 ## Cómo probarlo en Docker
@@ -143,9 +168,10 @@ La tool `estado_del_servidor` es el diagnóstico oficial:
 ```json
 {
   "estado": "exito",
-  "modulos_cargados": ["calculo1", "calculo3"],
-  "modulos_faltantes": ["calculo2", "calculo4"],
-  "total_tools": 9
+  "servidor": "grupo02-calculo-i-iv",
+  "herramientas_base": ["calcular_derivada", "calcular_gradiente", "calcular_integral", "estado_del_servidor", "graficar_campo_vectorial", "graficar_curva", "graficar_funciones", "graficar_superficie", "verificar_respuesta"],
+  "modulos_cargados": ["calculo1", "calculo2", "calculo3", "calculo4"],
+  "total_tools": 35
 }
 ```
 
@@ -175,8 +201,14 @@ no se toca.
 6. **El `docstring` de cada tool es documentación para la IA**, no para
    humanos: es lo que lee el cliente MCP para saber cómo llamar la tool y qué
    sintaxis espera. Por eso el contrato de `tools/README.md` insiste en él.
+7. **Generación de gráficos en memoria y subida a SeaweedFS.** Los gráficos se
+   generan headless con `Figure` de Matplotlib y se suben directamente al clúster
+   interno `http://seaweedfs:8333` mediante HTTP `PUT`, retornando enlaces
+   públicos Markdown para los clientes de IA.
 
-## Pendiente
+## Estado del Proyecto
 
-- Los 4 módulos de `tools/` (`calculo1.py` … `calculo4.py`) están pendientes:
-  hasta que existan, el servidor funciona solo con las 5 tools base.
+- **Completo:** Los 4 cursos de cálculo (`calculo1.py` a `calculo4.py`) cuentan
+  con sus motores matemáticos validados (26 herramientas que cubren los 24 temas).
+- **Servidor:** 35 tools operativas (9 base + 26 dinámicas) y 3 prompts interactivos.
+- **Validado:** Pasa `mcp-validator` con veredicto *"LISTO: se puede subir y va a desplegar"*.
