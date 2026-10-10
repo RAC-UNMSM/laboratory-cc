@@ -17,3 +17,13 @@ def test_descenso_sistema_simple():
     assert res.status == EstadoMetodo.CONVERGED
     assert abs(res.solution[0] - res.solution[1]) < 1e-4
     assert abs(res.solution[0]**2 + res.solution[1]**2 - 1) < 1e-4
+
+
+def test_descenso_no_declara_raiz_en_punto_estacionario():
+    funciones = [lambda x: x[0] ** 2 + 1.0, lambda x: x[1]]
+
+    res = descenso_mas_rapido(funciones, [0.0, 0.0], tolerancia=1e-8, max_iter=10)
+
+    assert res.status == EstadoMetodo.MAX_ITER
+    assert res.final_residual == 1.0
+    assert "no se encontro una raiz" in res.message

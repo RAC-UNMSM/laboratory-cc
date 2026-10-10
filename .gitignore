@@ -1,0 +1,47 @@
+.vscode/
+
+# Secrets and local environment
+.env
+.env.*
+
+# Node.js
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+*.egg-info/
+htmlcov/
+.coverage
+coverage.xml
+
+# Generated Grupo 8 HTML reports and images
+/grupos/grupo08/proyecto01/sistemas-no-lineales/salida-mathjax/
+/grupos/grupo08/proyecto01/sistemas-no-lineales/config/proyecto_config.json
+
+# Build output and compiled binaries
+dist/
+build/
+out/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+
+# IDE and operating system files
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary and log files
+*.log
+*.tmp

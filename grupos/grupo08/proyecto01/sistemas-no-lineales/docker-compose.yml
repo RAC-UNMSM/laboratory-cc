@@ -1,0 +1,14 @@
+services:
+  sistemas-no-lineales:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${LAB_CONTAINER_NAME}
+    restart: unless-stopped
+    mem_limit: 512m
+    stdin_open: true
+
+networks:
+  default:
+    name: lab_net
+    external: true

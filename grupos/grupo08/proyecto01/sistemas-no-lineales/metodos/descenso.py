@@ -50,14 +50,16 @@ def descenso_mas_rapido(
         if np.linalg.norm(grad) < tolerancia:
             return ResultadoMetodo(
                 method="descenso_mas_rapido",
-                status=EstadoMetodo.CONVERGED,
+                status=EstadoMetodo.MAX_ITER,
                 solution=x.tolist(),
                 iterations=k,
                 final_error=float(norm_F),
                 final_residual=float(norm_F),
                 trajectory=trayectoria,
-                warnings=warnings,
-                message="Gradiente cercano a cero."
+                warnings=warnings + [
+                    "Gradiente cercano a cero, pero el residuo supera la tolerancia."
+                ],
+                message="Estancamiento: no se encontro una raiz."
             )
 
         direccion = -grad
