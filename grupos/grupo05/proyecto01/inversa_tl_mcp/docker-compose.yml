@@ -1,0 +1,11 @@
+services:
+  inversa-tl-mcp:
+    build: .
+    container_name: ${LAB_CONTAINER_NAME}
+    restart: unless-stopped
+    mem_limit: 512m
+
+networks:
+  default:
+    name: lab_net
+    external: true
