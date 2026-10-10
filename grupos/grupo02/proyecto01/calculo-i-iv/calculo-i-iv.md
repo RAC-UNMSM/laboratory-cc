@@ -12,13 +12,21 @@
 5. **Meza Nolorbe Angel** (Desarrollador Python - Cálculo IV)
 6. **Lau Huamantoma Carlos Yang Hu** (Ingeniero de Prompts & QA / Skills)
 
+## Estado de implementación
+
+La propuesta se ha implementado en esta carpeta. Consulte [README.md](README.md)
+y [API](docs/API.md) para el alcance real de veinte operaciones, cinco tools,
+nueve temas del tutor y las limitaciones. Los nombres del árbol conceptual se
+conservan en `tools/`. Se añadieron validación, procesos aislados, despliegue y QA.
+La aceptación en producción depende de las comprobaciones del administrador.
+
 ## 1. Idea General del Proyecto
 
 El objetivo del Grupo 02 es desarrollar un **Servidor MCP (Model Context Protocol)** que actúe como una plataforma integral de resolución y enseñanza para todo el ciclo universitario de Cálculo (Cálculo I, II, III y IV).
 
 Para cumplir con la complejidad adecuada solicitada a un equipo de 6 personas, el sistema no dependerá únicamente de respuestas generativas de texto. En su lugar, el MCP conectará el modelo de lenguaje con motores de cálculo simbólico programados en Python (usando librerías científicas como **SymPy** y **NumPy**).
 
-De este modo, los cálculos matemáticos (límites, integrales, gradientes, integrales dobles/triples o teoremas de campos vectoriales) son resueltos de forma exacta por código Python, mientras que el modelo de IA se encarga de dar el formato matemático adecuado y la explicación pedagógica requerida.
+De este modo, los cálculos matemáticos (límites, integrales, gradientes, integrales dobles/triples o teoremas de campos vectoriales) se calculan simbólicamente cuando el motor puede resolverlos; en otros casos se informa que no se obtuvo solución cerrada, mientras que el modelo de IA se encarga de dar el formato matemático adecuado y la explicación pedagógica requerida.
 
 ## 2. Estructura de los 2 Apartados Principales
 
@@ -43,7 +51,7 @@ El proyecto se dividirá internamente en dos apartados funcionales independiente
 
 ### APARTADO 1: Resolutor de Ejercicios Prácticos
 
-Este módulo está pensado para procesar cualquier ejercicio específico que proporcione el usuario y resolverlo en tiempo real mediante dos modalidades de visualización:
+Este módulo está pensado para procesar los tipos de ejercicios estructurados admitidos por la API y resolverlo en tiempo real mediante dos modalidades de visualización:
 
 * **Opción A - Respuesta Formal de Examen:**
   * **Objetivo:** Entregar la resolución directa y rigurosa, tal como se exigiría en una evaluación presencial o examen escrito.
@@ -57,7 +65,7 @@ Este módulo está pensado para procesar cualquier ejercicio específico que pro
 
 Este módulo funciona con una ventana de contexto (*skill*) independiente, diseñada específicamente para guiar al usuario en el aprendizaje teórico y práctico de los cursos.
 
-* **Ventana de Contexto Independiente:** Posee sus propias reglas de interacción, comportamiento y evaluación, aisladas de la herramienta de examen.
+* **Ventana de Contexto Independiente:** Publica reglas de interacción como prompts separados. El cliente MCP administra la separación de contexto, comportamiento y evaluación.
 * **Modalidades de Aprendizaje:**
   * **Modo Desde Cero:** Guía al estudiante tema por tema desde los conceptos fundamentales (límites, funciones, integrales básicas) de manera progresiva.
   * **Modo Avanzado:** Permite al usuario seleccionar temas complejos específicos (ej. Multiplicadores de Lagrange, Teorema de Green, Stokes o Gauss) para repasarlos directamente.
@@ -65,39 +73,25 @@ Este módulo funciona con una ventana de contexto (*skill*) independiente, dise�
 
 ## 3. Estructura Modular de Archivos y Componentes
 
-> **Nota:** esta sección se actualizó para reflejar la estructura que se
-> construyó finalmente. La partición inicial era de 7 módulos (uno por tema);
-> se cambió a **4 módulos, uno por área y por persona**, que es como quedó
-> repartido el trabajo y lo que hace que 5 personas puedan escribir en paralelo
-> sin pisarse. La carpeta también cambió de nombre: el profesor pidió que el
-> proyecto viva dentro de `proyecto01/`.
-
-El repositorio del Grupo 02 se organiza bajo la siguiente arquitectura de directorios:
+El repositorio del Grupo 02 se organizará bajo la siguiente arquitectura de directorios:
 
 ```text
-calculo-i-iv/
-|-- server.py               # Servidor principal MCP (orquestador)
-|-- requirements.txt        # mcp==2.1.1 (pinned), sympy, numpy
-|-- Dockerfile
-|-- docker-compose.yml
-|-- skill/                  # Contextos de comportamiento (Markdown)
+mcp-calculo-g02/
+|-- server.py                      # Servidor principal MCP
+|-- tools/                         # Motores matemáticos (SymPy / NumPy)
+|   |-- limites_continuidad.py     # Cálculo I
+|   |-- derivadas_optimizacion.py  # Cálculo I
+|   |-- integrales.py              # Cálculo II
+|   |-- integrales_aplicaciones.py # Cálculo II
+|   |-- calculo_multivariable.py   # Cálculo III
+|   |-- integrales_multiples.py    # Cálculo IV
+|   `-- campos_vectoriales.py      # Cálculo IV
+|-- skills/                        # Contextos de comportamiento (Markdown)
 |   |-- skill_resolver_examen.md   # Instrucciones de examen formal
 |   |-- skill_paso_a_paso.md       # Instrucciones de paso a paso
 |   `-- skill_tutor_interactivo.md # Contexto del tutor
-|-- tools/                  # Motores matemáticos (SymPy / NumPy)
-|   |-- README.md           # El contrato que debe cumplir cada módulo
-|   |-- _plantilla.py       # Plantilla a copiar por cada integrante
-|   |-- calculo1.py         # Cálculo I   (Saico Cristhian)
-|   |-- calculo2.py         # Cálculo II  (Rosales Yhin)
-|   |-- calculo3.py         # Cálculo III (Vilcapoma Jefferson)
-|   `-- calculo4.py         # Cálculo IV  (Meza Angel)
-`-- tests/                  # Pruebas de estructura
+`-- tests/                         # Pruebas unitarias para scripts .py
 ```
-
-`server.py` carga los módulos de `tools/` **de forma dinámica al arrancar**:
-recorre `calculo1.py` … `calculo4.py`, registra sus funciones públicas como
-tools MCP con el prefijo del módulo (`calculo4_green`, `calculo1_limite`…) y
-no hay que tocar el servidor para agregar una función nueva.
 
 ## 4. Organización de Tareas para el Grupo 02
 
