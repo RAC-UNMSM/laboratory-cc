@@ -1,4 +1,4 @@
-"""Plantillas Jinja2, gráficos y almacenamiento en SeaweedFS (S3 simulado)."""
+"""Plantillas Jinja2, gráficos EN MEMORIA y almacenamiento en SeaweedFS (S3 simulado)."""
 import json
 import re
 import socket
@@ -7,11 +7,11 @@ import pytest
 
 from core import reporte, visualizacion
 from methods import metodo_frenet as MF, metodo_hessiana as MH, metodo_lagrange as ML
-from storage import ID_PATRON, Almacen, BackendLocal, BackendS3, ErrorAlmacen, nuevo_id
+from storage import ID_PATRON, ID_SESION, Almacen, BackendS3, ErrorAlmacen, nuevo_id
 from s3_simulado import SeaweedSimulado
 
-BUCKET = "frenet-lagrange-imgs"
-PUBLICA = "https://rac-unmsm.vekthos.org/img/frenet-lagrange"
+BUCKET = "grupo06-frenet-lagrange-imgs"
+PUBLICA = "https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -22,17 +22,20 @@ PUBLICA = "https://rac-unmsm.vekthos.org/img/frenet-lagrange"
     ("hessiana", lambda: MH.resolver("x^4 + y^4 - 4xy + 1")),
     ("frenet", lambda: MF.resolver("cos t, sin t, t", "0")),
 ])
-def test_html_y_png(tmp_path, metodo, objeto):
+def test_html_y_png_en_memoria(tmp_path, monkeypatch, metodo, objeto):
+    monkeypatch.chdir(tmp_path)                                   # si algo escribiera en disco, aparecería aquí
     obj = objeto()
     datos = visualizacion.datos_grafico(metodo, obj)
-    ruta = reporte.guardar_html(metodo, obj, tmp_path / "r.html", datos=datos)
-    html = open(ruta, encoding="utf-8").read()
+    html_b = reporte.html_bytes(metodo, obj, datos=datos)
+    assert isinstance(html_b, bytes)
+    html = html_b.decode("utf-8")
     assert html.lower().startswith("<!doctype html>") and "katex" in html.lower()
     assert not re.search(r"\{\{\s*\w+\s*\}\}|\{%", html)          # Jinja2 sin variables sin rellenar
     assert reporte.CONFIG[metodo]["titulo"] in html
-    png = visualizacion.generar_png(metodo, obj, str(tmp_path / "g.png"), datos)
-    assert open(png, "rb").read(8) == b"\x89PNG\r\n\x1a\n"
+    png = reporte.grafico_png_bytes(metodo, obj, datos)
+    assert isinstance(png, bytes) and png[:8] == b"\x89PNG\r\n\x1a\n"
     assert reporte.resumen_breve(metodo, reporte.a_dict(metodo, obj))
+    assert list(tmp_path.iterdir()) == []                          # nada se escribió en disco
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -43,8 +46,11 @@ def _almacen(s3: SeaweedSimulado, **kw) -> Almacen:
 
 
 def test_nuevo_id_sin_colisiones():
-    ids = [nuevo_id("frenet") for _ in range(20000)]
-    assert len(set(ids)) == len(ids)                              # 32 bits aleatorios por id
+    # 32 bits aleatorios por id: con k ids en el MISMO segundo, P(choque) ≈ k²/2³³.
+    # 2000 ids (casi todos en el mismo segundo) → ≈ 0,05 %; con 20 000 sería ≈ 5 % y la prueba
+    # fallaría a veces por pura estadística, no por un error del código.
+    ids = [nuevo_id("frenet") for _ in range(2000)]
+    assert len(set(ids)) == len(ids)
     assert all(ID_PATRON.match(i) for i in ids[:50])
     assert re.fullmatch(r"frenet-\d{8}-\d{6}-[0-9a-f]{8}", ids[0])
 
@@ -66,14 +72,14 @@ def test_ensure_bucket_no_falla_si_seaweedfs_no_responde():
         Almacen(b).subir("frenet-20261006-000000-abcdef12", "x.json", b"{}")
 
 
-def test_guardar_sube_bajo_grupo06_id_con_urls_publicas(tmp_path):
-    (tmp_path / "reporte.html").write_text("<!doctype html><p>hola</p>", encoding="utf-8")
-    (tmp_path / "grafico.png").write_bytes(b"\x89PNG\r\n\x1a\nfalso")
+def test_guardar_sube_bytes_bajo_grupo06_id_con_urls_publicas():
+    html = "<!doctype html><p>hola</p>".encode("utf-8")
+    png = b"\x89PNG\r\n\x1a\nfalso"
     with SeaweedSimulado() as s3:                                 # sin bucket: lo crea la 1.ª subida
         a = _almacen(s3)
         id_ = a.nuevo_id("hessiana")
         reg = a.guardar(id_, "hessiana", "f = x^2", {"funcion": "x^2"}, {"ñ": "á"}, ["P1 mínimo"],
-                        {"html": tmp_path / "reporte.html", "png": tmp_path / "grafico.png"})
+                        contenido_bytes={"html": html, "png": png})
         esperadas = {f"grupo06/{id_}/{n}" for n in
                      ("reporte.html", "grafico.png", "resultado.json", "entrada.json", "meta.json")}
         assert set(s3.claves(BUCKET)) == esperadas
@@ -85,6 +91,18 @@ def test_guardar_sube_bajo_grupo06_id_con_urls_publicas(tmp_path):
         assert reg.archivos["html"] == f"{PUBLICA}/grupo06/{id_}/reporte.html"
         assert reg.archivos["png"] == f"{PUBLICA}/grupo06/{id_}/grafico.png"
         assert json.loads(s3.objetos[(BUCKET, f"grupo06/{id_}/resultado.json")][0]) == {"ñ": "á"}
+        assert s3.objetos[(BUCKET, f"grupo06/{id_}/reporte.html")][0] == html          # mismos bytes
+        assert s3.objetos[(BUCKET, f"grupo06/{id_}/grafico.png")][0] == png
+
+
+def test_subir_exige_bytes_y_acepta_el_prefijo_de_sesion():
+    with SeaweedSimulado(crear_buckets=(BUCKET,)) as s3:
+        a = _almacen(s3)
+        with pytest.raises(TypeError):
+            a.subir("frenet-20261006-000000-abcdef12", "x.json", "texto, no bytes")   # type: ignore[arg-type]
+        url = a.subir(ID_SESION, "lote.json", b"{}")
+        assert url == f"{PUBLICA}/grupo06/{ID_SESION}/lote.json"
+        assert ID_SESION not in [x["id"] for x in a.listar()]                       # no es un ejercicio
 
 
 def test_listar_y_obtener_sin_indice():
@@ -124,12 +142,3 @@ def test_ids_y_nombres_maliciosos():
             a.clave(malo, "reporte.html")
     with pytest.raises(KeyError):
         a.clave("frenet-20261006-000000-abcdef12", "../../otro_grupo")
-
-
-def test_backend_local_misma_estructura(tmp_path):
-    a = Almacen(BackendLocal(tmp_path))
-    id_ = a.nuevo_id("frenet")
-    reg = a.guardar(id_, "frenet", "hélice", {}, {"k": 1}, ["ok"], {})
-    assert (tmp_path / "grupo06" / id_ / "meta.json").is_file()
-    assert reg.archivos["resultado"].startswith("file://")
-    assert a.listar()[0]["id"] == id_ and a.obtener(id_)["resultado"] == {"k": 1}

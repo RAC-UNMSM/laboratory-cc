@@ -1,3 +1,4 @@
--r requirements-agente.txt
+# Pruebas (pytest) y comprobaciones estáticas del CI.
+-r requirements.txt
 pytest>=8
 pyflakes>=3

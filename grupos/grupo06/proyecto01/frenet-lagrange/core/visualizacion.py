@@ -7,12 +7,16 @@ Los métodos (``methods/``) solo devuelven objetos matemáticos; este módulo lo
   mallas, curvas de restricción, flujo del gradiente, cuencas, triedro muestreado, etc.
   Son los arreglos que usan las plantillas web (Plotly.js) y que el MCP puede devolver.
 * **Imágenes PNG** con matplotlib (``png_lagrange``, ``png_hessiana``, ``png_frenet``).
-* Un **despachador** común: ``datos_grafico(metodo, objeto)`` y ``generar_png(metodo, objeto, ruta)``.
+* Un **despachador** común: ``datos_grafico(metodo, objeto)`` y ``generar_png(metodo, objeto)``.
+
+Todo en MEMORIA: las láminas se dibujan en un ``io.BytesIO`` y se devuelven como ``bytes``
+(nunca se escriben en el disco del contenedor).
 
 Paleta única (sobria, terracota) compartida con las plantillas HTML: ``PALETA`` y ``TERRA``.
 """
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Literal
 
@@ -30,6 +34,7 @@ __all__ = ["datos_grafico", "generar_png", "datos_lagrange", "datos_hessiana", "
            "png_lagrange", "png_hessiana", "png_frenet", "PALETA", "TERRA"]
 
 Metodo = Literal["lagrange", "hessiana", "frenet"]
+log = logging.getLogger("mcp_math.visualizacion")
 
 #: Colores semánticos (mismos valores que las variables CSS de templates/static/estilos.css).
 PALETA: dict[str, str] = {
@@ -39,6 +44,13 @@ PALETA: dict[str, str] = {
 TERRA: list[str] = ["#2c2420", "#4c2c21", "#7a3a24", "#ab4f2c", "#cf8660", "#e7bf9e", "#f7ece0"]
 _TERRA = TERRA
 PALETA_CUENCAS: list[str] = ["#3f6e7d", "#6b7a4f", "#a07b4f", "#5f6f8a", "#8a5a44", "#7a5873", "#4f7d6a"]
+
+
+def _a_bytes(fig: Any, plt: Any, dpi: int) -> bytes:
+    """La figura se convierte en bytes PNG en MEMORIA (core.reporte.figura_a_png_bytes, io.BytesIO)."""
+    from core.reporte import figura_a_png_bytes
+    del plt                                         # figura_a_png_bytes cierra la figura
+    return figura_a_png_bytes(fig, dpi)
 
 
 def _cmap_terra():
@@ -210,7 +222,7 @@ def _color_l(p):
     return _COLOR_L.get(p["clasificacion"], "#8c8279")
 
 
-def png_lagrange(P: ProblemaLagrange, ruta: str, datos: dict | None = None, dpi: int = 130):
+def png_lagrange(P: ProblemaLagrange, datos: dict | None = None, dpi: int = 130) -> bytes:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -289,9 +301,7 @@ def png_lagrange(P: ProblemaLagrange, ruta: str, datos: dict | None = None, dpi:
     fig.legend(handles=leyenda, loc="lower center", ncol=5, fontsize=9, frameon=False)
     fig.suptitle(titulo, fontsize=12, fontweight="bold")
     fig.tight_layout(rect=(0, 0.05, 1, 0.95))
-    fig.savefig(ruta, dpi=dpi)
-    plt.close(fig)
-    return ruta
+    return _a_bytes(fig, plt, dpi)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -533,7 +543,7 @@ def _color_h(p):
     return _COLOR_H.get(p["clasificacion"], "#8c8279")
 
 
-def png_hessiana(P: ProblemaHessiana, ruta: str, datos: dict | None = None, dpi: int = 130):
+def png_hessiana(P: ProblemaHessiana, datos: dict | None = None, dpi: int = 130) -> bytes:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -575,7 +585,7 @@ def png_hessiana(P: ProblemaHessiana, ruta: str, datos: dict | None = None, dpi:
             ax.streamplot(xs, ys, np.nan_to_num(U), np.nan_to_num(V), color=(1, 1, 1, 0.75),
                           density=1.4, linewidth=0.9, arrowsize=1.0, zorder=3)
         except Exception as e:  # noqa: BLE001
-            print("(aviso: no se pudo dibujar el flujo:", e, ")")
+            log.warning("No se pudo dibujar el flujo del gradiente: %s", e)
         if D.get("niveles_criticos"):
             try:
                 cs = ax.contour(X, Y, Z, levels=sorted(set(D["niveles_criticos"])), colors="black",
@@ -682,9 +692,7 @@ def png_hessiana(P: ProblemaHessiana, ruta: str, datos: dict | None = None, dpi:
     fig.legend(handles=leyenda, loc="lower center", ncol=5, fontsize=10, frameon=False)
     fig.suptitle(titulo, fontsize=15, fontweight="bold")
     fig.tight_layout(rect=(0, 0.03, 1, 0.96))
-    fig.savefig(ruta, dpi=dpi)
-    plt.close(fig)
-    return ruta
+    return _a_bytes(fig, plt, dpi)
 
 
 def _envolver(t, w):
@@ -784,7 +792,7 @@ def datos_frenet(C: CurvaFrenet, rango=None, n: int = 481) -> dict:
 _CT, _CN, _CB = "#b0502c", "#3f6e7d", "#c38d35"
 
 
-def png_frenet(C: CurvaFrenet, ruta: str, datos: dict | None = None, dpi: int = 130):
+def png_frenet(C: CurvaFrenet, datos: dict | None = None, dpi: int = 130) -> bytes:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -884,9 +892,7 @@ def png_frenet(C: CurvaFrenet, ruta: str, datos: dict | None = None, dpi: int = 
              family="monospace", fontsize=9.5, transform=ax4.transAxes)
     fig.suptitle(f"Triedro de Frenet · r({C.t}) = ({', '.join(_s(c) for c in C.r)})", fontsize=14, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    fig.savefig(ruta, dpi=dpi)
-    plt.close(fig)
-    return ruta
+    return _a_bytes(fig, plt, dpi)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -903,11 +909,11 @@ def datos_grafico(metodo: Metodo, objeto: Any, rango=None) -> dict:
     raise ValueError(f"Método desconocido: {metodo}")
 
 
-def generar_png(metodo: Metodo, objeto: Any, ruta: str, datos: dict | None = None) -> str:
-    """Despachador: guarda la lámina PNG del método en ``ruta`` y devuelve la ruta."""
+def generar_png(metodo: Metodo, objeto: Any, datos: dict | None = None) -> bytes:
+    """Despachador: devuelve la lámina PNG del método como ``bytes`` (generada en memoria)."""
     fn = {"lagrange": png_lagrange, "hessiana": png_hessiana, "frenet": png_frenet}.get(metodo)
     if fn is None:
         raise ValueError(f"Método desconocido: {metodo}")
     if datos is not None and datos.get("tipo") == "sin_grafico":
         raise ValueError("Con más de 3 variables no hay representación geométrica.")
-    return fn(objeto, ruta, datos)
+    return fn(objeto, datos)

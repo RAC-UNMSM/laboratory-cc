@@ -11,9 +11,16 @@ Cada cálculo se guarda bajo una "carpeta virtual" (prefijo S3) propia del grupo
         │   ├── resultado.json      ← JSON exacto del método
         │   ├── entrada.json        ← la solicitud validada
         │   └── meta.json           ← id, método, fecha, descripción y resumen (se escribe AL FINAL)
-        └── lote-20261006-153500-9f8e7d6c/
+        ├── lote-20261006-153500-9f8e7d6c/      ← reporte combinado pedido explícitamente
+        │   ├── reporte_combinado.html
+        │   └── lote.json
+        └── lote-sesion-actual/                 ← reporte combinado AUTOMÁTICO (se sobrescribe)
             ├── reporte_combinado.html
             └── lote.json
+
+Todo viaja en MEMORIA: ``subir`` y ``guardar`` reciben ``contenido_bytes`` (los bytes del HTML,
+del PNG o del JSON) y los envían directo a SeaweedFS. Este módulo no escribe en el disco del
+contenedor (ni carpetas temporales ni archivos intermedios).
 
 Las URLs que se devuelven son PÚBLICAS (las sirve Caddy):
     ${PUBLIC_IMG_BASE_URL}/grupo06/<id>/reporte.html
@@ -24,13 +31,11 @@ cada cálculo escribe SOLO en su propio prefijo (claves que nadie más usa) y el
 obtiene preguntándole a S3 qué prefijos existen (ListObjectsV2 con delimitador '/').
 
 Variables de entorno:
-    MCP_MATH_STORAGE      s3 | local | auto  (auto: s3 si el transporte es HTTP, local si es STDIO)
     SEAWEEDFS_S3_URL      http://seaweedfs:8333          (DNS interno de Docker)
-    IMG_BUCKET            frenet-lagrange-imgs
-    PUBLIC_IMG_BASE_URL   https://rac-unmsm.vekthos.org/img/frenet-lagrange
+    IMG_BUCKET            grupo06-frenet-lagrange-imgs
+    PUBLIC_IMG_BASE_URL   https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange
     MCP_GRUPO             grupo06                        (prefijo de todas las claves)
     S3_ACCESS_KEY / S3_SECRET_KEY / S3_REGION            (opcionales: firma AWS SigV4)
-    MCP_MATH_RESULTADOS   carpeta del modo local         (def. ./resultados)
 """
 from __future__ import annotations
 
@@ -39,29 +44,33 @@ import hmac
 import json
 import logging
 import os
+import posixpath
 import re
-import tempfile
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
-__all__ = ["Almacen", "BackendS3", "BackendLocal", "RegistroResultado", "ErrorAlmacen", "ID_PATRON",
-           "ID_LOTE", "nuevo_id", "nuevo_id_lote", "GRUPO"]
+__all__ = ["Almacen", "BackendS3", "RegistroResultado", "ErrorAlmacen", "ID_PATRON", "ID_LOTE",
+           "ID_SESION", "nuevo_id", "nuevo_id_lote", "elegir_backend", "GRUPO",
+           "SEAWEEDFS_S3_URL", "IMG_BUCKET", "PUBLIC_IMG_BASE_URL"]
 
 log = logging.getLogger("mcp_math.storage")
 
 GRUPO = os.environ.get("MCP_GRUPO", "grupo06")
+# Constantes de despliegue (el contenedor las lee también desde el entorno, que gana si está definido).
+SEAWEEDFS_S3_URL = "http://seaweedfs:8333"
 IMG_BUCKET = "grupo06-frenet-lagrange-imgs"
 PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange"
 # 8 hex (uuid4) en los ids nuevos; se aceptan 6 hex para leer resultados antiguos.
 ID_PATRON = re.compile(r"^(lagrange|hessiana|frenet)-\d{8}-\d{6}-[0-9a-f]{6}(?:[0-9a-f]{2})?$")
 ID_LOTE = re.compile(r"^lote-\d{8}-\d{6}-[0-9a-f]{6}(?:[0-9a-f]{2})?$")
+#: Prefijo FIJO del reporte combinado automático de la sesión (core/combinado.agregar_a_sesion).
+ID_SESION = "lote-sesion-actual"
 ARCHIVOS = {"html": "reporte.html", "png": "grafico.png", "resultado": "resultado.json",
             "entrada": "entrada.json", "meta": "meta.json"}
 TIPOS = {".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -93,7 +102,7 @@ def _orden(id_: str) -> str:
 
 
 def _tipo(nombre: str) -> str:
-    return TIPOS.get(Path(nombre).suffix.lower(), "application/octet-stream")
+    return TIPOS.get(posixpath.splitext(nombre)[1].lower(), "application/octet-stream")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -103,7 +112,7 @@ class Backend(Protocol):
     descripcion: str
 
     def preparar(self) -> bool: ...
-    def subir(self, clave: str, datos: bytes, tipo: str) -> None: ...
+    def subir(self, clave: str, contenido_bytes: bytes, tipo: str) -> None: ...
     def leer(self, clave: str) -> bytes: ...
     def prefijos(self, prefijo: str) -> list[str]: ...
     def url_publica(self, clave: str) -> str: ...
@@ -129,14 +138,13 @@ class BackendS3:
 
     @classmethod
     def desde_entorno(cls) -> "BackendS3":
-        return cls(
-            os.environ.get("SEAWEEDFS_S3_URL", "http://seaweedfs:8333"),
-            IMG_BUCKET,
-            PUBLIC_IMG_BASE_URL,
-            timeout=float(os.environ.get("S3_TIMEOUT", "20")),
-            access_key=os.environ.get("S3_ACCESS_KEY") or None,
-            secret_key=os.environ.get("S3_SECRET_KEY") or None,
-            region=os.environ.get("S3_REGION", "us-east-1"))
+        return cls(os.environ.get("SEAWEEDFS_S3_URL", SEAWEEDFS_S3_URL),
+                   os.environ.get("IMG_BUCKET", IMG_BUCKET),
+                   os.environ.get("PUBLIC_IMG_BASE_URL", PUBLIC_IMG_BASE_URL),
+                   timeout=float(os.environ.get("S3_TIMEOUT", "20")),
+                   access_key=os.environ.get("S3_ACCESS_KEY", "") or None,
+                   secret_key=os.environ.get("S3_SECRET_KEY", "") or None,
+                   region=os.environ.get("S3_REGION", "us-east-1"))
 
     # ── HTTP ─────────────────────────────────────────────────────────────────
     def _ruta(self, clave: str = "") -> str:
@@ -195,16 +203,17 @@ class BackendS3:
 
     ensure_bucket = preparar                          # nombre usado en el enunciado del laboratorio
 
-    def subir(self, clave: str, datos: bytes, tipo: str) -> None:
+    def subir(self, clave: str, contenido_bytes: bytes, tipo: str) -> None:
+        """PUT del objeto directamente desde el búfer en memoria ``contenido_bytes``."""
         if not self._bucket_listo:
             self.preparar()
         try:
-            self._peticion("PUT", clave, datos, tipo=tipo)
+            self._peticion("PUT", clave, contenido_bytes, tipo=tipo)
         except HTTPError as e:
             # SeaweedFS responde 404 (NoSuchBucket) o 403 si el bucket no existe: crearlo y reintentar una vez.
             if e.code in (403, 404) and self.preparar():
                 try:
-                    self._peticion("PUT", clave, datos, tipo=tipo)
+                    self._peticion("PUT", clave, contenido_bytes, tipo=tipo)
                     return
                 except HTTPError as e2:
                     raise ErrorAlmacen(f"SeaweedFS respondió {e2.code} al subir {clave}") from e2
@@ -253,53 +262,6 @@ class BackendS3:
         return f"{self.base_publica}/{quote(clave, safe='/-_.~')}"
 
 
-class BackendLocal:
-    """Misma estructura de claves, pero en una carpeta del disco. Para usar el servidor por STDIO
-    en la PC (Claude Desktop, agente.py) sin SeaweedFS."""
-
-    def __init__(self, base: str | Path, url_publica_base: str | None = None) -> None:
-        self.base = Path(base).resolve()
-        self.base_publica = (url_publica_base or "").rstrip("/") or None
-        self.descripcion = f"carpeta local {self.base}"
-
-    @classmethod
-    def desde_entorno(cls) -> "BackendLocal":
-        defecto = Path(__file__).resolve().parent / "resultados"
-        return cls(os.environ.get("MCP_MATH_RESULTADOS") or defecto, os.environ.get("PUBLIC_LOCAL_BASE_URL"))
-
-    def _ruta(self, clave: str) -> Path:
-        ruta = (self.base / clave).resolve()
-        if self.base not in ruta.parents:
-            raise KeyError(clave)
-        return ruta
-
-    def preparar(self) -> bool:
-        self.base.mkdir(parents=True, exist_ok=True)
-        return True
-
-    def subir(self, clave: str, datos: bytes, tipo: str) -> None:
-        ruta = self._ruta(clave)
-        ruta.parent.mkdir(parents=True, exist_ok=True)
-        with open(ruta, "wb") as fh:
-            fh.write(datos)
-
-    def leer(self, clave: str) -> bytes:
-        ruta = self._ruta(clave)
-        if not ruta.is_file():
-            raise KeyError(clave)
-        with open(ruta, "rb") as fh:
-            return fh.read()
-
-    def prefijos(self, prefijo: str) -> list[str]:
-        carpeta = self.base / prefijo
-        return [p.name for p in carpeta.iterdir() if p.is_dir()] if carpeta.is_dir() else []
-
-    def url_publica(self, clave: str) -> str:
-        if self.base_publica:
-            return f"{self.base_publica}/{quote(clave, safe='/-_.~')}"
-        return self._ruta(clave).as_uri()
-
-
 # ════════════════════════════════════════════════════════════════════════════
 # Almacén: lógica de resultados sobre cualquier backend
 # ════════════════════════════════════════════════════════════════════════════
@@ -315,14 +277,8 @@ class RegistroResultado:
 
 
 def elegir_backend(transporte: str | None = None) -> Backend:
-    modo = os.environ.get("MCP_MATH_STORAGE", "auto").lower()
-    if modo == "auto":
-        modo = "local" if (transporte or os.environ.get("MCP_TRANSPORT", "streamable-http")) == "stdio" else "s3"
-    if modo == "local":
-        return BackendLocal.desde_entorno()
-    if modo == "s3":
-        return BackendS3.desde_entorno()
-    raise ValueError(f"MCP_MATH_STORAGE='{modo}' no es válido (usa s3, local o auto).")
+    """El despliegue solo ofrece SeaweedFS: el almacén de resultados es siempre S3."""
+    return BackendS3.desde_entorno()
 
 
 class Almacen:
@@ -335,7 +291,7 @@ class Almacen:
         self.descripcion = self.backend.descripcion
 
     def preparar(self) -> bool:
-        """ensure_bucket() del backend (en local, crea la carpeta)."""
+        """ensure_bucket() del backend S3."""
         return self.backend.preparar()
 
     @staticmethod
@@ -344,7 +300,7 @@ class Almacen:
 
     # ── claves y URLs ────────────────────────────────────────────────────────
     def clave(self, id_: str, nombre: str) -> str:
-        if not (ID_PATRON.match(id_) or ID_LOTE.match(id_)):
+        if not (ID_PATRON.match(id_) or ID_LOTE.match(id_) or id_ == ID_SESION):
             raise KeyError(f"Id con formato inválido: '{id_}'.")
         if "/" in nombre or nombre.startswith("."):
             raise KeyError(f"Nombre de archivo inválido: '{nombre}'.")
@@ -353,25 +309,29 @@ class Almacen:
     def url(self, id_: str, nombre: str) -> str:
         return self.backend.url_publica(self.clave(id_, nombre))
 
-    # ── escritura ────────────────────────────────────────────────────────────
-    def subir(self, id_: str, nombre: str, datos: bytes | str, tipo: str | None = None) -> str:
-        if isinstance(datos, str):
-            datos = datos.encode("utf-8")
-        self.backend.subir(self.clave(id_, nombre), datos, tipo or _tipo(nombre))
+    # ── escritura (todo desde memoria) ───────────────────────────────────────
+    def subir(self, id_: str, nombre: str, contenido_bytes: bytes, tipo: str | None = None) -> str:
+        """Sube ``contenido_bytes`` a ``<grupo>/<id>/<nombre>`` y devuelve su URL pública."""
+        if not isinstance(contenido_bytes, (bytes, bytearray)):
+            raise TypeError("contenido_bytes debe ser bytes (usa .encode('utf-8') para texto).")
+        self.backend.subir(self.clave(id_, nombre), bytes(contenido_bytes), tipo or _tipo(nombre))
         return self.url(id_, nombre)
 
     def subir_json(self, id_: str, nombre: str, datos: Any) -> str:
-        return self.subir(id_, nombre, json.dumps(datos, ensure_ascii=False, indent=2, default=str))
+        contenido_bytes = json.dumps(datos, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+        return self.subir(id_, nombre, contenido_bytes)
 
     def guardar(self, id_: str, metodo: str, descripcion: str, entrada: dict, resultado: dict,
-                resumen: list[str], archivos_locales: dict[str, str | Path] | None = None) -> RegistroResultado:
-        """Sube los artefactos del cálculo. ``archivos_locales``: {"html": ruta, "png": ruta} generados por
-        el proceso de cálculo en una carpeta temporal. meta.json se escribe al final: si existe, el
-        resultado está completo."""
+                resumen: list[str], contenido_bytes: dict[str, bytes] | None = None) -> RegistroResultado:
+        """Sube los artefactos del cálculo directamente desde memoria.
+
+        ``contenido_bytes``: {"html": bytes del reporte, "png": bytes del gráfico}, tal como los
+        generó el proceso de cálculo (nada pasa por el disco). meta.json se escribe al final:
+        si existe, el resultado está completo."""
         urls: dict[str, str] = {}
-        for clave_logica, ruta in (archivos_locales or {}).items():
-            if clave_logica in ARCHIVOS and ruta and Path(ruta).is_file():
-                urls[clave_logica] = self.subir(id_, ARCHIVOS[clave_logica], Path(ruta).read_bytes())
+        for clave_logica, datos in (contenido_bytes or {}).items():
+            if clave_logica in ("html", "png") and datos:
+                urls[clave_logica] = self.subir(id_, ARCHIVOS[clave_logica], datos)
         urls["resultado"] = self.subir_json(id_, ARCHIVOS["resultado"], resultado)
         urls["entrada"] = self.subir_json(id_, ARCHIVOS["entrada"], entrada)
         reg = RegistroResultado(id=id_, metodo=metodo,

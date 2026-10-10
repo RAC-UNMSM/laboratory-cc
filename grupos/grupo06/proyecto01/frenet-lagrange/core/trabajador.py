@@ -2,8 +2,10 @@
 core/trabajador.py — Proceso de cálculo independiente (lo lanza server.py).
 
 Protocolo muy simple por tuberías PROPIAS (no las del cliente MCP):
-    entrada  (stdin)  : una línea JSON por pedido  {"metodo": ..., "solicitud": {...}, "carpeta": "..."}
-    salida   (stdout) : una línea JSON por respuesta (la de core.motor.ejecutar)
+    entrada  (stdin)  : una línea JSON por pedido  {"metodo": ..., "solicitud": {...}}
+    salida   (stdout) : una línea JSON por respuesta (la de core.motor.ejecutar); los bytes del HTML
+                        y del PNG viajan en base64 dentro de "artefactos" — siempre en memoria, el
+                        trabajador no escribe archivos.
 
 ¿Por qué un proceso aparte?  Para poder MATARLO si un cálculo simbólico se eterniza
 (el servidor responde 'TIEMPO_AGOTADO' y lanza otro trabajador limpio).
@@ -14,6 +16,7 @@ la creación del proceso bloqueada para siempre. Con subprocess y tuberías expl
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -37,7 +40,8 @@ def main() -> None:
             continue
         try:
             p = json.loads(linea)
-            r = ejecutar(p["metodo"], p["solicitud"], p.get("carpeta"))
+            r = ejecutar(p["metodo"], p["solicitud"], bool(p.get("generar_archivos", True)))
+            r["artefactos"] = {k: base64.b64encode(v).decode("ascii") for k, v in (r.get("artefactos") or {}).items()}
         except Exception as e:  # noqa: BLE001
             r = {"ok": False, "error": {"tipo": "interno", "codigo": "ERROR_INTERNO",
                                         "mensaje": f"{type(e).__name__}: {e}", "sugerencia": ""}}

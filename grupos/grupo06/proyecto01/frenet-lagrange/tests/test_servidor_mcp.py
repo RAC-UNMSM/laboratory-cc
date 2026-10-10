@@ -1,9 +1,9 @@
-"""Pruebas de punta a punta con el cliente MCP oficial.
+"""Pruebas de punta a punta con el cliente MCP oficial (SDK 2.x, mcp==2.1.1).
 
-1) streamable-http (el modo del laboratorio): server.py en un puerto libre + SeaweedFS SIMULADO.
-   Se verifica qué objetos llegaron al "S3", las URLs públicas en Markdown, el bloque Image,
-   las dos capas de validación, el listado sin índice, el reporte combinado y la concurrencia.
-2) STDIO (Claude Desktop / agente.py en la PC) con almacenamiento local.
+streamable-http (el modo del laboratorio): server.py en un puerto libre + SeaweedFS SIMULADO.
+Se verifica qué objetos llegaron al "S3", las URLs públicas en Markdown, el bloque Image,
+las dos capas de validación, el listado sin índice, el reporte combinado (automático de la
+sesión y explícito) y la concurrencia.
 """
 import asyncio
 import base64
@@ -16,24 +16,24 @@ import time
 import urllib.request
 
 import pytest
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from agente import esquema_portable
 from conftest import RAIZ
+from core.esquema import esquema_portable
 from s3_simulado import SeaweedSimulado
 
-BUCKET = "frenet-lagrange-imgs"
-PUBLICA = "https://rac-unmsm.vekthos.org/img/frenet-lagrange"
+BUCKET = "grupo06-frenet-lagrange-imgs"
+SESION = "lote-sesion-actual"
+PUBLICA = "https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange"
 HERRAMIENTAS = {"diagnosticar_problema", "optimizar_con_restricciones", "analizar_puntos_criticos",
                 "analizar_curva_frenet", "listar_resultados", "obtener_resultado", "combinar_reportes"}
 
 
 def _datos(res):
     texto = next((c.text for c in res.content if c.type == "text"), "")
-    assert not res.isError, f"La herramienta devolvió un error: {texto[:500]}"
-    return res.structuredContent or json.loads(texto)
+    assert not res.is_error, f"La herramienta devolvió un error: {texto[:500]}"
+    return res.structured_content or json.loads(texto)
 
 
 def _puerto_libre() -> int:
@@ -79,12 +79,13 @@ def test_salud_y_nombre(servidor_http):
 
 
 async def _flujo_http(url, s3):
-    async with streamable_http_client(url) as (r, w, _), ClientSession(r, w) as s:
+    async with streamable_http_client(url) as (r, w), ClientSession(r, w) as s:
         info = await s.initialize()
-        assert info.serverInfo.name == "grupo06-frenet-lagrange"
+        assert info.server_info.name == "grupo06-frenet-lagrange"
+        assert "REPORTE COMBINADO AUTOMÁTICO" in (info.instructions or "")
         tools = (await s.list_tools()).tools
         assert HERRAMIENTAS <= {t.name for t in tools}
-        assert all("$ref" not in json.dumps(esquema_portable(t.inputSchema)) for t in tools)
+        assert all("$ref" not in json.dumps(esquema_portable(t.input_schema)) for t in tools)
 
         d = _datos(await s.call_tool("diagnosticar_problema",
                                      {"solicitud": {"enunciado": "maximiza x*y sujeto a x^2 + y^2 = 8"}}))
@@ -105,18 +106,23 @@ async def _flujo_http(url, s3):
         assert f"({PUBLICA}/grupo06/{id_}/grafico.png)" in r["markdown"]
         assert res.content[0].type == "text" and url_html in res.content[0].text
         imagenes = [c for c in res.content if c.type == "image"]
-        assert len(imagenes) == 1 and imagenes[0].mimeType == "image/png"
+        assert len(imagenes) == 1 and imagenes[0].mime_type == "image/png"
+        # reporte combinado AUTOMÁTICO de la sesión: prefijo fijo, actualizado tras subir el ejercicio
+        url_sesion = f"{PUBLICA}/grupo06/{SESION}/reporte_combinado.html"
+        assert r["reporte_sesion"] == url_sesion and url_sesion in r["markdown"]
+        lote = json.loads(s3.objetos[(BUCKET, f"grupo06/{SESION}/lote.json")][0])
+        assert lote["ejercicios"][-1]["id"] == id_
         assert base64.b64decode(imagenes[0].data)[:8] == b"\x89PNG\r\n\x1a\n"
 
         # capa 2 (verificador) y capa 1 (Pydantic)
         e = await s.call_tool("analizar_curva_frenet", {"solicitud": {"curva": ["t", "2t", "3t"]}})
-        assert e.isError and "CURVATURA_CERO" in e.content[0].text
+        assert e.is_error and "CURVATURA_CERO" in e.content[0].text
         e = await s.call_tool("analizar_puntos_criticos", {"solicitud": {"funcion": "x^^2"}})
-        assert e.isError and "No se pudo interpretar" in e.content[0].text
+        assert e.is_error and "No se pudo interpretar" in e.content[0].text
 
         # concurrencia: 4 usuarios a la vez → ids distintos, cada uno en su prefijo
         async def usuario(sol):
-            async with streamable_http_client(url) as (r2, w2, _), ClientSession(r2, w2) as s2:
+            async with streamable_http_client(url) as (r2, w2), ClientSession(r2, w2) as s2:
                 await s2.initialize()
                 return _datos(await s2.call_tool("analizar_curva_frenet",
                                                  {"solicitud": {**sol, "salida": {"incluir_imagen": False}}}))
@@ -124,6 +130,10 @@ async def _flujo_http(url, s3):
         ids = [v["id_resultado"] for v in varios]
         assert len(set(ids)) == 4
         assert all((BUCKET, f"grupo06/{i}/meta.json") in s3.objetos for i in ids)
+        # la sesión no perdió ninguno de los 4 cálculos simultáneos (candado del proceso)
+        en_sesion = [e["id"] for e in json.loads(s3.objetos[(BUCKET, f"grupo06/{SESION}/lote.json")][0])["ejercicios"]]
+        assert set(ids) <= set(en_sesion) and en_sesion[0] == id_
+        assert not any(k.startswith("grupo06/lote-2") for k in s3.claves())   # ningún lote con id nuevo
 
         # listado sin índice + obtener + combinado
         lista = _datos(await s.call_tool("listar_resultados", {"limite": 10}))["resultados"]
@@ -134,7 +144,7 @@ async def _flujo_http(url, s3):
         assert c["archivos"]["html"] == f"{PUBLICA}/grupo06/{c['id_lote']}/reporte_combinado.html"
         assert (BUCKET, f"grupo06/{c['id_lote']}/reporte_combinado.html") in s3.objetos
         e = await s.call_tool("combinar_reportes", {"solicitud": {"ids": ["lagrange-20000101-000000-abcdef12"]}})
-        assert e.isError and "NO_ENCONTRADO" in e.content[0].text
+        assert e.is_error and "NO_ENCONTRADO" in e.content[0].text
 
 
 def test_servidor_http_con_seaweedfs_simulado(servidor_http):
@@ -142,27 +152,15 @@ def test_servidor_http_con_seaweedfs_simulado(servidor_http):
 
 
 def test_trabajador_directo(tmp_path):
-    """El proceso de cálculo responde por sus propias tuberías (sin pasar por MCP)."""
-    pedido = json.dumps({"metodo": "frenet", "solicitud": {"curva": ["cos t", "sin t", "t"]}, "carpeta": str(tmp_path)})
+    """El proceso de cálculo responde por sus propias tuberías (sin pasar por MCP) y devuelve el HTML
+    y el PNG como bytes (base64) sin escribir ningún archivo."""
+    pedido = json.dumps({"metodo": "frenet", "solicitud": {"curva": ["cos t", "sin t", "t"]}})
     r = subprocess.run([sys.executable, str(RAIZ / "core" / "trabajador.py")], input=(pedido + "\n").encode(),
-                       capture_output=True, timeout=120)
+                       capture_output=True, timeout=120, cwd=str(tmp_path))
     lineas = r.stdout.decode().splitlines()
     assert lineas[0] == '{"listo": true}'
-    assert json.loads(lineas[1])["ok"]
-
-
-async def _flujo_stdio(tmp):
-    env = {**os.environ, "MCP_TRANSPORT": "stdio", "MCP_MATH_STORAGE": "local",
-           "MCP_MATH_RESULTADOS": str(tmp), "MCP_MATH_LOG": "WARNING"}
-    params = StdioServerParameters(command=sys.executable, args=[str(RAIZ / "server.py"), "--stdio"], env=env,
-                                   cwd=str(RAIZ))
-    async with stdio_client(params) as (r, w), ClientSession(r, w) as s:
-        await s.initialize()
-        d = _datos(await s.call_tool("analizar_puntos_criticos", {"solicitud": {"funcion": "x^3 + y^3 - 3xy"}}))
-        assert len(d["resultado"]["puntos_criticos"]) == 2              # '3xy' = 3·x·y
-        assert d["archivos"]["html"].startswith("file://")
-        assert (tmp / "grupo06" / d["id_resultado"] / "reporte.html").is_file()
-
-
-def test_servidor_stdio_local(tmp_path):
-    asyncio.run(_flujo_stdio(tmp_path))
+    resp = json.loads(lineas[1])
+    assert resp["ok"]
+    assert base64.b64decode(resp["artefactos"]["png"])[:8] == b"\x89PNG\r\n\x1a\n"
+    assert base64.b64decode(resp["artefactos"]["html"]).lower().startswith(b"<!doctype html>")
+    assert list(tmp_path.iterdir()) == []

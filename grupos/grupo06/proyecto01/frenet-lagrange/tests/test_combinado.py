@@ -1,17 +1,18 @@
-"""Reporte combinado: varios ejercicios en un solo HTML, publicado en su propio prefijo del almacén."""
+"""Reporte combinado: varios ejercicios en un solo HTML, publicado en su propio prefijo del almacén,
+y el reporte AUTOMÁTICO de la sesión (prefijo fijo grupo06/lote-sesion-actual/)."""
 import json
 import re
-import tempfile
 
 import pytest
 
-from core.combinado import Combinador, ErrorCombinado, ID_LOTE
-from core.motor import ejecutar
+import core.combinado as C
+from core.combinado import Combinador, ErrorCombinado, ID_LOTE, ID_SESION
+from core.motor import ejecutar, publicar
 from s3_simulado import SeaweedSimulado
 from storage import Almacen, BackendS3
 
-BUCKET = "frenet-lagrange-imgs"
-PUBLICA = "https://rac-unmsm.vekthos.org/img/frenet-lagrange"
+BUCKET = "grupo06-frenet-lagrange-imgs"
+PUBLICA = "https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange"
 
 PROBLEMAS = [
     ("lagrange", {"funcion": "3x + 4y", "restricciones": ["x^2 + y^2 = 25"]}),
@@ -22,11 +23,11 @@ PROBLEMAS = [
 
 def _resolver(almacen, metodo, solicitud):
     id_ = almacen.nuevo_id(metodo)
-    with tempfile.TemporaryDirectory() as tmp:            # igual que server.py: carpeta temporal → S3
-        r = ejecutar(metodo, {**solicitud, "salida": {"generar_png": False}}, tmp)
-        assert r["ok"], r
-        almacen.guardar(id_, metodo, f"prueba {metodo}", r["solicitud"], r["resultado"], r["resumen"],
-                        r["archivos"])
+    r = ejecutar(metodo, {**solicitud, "salida": {"generar_png": False}})      # HTML en memoria (bytes)
+    assert r["ok"], r
+    assert isinstance(r["artefactos"]["html"], bytes)
+    almacen.guardar(id_, metodo, f"prueba {metodo}", r["solicitud"], r["resultado"], r["resumen"],
+                    contenido_bytes=r["artefactos"])
     return id_
 
 
@@ -97,3 +98,64 @@ def test_validacion_combinar():
     with pytest.raises(ValidationError):
         SolicitudCombinar(ids=["frenet-20261003-184624-5794a3"], enunciados=["a", "b"])
     assert SolicitudCombinar(ids=["frenet-20261006-184624-5794a3b2"]).ids          # ids nuevos (8 hex)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Reporte de sesión automático (agregar_a_sesion)
+# ════════════════════════════════════════════════════════════════════════════
+def test_agregar_a_sesion_sobrescribe_el_mismo_prefijo(almacen_con_tres):
+    a, ids, s3 = almacen_con_tres
+    C.configurar_sesion(a)
+    clave_html = f"grupo06/{ID_SESION}/reporte_combinado.html"
+    clave_lote = f"grupo06/{ID_SESION}/lote.json"
+    assert (BUCKET, clave_lote) not in s3.objetos                      # sesión vacía al principio
+    lotes_antes = {k for (_, k) in s3.objetos if "/lote-" in k}
+
+    for i, (id_, texto) in enumerate(zip(ids, ["Ejercicio A", "Ejercicio B", "Ejercicio C"]), start=1):
+        r = C.agregar_a_sesion(id_, texto)
+        assert r["id_lote"] == ID_SESION and r["n_ejercicios"] == i
+        assert r["archivos"]["html"] == f"{PUBLICA}/{clave_html}"
+        lote = json.loads(s3.objetos[(BUCKET, clave_lote)][0])
+        assert [e["id"] for e in lote["ejercicios"]] == ids[:i]          # se añade al final, en orden
+        assert [e["enunciado"] for e in lote["ejercicios"]] == ["Ejercicio A", "Ejercicio B", "Ejercicio C"][:i]
+
+    # siempre el MISMO prefijo: no aparecen lotes con id nuevo
+    lotes_despues = {k for (_, k) in s3.objetos if "/lote-" in k}
+    assert lotes_despues - lotes_antes == {clave_html, clave_lote}
+    html = s3.objetos[(BUCKET, clave_html)][0].decode("utf-8")
+    assert [e["id"] for e in _ejercicios(html)] == ids
+    # repetir un id no lo duplica: pasa al final
+    r = C.agregar_a_sesion(ids[0], "Ejercicio A otra vez")
+    assert [e["id"] for e in json.loads(s3.objetos[(BUCKET, clave_lote)][0])["ejercicios"]] == [ids[1], ids[2], ids[0]]
+
+
+def test_publicar_sube_desde_memoria_y_actualiza_la_sesion():
+    with SeaweedSimulado() as s3:                                    # sin bucket: lo crea la primera subida
+        a = Almacen(BackendS3(s3.url, BUCKET, PUBLICA))
+        C.configurar_sesion(a)
+        urls = []
+        for metodo, sol in PROBLEMAS[1:]:
+            id_ = a.nuevo_id(metodo)
+            r = ejecutar(metodo, sol)
+            assert isinstance(r["artefactos"]["png"], bytes) and r["artefactos"]["png"][:8] == b"\x89PNG\r\n\x1a\n"
+            pub = publicar(a, id_, metodo, f"prueba {metodo}", r, f"enunciado {metodo}")
+            assert pub["archivos"]["html"] == f"{PUBLICA}/grupo06/{id_}/reporte.html"
+            assert pub["sesion"] == f"{PUBLICA}/grupo06/{ID_SESION}/reporte_combinado.html"
+            # los bytes subidos son exactamente los generados en memoria
+            assert s3.objetos[(BUCKET, f"grupo06/{id_}/grafico.png")][0] == r["artefactos"]["png"]
+            urls.append(id_)
+        lote = json.loads(s3.objetos[(BUCKET, f"grupo06/{ID_SESION}/lote.json")][0])
+        assert [e["id"] for e in lote["ejercicios"]] == urls and pub["n_sesion"] == 2
+        # orden de las subidas: individuales primero, sesión después
+        puts = [ruta for (m, ruta, _) in s3.llamadas if m == "PUT" and ruta.count("/") > 2]
+        assert puts.index(f"/{BUCKET}/grupo06/{urls[0]}/meta.json") < puts.index(
+            f"/{BUCKET}/grupo06/{ID_SESION}/reporte_combinado.html")
+
+
+def test_sesion_descarta_ejercicios_que_ya_no_existen(almacen_con_tres):
+    a, ids, s3 = almacen_con_tres
+    C.configurar_sesion(a)
+    a.subir_json(ID_SESION, "lote.json", {"ejercicios": [{"id": "frenet-20000101-000000-deadbeef", "enunciado": "x"},
+                                                         {"id": ids[0], "enunciado": "A"}]})
+    r = C.agregar_a_sesion(ids[1], "B")
+    assert [e["id"] for e in r["ejercicios"]] == [ids[0], ids[1]]

@@ -83,6 +83,9 @@ class OpcionesSalida(BaseModel):
 class _Base(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     salida: OpcionesSalida = Field(default_factory=OpcionesSalida, description="Archivos a generar.")
+    enunciado: str | None = Field(None, max_length=600,
+                                  description="Texto del ejercicio tal como lo planteó el usuario (opcional). Se "
+                                              "muestra en el índice del reporte combinado automático de la sesión.")
 
 
 class SolicitudLagrange(_Base):

@@ -13,7 +13,11 @@ los cálculos simbólicos que se eternizan). Por eso:
 Flujo:
     solicitud (dict) ──Pydantic──▶ Solicitud*  ──verificador──▶ InformeVerificacion
          ──methods.*.resolver──▶ objeto exacto ──a_dict──▶ resultado.json
-         ──visualizacion──▶ datos de gráficos / PNG ──reporte (Jinja2)──▶ reporte.html
+         ──visualizacion──▶ datos de gráficos / PNG (bytes) ──reporte (Jinja2)──▶ reporte.html (bytes)
+
+Todo en MEMORIA: ``ejecutar`` devuelve el HTML y el PNG como ``bytes`` en ``"artefactos"``; nada se
+escribe en disco. ``publicar`` sube esos bytes a SeaweedFS y, justo después, actualiza el reporte
+combinado automático de la sesión (core.combinado.agregar_a_sesion).
 """
 from __future__ import annotations
 
@@ -22,7 +26,6 @@ import os
 import sys
 import time
 import traceback
-from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
@@ -31,7 +34,7 @@ from core.utils_math import ErrorEntrada
 from core.validacion import SolicitudFrenet, SolicitudHessiana, SolicitudLagrange
 from core.verificador import ErrorVerificacion, verificar
 
-__all__ = ["ejecutar", "inicializar_proceso", "MODELOS", "compactar"]
+__all__ = ["ejecutar", "publicar", "inicializar_proceso", "MODELOS", "compactar"]
 
 Metodo = Literal["lagrange", "hessiana", "frenet"]
 MODELOS: dict[str, type[BaseModel]] = {"lagrange": SolicitudLagrange, "hessiana": SolicitudHessiana,
@@ -62,8 +65,9 @@ def _error(tipo: str, codigo: str, mensaje: str, sugerencia: str = "") -> dict[s
     return {"ok": False, "error": {"tipo": tipo, "codigo": codigo, "mensaje": mensaje, "sugerencia": sugerencia}}
 
 
-def ejecutar(metodo: Metodo, solicitud: dict[str, Any], carpeta: str | None) -> dict[str, Any]:
-    """Cálculo completo. ``carpeta``: dónde guardar reporte.html / grafico.png (None = no guardar)."""
+def ejecutar(metodo: Metodo, solicitud: dict[str, Any], generar_archivos: bool = True) -> dict[str, Any]:
+    """Cálculo completo. Con ``generar_archivos`` devuelve en ``"artefactos"`` los bytes del
+    reporte HTML y del gráfico PNG (generados en memoria, sin tocar el disco)."""
     t_ini = time.perf_counter()
     # ── Capa 1 (otra vez, por si se llama sin pasar por el servidor) ───────
     try:
@@ -90,7 +94,6 @@ def ejecutar(metodo: Metodo, solicitud: dict[str, Any], carpeta: str | None) -> 
 
     # ── Gráficos y reportes (si fallan, el cálculo sigue siendo válido) ────
     avisos = list(informe.avisos)
-    archivos: dict[str, str] = {}
     datos: dict | None = None
     salida = s.salida
     rango = getattr(s, "rango", None)
@@ -98,17 +101,17 @@ def ejecutar(metodo: Metodo, solicitud: dict[str, Any], carpeta: str | None) -> 
         datos = visualizacion.datos_grafico(metodo, objeto, rango=list(rango) if rango else None)
     except Exception as e:  # noqa: BLE001
         avisos.append(f"No se pudieron generar los datos del gráfico: {e}")
-    if carpeta:
-        dir_ = Path(carpeta)
+    artefactos: dict[str, bytes] = {}
+    if generar_archivos:
         if salida.generar_html and datos is not None:
             try:
-                archivos["html"] = reporte.guardar_html(metodo, objeto, dir_ / "reporte.html", datos=datos,
-                                                        resultado=resultado, offline=salida.offline)
+                artefactos["html"] = reporte.html_bytes(metodo, objeto, datos=datos, resultado=resultado,
+                                                        offline=salida.offline)
             except Exception as e:  # noqa: BLE001
                 avisos.append(f"No se pudo generar el HTML: {e}")
         if salida.generar_png and datos is not None:
             try:
-                archivos["png"] = visualizacion.generar_png(metodo, objeto, str(dir_ / "grafico.png"), datos=datos)
+                artefactos["png"] = reporte.grafico_png_bytes(metodo, objeto, datos=datos)
             except Exception as e:  # noqa: BLE001
                 avisos.append(f"No se pudo generar el PNG: {e}")
 
@@ -118,12 +121,45 @@ def ejecutar(metodo: Metodo, solicitud: dict[str, Any], carpeta: str | None) -> 
         "resumen": reporte.resumen_breve(metodo, resultado),
         "verificacion_previa": {**informe.como_dict(), "avisos": avisos},
         "resultado": resultado,
-        "archivos": archivos,
+        "artefactos": artefactos,
         "tiempo_s": {"calculo": round(t_calc, 3), "total": round(time.perf_counter() - t_ini, 3)},
         "solicitud": s.model_dump(mode="json"),
     }
     if salida.incluir_datos_grafico and datos is not None:
         out["datos_grafico"] = datos
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Publicación: subir a SeaweedFS y actualizar el reporte combinado de la sesión
+# ════════════════════════════════════════════════════════════════════════════
+def publicar(almacen: Any, id_: str, metodo: Metodo, descripcion: str, r: dict[str, Any],
+             enunciado: str) -> dict[str, Any]:
+    """Final de un cálculo exitoso (lo llama server.py; corre en un hilo, no en el proceso de cálculo).
+
+    1. Sube los artefactos desde memoria: ``almacen.guardar(..., contenido_bytes={"html", "png"})``
+       → grupo06/<id>/{reporte.html, grafico.png, resultado.json, entrada.json, meta.json}.
+    2. Justo después de esa subida exitosa, ``agregar_a_sesion(id_, enunciado)`` regenera
+       grupo06/lote-sesion-actual/reporte_combinado.html con este ejercicio añadido.
+
+    Devuelve {"archivos": URLs públicas, "sesion": URL del combinado o None, "avisos": [...]}.
+    Si falla la subida, se propaga storage.ErrorAlmacen (el servidor igual entrega el resultado);
+    si solo falla la sesión, se informa como aviso: el ejercicio ya quedó publicado."""
+    from core.combinado import ErrorCombinado, agregar_a_sesion
+    from storage import ErrorAlmacen
+
+    reg = almacen.guardar(id_, metodo, descripcion, r["solicitud"], r["resultado"], r["resumen"],
+                          contenido_bytes=r.get("artefactos") or {})
+    out: dict[str, Any] = {"archivos": reg.archivos, "sesion": None, "avisos": []}
+    if "html" not in reg.archivos:               # sin reporte individual no hay nada que combinar
+        return out
+    try:
+        sesion = agregar_a_sesion(id_, enunciado)
+        out["sesion"] = sesion["archivos"]["html"]
+        out["n_sesion"] = sesion["n_ejercicios"]
+    except (ErrorCombinado, ErrorAlmacen, RuntimeError) as e:
+        log.warning("No se pudo actualizar el reporte de la sesión con %s: %s", id_, e)
+        out["avisos"].append(f"El reporte combinado de la sesión no se pudo actualizar ({e}).")
     return out
 
 

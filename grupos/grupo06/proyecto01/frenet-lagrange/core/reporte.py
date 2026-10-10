@@ -4,15 +4,19 @@ core/reporte.py — Inyección de resultados en plantillas y reportes de texto.
 * ``renderizar_html``: rellena ``templates/base.html.j2`` (Jinja2) con el JSON del resultado,
   los datos de los gráficos, la hoja de estilos y el JavaScript del método
   (``templates/static/*.js``). No hay HTML escrito a mano dentro del código Python.
-* ``guardar_html``: calcula lo que falte (JSON + datos de gráficos) y escribe el archivo.
+* ``html_bytes``: calcula lo que falte (JSON + datos de gráficos) y devuelve la página como
+  ``bytes`` UTF-8 (``html_string.encode('utf-8')``), lista para subirla a SeaweedFS.
+* ``grafico_png_bytes``: la lámina PNG dibujada en un ``io.BytesIO`` (``.getvalue()``).
+  TODO en memoria: este módulo no escribe nada en el disco del contenedor.
 * ``resumen_breve``: frases cortas que el servidor MCP devuelve al LLM para que explique.
-* ``texto_*``: reporte legible para la terminal (lo usa ``cli.py``).
-
-Plotly.js se carga desde 3 CDN con respaldo, o se incrusta (``offline=True``) desde el
-paquete de Python ``plotly`` para que la página funcione sin internet.
+* ``texto_*``: reporte legible para la terminal.
+*
+* Plotly.js se carga desde 3 CDN con respaldo, o se incrusta (``offline=True``) desde el
+* paquete de Python ``plotly`` para que la página funcione sin internet.
 """
 from __future__ import annotations
 
+import io
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -28,7 +32,7 @@ from methods.metodo_frenet import CurvaFrenet
 from methods.metodo_hessiana import ProblemaHessiana
 from methods.metodo_lagrange import ProblemaLagrange
 
-__all__ = ["renderizar_html", "guardar_html", "resumen_breve", "texto", "texto_lagrange",
+__all__ = ["renderizar_html", "html_bytes", "grafico_png_bytes", "figura_a_png_bytes", "resumen_breve", "texto", "texto_lagrange",
            "texto_hessiana", "texto_frenet", "a_dict"]
 
 Metodo = Literal["lagrange", "hessiana", "frenet"]
@@ -94,16 +98,33 @@ def renderizar_html(metodo: Metodo, resultado: dict, datos: dict, offline: bool 
         js_base=_estatico("base.js"), js_modulo=_estatico(f"{metodo}.js"), js_arranque=_estatico("arranque.js"),
         **CONFIG[metodo])
 
-def guardar_html(metodo: Metodo, objeto: Any, ruta: str | Path, datos: dict | None = None,
-                 resultado: dict | None = None, offline: bool = False) -> str:
-    """Calcula lo que falte (JSON y datos de gráficos) y escribe la página en ``ruta``."""
+
+def html_bytes(metodo: Metodo, objeto: Any, datos: dict | None = None, resultado: dict | None = None,
+               offline: bool = False) -> bytes:
+    """Página HTML completa del reporte, como bytes UTF-8 (en memoria, sin archivos)."""
     from core.visualizacion import datos_grafico
     resultado = resultado if resultado is not None else a_dict(metodo, objeto)
     datos = datos if datos is not None else datos_grafico(metodo, objeto)
-    contenido = renderizar_html(metodo, resultado, datos, offline=offline)
-    with open(ruta, "w", encoding="utf-8") as f:
-        f.write(contenido)
-    return str(ruta)
+    html_string = renderizar_html(metodo, resultado, datos, offline=offline)
+    return html_string.encode("utf-8")
+
+
+def figura_a_png_bytes(fig: Any, dpi: int = 130) -> bytes:
+    """Convierte una figura de Matplotlib en bytes PNG usando un búfer en MEMORIA (io.BytesIO):
+    no se escribe ningún archivo. Cierra la figura."""
+    import matplotlib.pyplot as plt
+    bufer = io.BytesIO()
+    try:
+        fig.savefig(bufer, format="png", dpi=dpi)
+    finally:
+        plt.close(fig)
+    return bufer.getvalue()
+
+
+def grafico_png_bytes(metodo: Metodo, objeto: Any, datos: dict | None = None) -> bytes:
+    """Lámina PNG del método como ``bytes`` (generada en memoria con ``figura_a_png_bytes``)."""
+    from core.visualizacion import generar_png
+    return generar_png(metodo, objeto, datos)
 
 
 def resumen_breve(metodo: Metodo, r: dict) -> list[str]:

@@ -6,7 +6,7 @@ que las pruebas puedan verificar exactamente qué hizo storage.py:
 
     with SeaweedSimulado() as s3:
         ...                              # s3.url → "http://127.0.0.1:PUERTO"
-        s3.llamadas                      # [("PUT", "/frenet-lagrange-imgs/", {...cabeceras}), ...]
+        s3.llamadas                      # [("PUT", "/grupo06-frenet-lagrange-imgs/", {...cabeceras}), ...]
         s3.objetos                       # {("bucket", "grupo06/<id>/reporte.html"): (bytes, content-type)}
 
 Implementa lo que usa storage.py: PUT bucket, PUT/GET objeto, ListObjectsV2 (prefix + delimiter).

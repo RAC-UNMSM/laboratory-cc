@@ -1,0 +1,9 @@
+# Resultados y artefactos locales: nunca se suben al repositorio
+resultados/
+resultados_combinados/
+_respaldo_antes_seaweedfs/
+__pycache__/
+.pytest_cache/
+*.pyc
+.venv/
+venv/

@@ -1,17 +1,17 @@
 # EJEMPLO de las rutas que el Caddy del laboratorio necesita para este servicio.
-# (El Caddyfile real lo administra el profesor; adapta los nombres si su convención es otra.)
+# (El Caddyfile real lo administra el profesor; estos son los nombres que calcula el despliegue.)
 rac-unmsm.vekthos.org {
 	# 1) Archivos públicos (reportes HTML, PNG, JSON) desde SeaweedFS:
-	#    https://rac-unmsm.vekthos.org/img/frenet-lagrange/grupo06/<id>/reporte.html
-	handle_path /img/frenet-lagrange/* {
-		rewrite * /frenet-lagrange-imgs{path}
+	#    https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange/grupo06/<id>/reporte.html
+	handle_path /img/grupo06-frenet-lagrange/* {
+		rewrite * /grupo06-frenet-lagrange-imgs{path}
 		reverse_proxy seaweedfs:8333
 	}
 
 	# 2) Endpoint MCP (streamable-http) del grupo 06:
-	#    https://rac-unmsm.vekthos.org/grupo06/frenet-lagrange/mcp
-	handle_path /grupo06/frenet-lagrange/* {
-		reverse_proxy grupo06-frenet-lagrange:8000 {
+	#    https://rac-unmsm.vekthos.org/grupo06/grupo06_proyecto01_frenet-lagrange/mcp
+	handle_path /grupo06/grupo06_proyecto01_frenet-lagrange* {
+		reverse_proxy lab-grupo06_proyecto01_frenet-lagrange:8000 {
 			flush_interval -1
 		}
 	}
