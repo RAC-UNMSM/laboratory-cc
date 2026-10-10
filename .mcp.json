@@ -1,0 +1,8 @@
+{
+	"mcpServers": {
+		"my-mcp-server-131724ec": {
+			"url": "http://127.0.0.1:8000/mcp",
+			"type": "http"
+		}
+	}
+}

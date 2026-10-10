@@ -1,37 +1,7 @@
 """Grupo 02 — Cálculo I: módulo unificado con pruebas (Python >= 3.10).
 
 Dependencia: pip install sympy==1.14.0
-API pública: calcular_limite, analizar_continuidad, analizar_asintotas,
-calcular_derivada, derivada_implicita, recta_tangente, optimizar_polinomio,
-verificar_derivada, registrar_herramientas. Resultados serializables como JSON.
 
-Uso:
-    python calculo1.py --test       # pruebas automáticas incorporadas
-    python calculo1.py --demo       # ejemplos de resultados JSON
-    python calculo1.py --help       # ayuda
-
-No necesita los dos módulos originales. Importar este archivo no ejecuta
-pruebas, ejemplos ni servidores. Solo requiere SymPy.
-Optimización: polinomios de grado <=6 con coeficientes y extremos racionales.
-Asíntotas: funciones racionales. No incluye funciones definidas por tramos,
-L'Hospital, teorema del valor medio ni un tutor conversacional completo.
-
-Sintaxis: x**2 o x^2, sin(x), cos(x), tan(x), exp(x), log(x), sqrt(x),
-Abs(x), pi, E y oo. Multiplicación explícita: 2*x. No acepta LaTeX,
-funciones por tramos ni parámetros libres. Todos los ángulos están en radianes.
-La continuidad se estudia respecto al dominio real natural de la expresión.
-Los pasos son una traza verificable del cálculo, no una derivación completa
-por épsilon-delta ni una simulación de los algoritmos internos de SymPy.
-
-Integración en server.py:
-    from calculo1 import registrar_herramientas
-    registrar_herramientas(mcp)  # objeto FastMCP creado por server.py
-
-El parser no usa eval ni sympify sobre texto. Para un servidor público,
-ejecutar el cálculo en procesos con límites de tiempo y memoria: los límites
-de entrada aquí no sustituyen el aislamiento de recursos del servidor.
-Referencias: https://docs.sympy.org/latest/tutorials/intro-tutorial/calculus.html
-https://docs.sympy.org/latest/modules/calculus/index.html
 """
 from __future__ import annotations
 import ast
