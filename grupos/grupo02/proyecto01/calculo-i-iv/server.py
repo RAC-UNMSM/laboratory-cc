@@ -50,7 +50,11 @@ SKILLS_DIR = BASE_DIR / "skill"
 # dos personas del equipo nunca colisionen con el mismo nombre de tool.
 MODULOS_CALCULO = ("calculo1", "calculo2", "calculo3", "calculo4")
 
-mcp = MCPServer("grupo02-mcp-calculo")
+# El nombre del servidor DEBE seguir la regla del despliegue: "grupo + carpeta
+# del proyecto", o sea `grupo02-calculo-i-iv`. Es lo que verifica
+# .claude/skills/mcp-validator/scripts/validar_entrega.py; si no coincide con
+# el nombre de la carpeta, el PR se bloquea.
+mcp = MCPServer("grupo02-calculo-i-iv")
 
 
 def _normalizar(expr: Any) -> str:
@@ -333,7 +337,7 @@ async def estado_del_servidor() -> dict[str, Any]:
     """
     return {
         "estado": "exito",
-        "servidor": "grupo02-mcp-calculo",
+        "servidor": "grupo02-calculo-i-iv",
         "herramientas_base": sorted(TOOLS_BASE),
         "modulos_cargados": sorted(_MODULOS_CARGADOS),
         "modulos_faltantes": sorted(set(MODULOS_CALCULO) - set(_MODULOS_CARGADOS)),

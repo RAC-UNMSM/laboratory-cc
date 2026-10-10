@@ -7,8 +7,6 @@
 # import viejo tambien. El pin evita las dos condiciones.
 mcp==2.1.1
 
-# Motores matematicos. sympy es el que hace los calculos exactos; numpy lo
-# usan los modulos de tools/ para las partes numericas (integracion numerica,
-# muestreo para graficas, metodos iterativos).
+# Motores matematicos. sympy es el que hace los calculos exactos; es la unica
+# libreria que el codigo importa de verdad.
 sympy>=1.12
-numpy>=1.26
