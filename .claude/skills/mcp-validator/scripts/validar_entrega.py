@@ -491,11 +491,11 @@ def revisar_gitignore(repo: Path, grupo: str, rep: Reporte, ctx: dict) -> None:
         try:
             r = subprocess.run(
                 ["git", "-c", "core.quotepath=off", *extra, "check-ignore", "--no-index", "--stdin"], cwd=repo,
-                input="\n".join(candidatos).encode("utf-8"), capture_output=True,
+                input="\n".join(candidatos), capture_output=True, text=True, encoding="utf-8", errors="replace",
             )
         except FileNotFoundError:
             return set()
-        return set(r.stdout.decode("utf-8", errors="replace").splitlines())
+        return set(r.stdout.splitlines())
 
     cubiertos = cubiertos_con([])
     code_main, ignore_main = git(repo, "show", f"{ctx.get('base', 'origin/main')}:.gitignore")
