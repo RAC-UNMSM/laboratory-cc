@@ -8,7 +8,7 @@ laboratorio, y su enlace vuelve en `visualizacion.informe`.
 
 Desplegado, escucha por streamable-http en 0.0.0.0:8000 y se conecta en:
 
-    https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
+    https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lnl-rf/mcp
 """
 
 import hashlib
@@ -55,7 +55,7 @@ registro = logging.getLogger("edos-grupo09")
 storage.ensure_bucket()
 
 mcp = MCPServer(
-    "grupo09-edos-lineales-no-lineales-y-retrato-de-fase",
+    "grupo09-edos-lnl-rf",
     title="Agente de EDOs y sistemas dinámicos (grupo 09)",
     instructions=(
         "Resuelve problemas de ecuaciones diferenciales ordinarias (1 a 3 variables), de "
@@ -172,7 +172,7 @@ def ping() -> dict:
     """Latido del servidor, con la versión y el inventario de capacidades."""
     return {
         "ok": True,
-        "servidor": "grupo09-edos-lineales-no-lineales-y-retrato-de-fase",
+        "servidor": "grupo09-edos-lnl-rf",
         "revision": REVISION,
         "transporte": "streamable-http",
         "informe": "una página HTML por análisis, publicada en el storage del laboratorio",

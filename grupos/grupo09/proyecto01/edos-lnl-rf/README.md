@@ -28,7 +28,7 @@ El servidor corre desplegado en el laboratorio (streamable-http) y se conecta
 con esta URL:
 
 ```
-https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
+https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lnl-rf/mcp
 ```
 
 - **Claude (web o Desktop), ChatGPT u otro cliente:** agregar un conector MCP
@@ -36,7 +36,7 @@ https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineal
 - **Claude Code:**
 
   ```bash
-  claude mcp add --transport http edos-grupo09 https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
+  claude mcp add --transport http edos-grupo09 https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lnl-rf/mcp
   ```
 
 - **MCP Inspector:** `npx @modelcontextprotocol/inspector`, transporte
@@ -386,7 +386,7 @@ Sigue el contrato del laboratorio y el piloto `grupos/g01/semana01/derivadas1/`:
 
 | Archivo | Qué lleva |
 | --- | --- |
-| `server.py` | `MCPServer("grupo09-edos-lineales-no-lineales-y-retrato-de-fase")` y `mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)` |
+| `server.py` | `MCPServer("grupo09-edos-lnl-rf")` y `mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)` |
 | `storage.py` | `LAB_IMG_BUCKET` y `LAB_PUBLIC_IMG_URL`, que pone el despliegue; `PUT` a `seaweedfs:8333` con `uuid`, `timeout` y `None` si falla |
 | `Dockerfile` | `python:3.11-slim`, copia `server.py`, `storage.py` y las carpetas `matematica/`, `orquestacion/`, `visualizacion/`, `balotario/`; `CMD ["python", "server.py"]` |
 | `docker-compose.yml` | `container_name: ${LAB_CONTAINER_NAME}`, `mem_limit: 512m`, `restart: unless-stopped`, red `lab_net`, sin puertos ni volúmenes |

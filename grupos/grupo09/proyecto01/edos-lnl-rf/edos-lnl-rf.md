@@ -106,7 +106,7 @@ Tres capas, sin dependencias hacia arriba. `matematica/` no sabe que existe
 `orquestacion/`, y ninguna de las dos sabe que existe MCP.
 
 ```text
-edos-lineales-no-lineales-y-retrato-de-fase/
+edos-lnl-rf/
 ├── server.py                  Las 5 herramientas MCP (streamable-http, puerto 8000)
 ├── storage.py                 Publica el informe en el storage del laboratorio
 ├── matematica/                CAPA MATEMÁTICA — no sabe de MCP
@@ -349,7 +349,7 @@ procedimiento.
 python -m pip install -r requirements.txt
 python -m unittest discover -s test -t .       # pruebas locales
 claude mcp add --transport http edos-grupo09 \
-  https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp
+  https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lnl-rf/mcp
 ```
 
 ## Qué entrega el agente
