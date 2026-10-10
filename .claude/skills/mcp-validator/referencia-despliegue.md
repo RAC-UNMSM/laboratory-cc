@@ -16,6 +16,11 @@ grupos/grupoNN/<semana>/<tema>/docker-compose.yml
 (código, archivos de despliegue, datos) va dentro de la carpeta del tema;
 en `grupos/grupoNN/` y en `proyectoNN/` solo queda documentación.
 
+El nombre del contenedor (`lab-<grupo>_<semana>_<tema>`) no puede pasar de 63
+caracteres: es el máximo que se puede resolver en la red interna, y con más
+la dirección pública responde error 502 aunque la app esté corriendo. Para
+`grupoNN/proyecto01/` eso deja 40 caracteres para la carpeta del proyecto.
+
 Los nombres de `<semana>` y `<tema>` solo pueden llevar minúsculas, dígitos,
 `-` y `_`. Sin espacios, mayúsculas ni tildes: forman el nombre de proyecto
 de Docker Compose, que no los acepta.

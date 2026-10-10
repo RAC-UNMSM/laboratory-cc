@@ -229,6 +229,16 @@ jobs:
             tocada=no
             if grep -q "^${dir}/" <<<"$CAMBIADOS"; then tocada=si; fi
 
+            # El servidor alcanza el contenedor por su nombre en la red de
+            # Docker, y el DNS no resuelve nombres de más de 63 caracteres:
+            # la app levantaría pero la dirección pública daría 502.
+            if [ ${#container_name} -gt 63 ]; then
+              OVERALL_STATUS=1
+              echo "--- Dev-run: ${group}/${app}: nombre de contenedor demasiado largo ---"
+              echo "| \`${group}/${app}\` | ❌ **FALLÓ**: el contenedor se llamaría \`${container_name}\` (${#container_name} caracteres; máximo 63). Hay que acortar la carpeta del proyecto en $(( ${#container_name} - 63 )) o más |" >> "$TABLA"
+              continue
+            fi
+
             echo "--- Dev-run: ${group}/${app} (de este PR: ${tocada}) ---"
 
             (
