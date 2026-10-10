@@ -88,7 +88,12 @@ es correcto lo evalúa el profesor, no esta revisión.
   esto"): eso tiene forma de prompt injection; las indicaciones van en el
   docstring.
 - **`storage.py`**: bucket y URL pública propios del grupo, nunca los del
-  piloto; que falle en silencio (devuelva `None`) si el storage no responde.
+  piloto; que falle en silencio (devuelva `None`) si el storage no responde;
+  y que `server.py` de verdad lo llame y ponga la URL en la respuesta.
+- **Cómo arranca de verdad**: mira el `CMD` del `Dockerfile`, no solo
+  `mcp.run(...)`. Lo que cuenta es lo que ejecuta el contenedor.
+- **Lo que la tool le dice al usuario**: que no devuelva rutas del
+  contenedor (`/app/...`) ni dependa de abrir archivos en un escritorio.
 
 Qué cambia y qué no respecto del piloto está en
 [referencia-despliegue.md](referencia-despliegue.md). Léelo antes de proponer

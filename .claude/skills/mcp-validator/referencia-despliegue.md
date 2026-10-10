@@ -90,6 +90,9 @@ CMD ["python", "server.py"]
 - La línea `COPY` debe incluir **todos** los módulos que `server.py` importa,
   directa o indirectamente. Las carpetas se copian aparte:
   `COPY tools/ tools/`. Lo que no se copia no existe en el contenedor.
+- El `CMD` es `["python", "server.py"]`. Con `fastmcp run server.py` (o
+  `mcp run`) el bloque `if __name__ == "__main__"` no se ejecuta, así que el
+  transporte, el host y el puerto serían los del `CMD`, no los de `mcp.run`.
 - Sin rutas de Windows ni nada de la laptop del alumno.
 - Si el código ejecuta un programa del sistema, se instala aquí con
   `RUN apt-get update && apt-get install -y --no-install-recommends <paquete> && rm -rf /var/lib/apt/lists/*`,
@@ -177,6 +180,11 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupoNN-<tema>"
 - La ruta `/img/grupoNN-<tema>/*` la crea el administrador en Caddy apuntando
   al bucket. Hasta entonces las imágenes se suben pero no se ven: hay que
   pedírsela.
+- `server.py` tiene que usarlo: llamar a `subir_imagen()` y agregar la URL al
+  texto de respuesta. Un `storage.py` que nadie importa no sube nada.
+- La subida es un `PUT` con los bytes como cuerpo (API S3), no un `POST` de
+  formulario, y cada archivo lleva un nombre aleatorio (`uuid`) para no pisar
+  el anterior. El bucket se crea al arrancar (`ensure_bucket()`).
 - Si el storage no responde, `subir_imagen()` devuelve `None` y la tool sigue
   respondiendo. Con `timeout` en cada llamada.
 - Nunca subir a servicios públicos de terceros (tmpfiles.org, imgur, etc.).
