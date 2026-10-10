@@ -25,7 +25,7 @@ services:
       MCP_TRANSPORT: streamable-http
       MCP_PORT: "8000"
     # Si el profesor pidiera el nombre fijo, es esta linea:
-    #   container_name: lab-grupo02_semana01_mcp-calculo
+    #   container_name: lab-grupo02_proyecto01_calculo-i-iv
 
 networks:
   default:

@@ -380,10 +380,30 @@ def _cargar_modulo(nombre_modulo: str) -> bool:
         print(f"[AVISO] tools/{nombre_modulo}.py no se pudo importar: {type(exc).__name__}: {exc}")
         return False
 
-    # Si el modulo declara HERRAMIENTAS se respeta esa lista; si no, se toman
+    # Si el modulo declara un manifiesto de tools se respeta; si no, se toman
     # todas las funciones publicas definidas en el propio archivo.
-    declaradas = getattr(modulo, "HERRAMIENTAS", None)
-    if declaradas is None:
+    #
+    # HERRAMIENTAS admite las DOS formas que usan los integrantes, porque las
+    # dos son razonables y no hay por que obligar a nadie a cambiar:
+    #   HERRAMIENTAS = ["limite", "dominio"]     # nombres (strings)
+    #   HERRAMIENTAS = (calcular_limite, limite) # funciones, directo
+    #
+    # Y se acepta cualquier variable que EMPIECE por HERRAMIENTAS, porque en la
+    # practica cada area le pondra su sufijo para no chocar (HERRAMIENTAS,
+    # HERRAMIENTAS_CALCULO2...). Sin esto, un manifiesto con sufijo no se
+    # reconoce, el modulo cae en auto-descubrimiento y se registran como tools
+    # funciones que no lo son -- un `main()`, un `ejecutar_pruebas()`, un
+    # `registrar_herramientas(mcp)`: el cliente los ve en su lista de tools y
+    # no puede hacer nada con ellos.
+    manifiesto = None
+    for atributo, valor in vars(modulo).items():
+        if not atributo.startswith("HERRAMIENTAS"):
+            continue
+        if isinstance(valor, (list, tuple)) and valor:
+            manifiesto = valor
+            break
+
+    if manifiesto is None:
         candidatas = [
             (nombre, obj)
             for nombre, obj in vars(modulo).items()
@@ -392,8 +412,32 @@ def _cargar_modulo(nombre_modulo: str) -> bool:
             and getattr(obj, "__module__", None) == modulo.__name__
         ]
     else:
-        candidatas = [(nombre, getattr(modulo, nombre, None)) for nombre in declaradas]
+        candidatas = []
+        for entrada in manifiesto:
+            if isinstance(entrada, str):
+                # Forma por nombre: se busca el atributo en el modulo.
+                candidatas.append((entrada, getattr(modulo, entrada, None)))
+            elif callable(entrada):
+                # Forma por objeto: el nombre sale de la propia funcion.
+                candidatas.append((getattr(entrada, "__name__", "tool"), entrada))
+            else:
+                print(f"[AVISO] {nombre_modulo}: manifiesto de tools con una entrada "
+                      f"que no es string ni funcion: {entrada!r}")
 
+    # A partir de aca, ningun error al registrar una tool puede tumbar el
+    # servidor: un modulo con un problema solo deja de contribyr, y el resto
+    # sigue funcionando. (Un TypeError aca antes hacia caer el proceso entero.)
+    try:
+        _registrar_candidatas(nombre_modulo, candidatas)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[AVISO] fallo registering tools de {nombre_modulo}: "
+              f"{type(exc).__name__}: {exc}")
+        return False
+    return True
+
+
+def _registrar_candidatas(nombre_modulo: str, candidatas: list[tuple[str, Any]]) -> None:
+    """Registra en el servidor MCP cada (nombre, funcion) de `candidatas`."""
     registradas = 0
     for nombre, fn in candidatas:
         if not callable(fn):
@@ -413,7 +457,6 @@ def _cargar_modulo(nombre_modulo: str) -> bool:
     if registradas:
         _MODULOS_CARGADOS.add(nombre_modulo)
         print(f"[OK] tools/{nombre_modulo}.py -> {registradas} tool(s)")
-    return True
 
 
 for _nombre_modulo in MODULOS_CALCULO:

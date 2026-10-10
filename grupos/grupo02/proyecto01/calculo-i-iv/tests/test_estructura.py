@@ -70,16 +70,20 @@ class TestModulosDeHerramientas(unittest.TestCase):
     util': la IA no va a poder llamarlo bien."""
 
     def test_cumple_el_contrato(self) -> None:
+        """Valida SOLO las funciones que se van a registrar como tools, que es
+        lo mismo que hace `server.py`: si el modulo declara `HERRAMIENTAS`, se
+        respetan esos nombres y el resto son helpers internos que nunca llegan
+        al cliente MCP (y por lo tanto no tienen por qué cumplir el contrato).
+        Exigirle el contrato a un helper interno es hacer fallar el test por
+        algo que no importa."""
         for nombre in MODULOS_CALCULO:
             ruta = APP_DIR / "tools" / f"{nombre}.py"
             if not ruta.is_file():
                 continue  # area todavia sin empezar
             with self.subTest(modulo=nombre):
                 arbol = ast.parse(ruta.read_text(encoding="utf-8"))
-                funciones = [
-                    n for n in ast.walk(arbol)
-                    if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
-                ]
+                declaradas = self._herramientas_declaradas(arbol)
+                funciones = self._a_registrar(arbol, declaradas)
                 self.assertTrue(
                     funciones,
                     f"tools/{nombre}.py no tiene ninguna funcion publica: "
@@ -104,6 +108,45 @@ class TestModulosDeHerramientas(unittest.TestCase):
                             f"{nombre}.{fn.name}() no anota el tipo de '{arg.arg}': "
                             "el cliente MCP no sabria que argumento pasar",
                         )
+
+    @staticmethod
+    def _herramientas_declaradas(arbol: ast.AST) -> set[str] | None:
+        """Nombres del manifiesto de tools, o None si el modulo no declara uno.
+
+        Misma regla que `server.py`: se acepta cualquier variable de nivel de
+        modulo que empiece por `HERRAMIENTAS` (cada area le pone su sufijo), y
+        dentro se aceptan las dos formas:
+          - strings:  HERRAMIENTAS = ["limite", "dominio"]
+          - objetos:  HERRAMIENTAS_CALCULO2 = (calcular_integral, riemann)
+        """
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Assign):
+                continue
+            nombres_obj = [
+                t.id for t in nodo.targets
+                if isinstance(t, ast.Name) and t.id.startswith("HERRAMIENTAS")
+            ]
+            if not nombres_obj:
+                continue
+            nombres = {
+                n.id for n in ast.walk(nodo.value)
+                if isinstance(n, ast.Name)
+            } | {
+                c.value for c in ast.walk(nodo.value)
+                if isinstance(c, ast.Constant) and isinstance(c.value, str)
+            }
+            return nombres or None
+        return None
+
+    def _a_registrar(self, arbol: ast.AST, declaradas: set[str] | None) -> list[ast.FunctionDef]:
+        """Las FunctionDef que el servidor convertiria en tools."""
+        todas = {
+            n.name: n for n in ast.walk(arbol)
+            if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
+        }
+        if declaradas is None:
+            return list(todas.values())
+        return [todas[n] for n in sorted(declaradas) if n in todas]
 
 
 class TestCompose(unittest.TestCase):
@@ -188,6 +231,19 @@ class TestCompose(unittest.TestCase):
         self.assertIn("streamable-http", self.compose)
         dockerfile = (APP_DIR / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("MCP_TRANSPORT", dockerfile)
+
+    def test_la_salida_del_servidor_no_queda_en_el_buffer(self) -> None:
+        """El CI lee `docker compose logs` para ver si la app arranco. Sin
+        PYTHONUNBUFFERED, los `print` del banner de arranque de server.py se
+        quedan en el buffer de stdout -- porque cuando la salida no es una
+        terminal Python no hace flush, y el proceso nunca termina -- y el
+        profesor ve un log vacio aunque el servidor este andaando."""
+        dockerfile = (APP_DIR / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn(
+            "PYTHONUNBUFFERED", dockerfile,
+            "falta PYTHONUNBUFFERED=1 en el Dockerfile: el banner de arranque "
+            "no va a aparecer en docker compose logs",
+        )
 
 
 if __name__ == "__main__":

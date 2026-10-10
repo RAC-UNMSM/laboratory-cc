@@ -1,26 +1,119 @@
-# Entornos virtuales
+# .gitignore del repo `lab` — aplica a todas las carpetas de grupos/.
+# Regla general: al repo solo sube lo que el despliegue necesita para
+# construir la app (código fuente, Dockerfile, docker-compose.yml,
+# requirements.txt, docs). Todo lo que se genera o se instala en la laptop
+# de cada uno se queda fuera. Si algo de esta lista de verdad hace falta,
+# se fuerza con `git add -f <archivo>` y se explica en el PR.
+
+# --- Raíz del repo: solo lo que ya existe -----------------------------------
+# Cualquier archivo o carpeta nuevo en la raíz se ignora (ej. `exit`, `ls`,
+# salidas de comandos guardadas por error). El trabajo de cada grupo va
+# dentro de grupos/grupoNN/.
+/*
+!/.github/
+!/.claude/
+!/.gitignore
+!/README.md
+!/ci/
+!/grupos/
+!/templates/
+
+# --- Entornos virtuales de Python -------------------------------------------
+# Nombres habituales...
 .venv/
 venv/
 env/
+virtualenv/
+.virtualenv/
+.ENTORNO/
+entorno/
+.entorno/
+# ...y lo que delata a un entorno virtual aunque la carpeta se llame distinto
+# (Windows: Lib/site-packages + Scripts/, Linux/macOS: lib/pythonX/site-packages + bin/).
+pyvenv.cfg
+site-packages/
+**/Scripts/activate*
+**/Scripts/Activate.ps1
+**/Scripts/deactivate.bat
+**/bin/activate*
+**/bin/Activate.ps1
 
-# Caches de Python
+# --- Caches y artefactos de Python ------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
 *.egg-info/
+.ipynb_checkpoints/
 
-# Credenciales / variables de entorno
+# --- Node (por si algún grupo usa JS) ----------------------------------------
+node_modules/
+
+# --- Binarios y ejecutables --------------------------------------------------
+# El despliegue corre en contenedores Linux y construye desde el Dockerfile:
+# un binario compilado en la laptop nunca se usa.
+*.exe
+*.dll
+*.so
+*.dylib
+*.msi
+*.chm
+
+# --- Comprimidos -------------------------------------------------------------
+# El código se sube como archivos, no como .zip del proyecto.
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+
+# --- Credenciales / variables de entorno ------------------------------------
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
 
-# Editores y sistema operativo
+# --- Datos y salidas generadas en ejecución ---------------------------------
+# Los datos persistentes viven en volúmenes nombrados de Docker, no en el repo.
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.tmp
+*.bak
+
+# --- Intermedios de LaTeX (reportes generados con pdflatex) ------------------
+*.aux
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc
+
+# --- Herramientas locales ----------------------------------------------------
+# De .claude/ solo se versionan las skills del repo (ej. revisar-entrega);
+# la configuración local de cada quien se queda fuera.
+**/.claude/*
+!**/.claude/skills/
+graphify-out/
+
+# --- Editores y sistema operativo --------------------------------------------
 .vscode/
 .idea/
+.vs/
 *.swp
+*~
+~$*
 .DS_Store
 Thumbs.db
 desktop.ini
+*.lnk
