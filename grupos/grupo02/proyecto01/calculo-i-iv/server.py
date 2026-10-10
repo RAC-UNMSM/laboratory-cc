@@ -364,6 +364,21 @@ def _descripcion(fn: Any) -> str:
     return doc or f"Tool del area {fn.__module__} (sin documentar: agregale un docstring)."
 
 
+def _log(mensaje: str) -> None:
+    """Escribe un mensaje de diagnostico a **stderr**, nunca a stdout.
+
+    No es una preferencia estetica: en transporte `stdio` (el que usan Claude
+    Desktop, Claude Code y el Inspector) stdout ES el canal del protocolo
+    JSON-RPC. Cualquier `print()` ahi mete una linea que no es JSON en medio
+    del flujo, y el cliente responde "Failed to parse JSONRPC message from
+    server".El servidor sigue andando, pero la sesion queda fragil.
+
+    stderr es lo correcto: el protocolo no lo usa, y Docker igual lo captura en
+    `docker compose logs`, asi que no se pierde observabilidad.
+    """
+    print(mensaje, file=sys.stderr, flush=True)
+
+
 def _cargar_modulo(nombre_modulo: str) -> bool:
     """Importa `tools/<nombre_modulo>.py` y registra sus funciones como tools."""
     ruta = TOOLS_DIR / f"{nombre_modulo}.py"
@@ -377,7 +392,7 @@ def _cargar_modulo(nombre_modulo: str) -> bool:
     try:
         modulo = importlib.import_module(nombre_modulo)
     except Exception as exc:  # un modulo roto no debe tumbar el servidor
-        print(f"[AVISO] tools/{nombre_modulo}.py no se pudo importar: {type(exc).__name__}: {exc}")
+        _log(f"[AVISO] tools/{nombre_modulo}.py no se pudo importar: {type(exc).__name__}: {exc}")
         return False
 
     # Si el modulo declara un manifiesto de tools se respeta; si no, se toman
@@ -421,7 +436,7 @@ def _cargar_modulo(nombre_modulo: str) -> bool:
                 # Forma por objeto: el nombre sale de la propia funcion.
                 candidatas.append((getattr(entrada, "__name__", "tool"), entrada))
             else:
-                print(f"[AVISO] {nombre_modulo}: manifiesto de tools con una entrada "
+                _log(f"[AVISO] {nombre_modulo}: manifiesto de tools con una entrada "
                       f"que no es string ni funcion: {entrada!r}")
 
     # A partir de aca, ningun error al registrar una tool puede tumbar el
@@ -430,7 +445,7 @@ def _cargar_modulo(nombre_modulo: str) -> bool:
     try:
         _registrar_candidatas(nombre_modulo, candidatas)
     except Exception as exc:  # noqa: BLE001
-        print(f"[AVISO] fallo registering tools de {nombre_modulo}: "
+        _log(f"[AVISO] fallo registering tools de {nombre_modulo}: "
               f"{type(exc).__name__}: {exc}")
         return False
     return True
@@ -441,22 +456,22 @@ def _registrar_candidatas(nombre_modulo: str, candidatas: list[tuple[str, Any]])
     registradas = 0
     for nombre, fn in candidatas:
         if not callable(fn):
-            print(f"[AVISO] {nombre_modulo}.HERRAMIENTAS lista '{nombre}', que no es una funcion")
+            _log(f"[AVISO] {nombre_modulo}.HERRAMIENTAS lista '{nombre}', que no es una funcion")
             continue
         nombre_tool = f"{nombre_modulo}_{nombre}"
         if nombre_tool in _TOOLS_REGISTRADAS:
-            print(f"[AVISO] tool duplicada {nombre_tool}, se omite")
+            _log(f"[AVISO] tool duplicada {nombre_tool}, se omite")
             continue
         try:
             mcp.tool(name=nombre_tool, description=_descripcion(fn))(fn)
             _TOOLS_REGISTRADAS.add(nombre_tool)
             registradas += 1
         except Exception as exc:  # noqa: BLE001
-            print(f"[AVISO] no se pudo registrar {nombre_tool}: {type(exc).__name__}: {exc}")
+            _log(f"[AVISO] no se pudo registrar {nombre_tool}: {type(exc).__name__}: {exc}")
 
     if registradas:
         _MODULOS_CARGADOS.add(nombre_modulo)
-        print(f"[OK] tools/{nombre_modulo}.py -> {registradas} tool(s)")
+        _log(f"[OK] tools/{nombre_modulo}.py -> {registradas} tool(s)")
 
 
 for _nombre_modulo in MODULOS_CALCULO:
@@ -483,16 +498,16 @@ PUERTO = int(os.environ.get("MCP_PORT", "8000"))
 
 
 if __name__ == "__main__":
-    print("=" * 68)
-    print(" Servidor MCP-Calculo (Grupo 02)")
-    print(f" contextos en skill/ : {len(list(SKILLS_DIR.glob('*.md')))} archivo(s)")
-    print(f" modulos de tools/   : {', '.join(sorted(_MODULOS_CARGADOS)) or '(ninguno aun)'}")
-    print(f" tools registradas   : {len(_TOOLS_REGISTRADAS)}")
+    _log("=" * 68)
+    _log(" Servidor MCP-Calculo (Grupo 02)")
+    _log(f" contextos en skill/ : {len(list(SKILLS_DIR.glob('*.md')))} archivo(s)")
+    _log(f" modulos de tools/   : {', '.join(sorted(_MODULOS_CARGADOS)) or '(ninguno aun)'}")
+    _log(f" tools registradas   : {len(_TOOLS_REGISTRADAS)}")
     if TRANSPORTE == "stdio":
-        print(" transporte          : stdio (cliente MCP local)")
+        _log(" transporte          : stdio (cliente MCP local)")
     else:
-        print(f" transporte          : {TRANSPORTE} en 0.0.0.0:{PUERTO}")
-    print("=" * 68)
+        _log(f" transporte          : {TRANSPORTE} en 0.0.0.0:{PUERTO}")
+    _log("=" * 68)
     if TRANSPORTE == "stdio":
         mcp.run(transport="stdio")
     else:
