@@ -1,3 +1,5 @@
-Mario Eguiluz - grupo 05
+# Eguiluz Poma Mario César
 
-Beckham-Gonzales - grupo 05
+- Grupo: 05
+- Correo institucional: mario.eguiluz@unmsm.edu.pe
+- Usuario de GitHub: mario-eguiluz
