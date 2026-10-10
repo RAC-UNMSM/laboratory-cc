@@ -15,7 +15,7 @@ from storage import guardar_registro
 # SERVIDOR MCP
 # ============================================================
 
-mcp = MCPServer("inversa-tl-mcp")
+mcp = MCPServer("grupo05-inversa-tl-mcp")
 
 
 # ============================================================

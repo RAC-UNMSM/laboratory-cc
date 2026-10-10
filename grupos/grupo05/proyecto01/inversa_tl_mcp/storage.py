@@ -1,6 +1,13 @@
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+SEAWEEDFS_S3_URL = "http://seaweedfs:8333"
+IMG_BUCKET = os.environ.get("LAB_IMG_BUCKET", "")
+PUBLIC_IMG_BASE_URL = os.environ.get("LAB_PUBLIC_IMG_URL", "")
+STORAGE_TIMEOUT = 10
 
 
 RUTA_DATOS = (
