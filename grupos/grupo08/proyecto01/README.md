@@ -12,3 +12,19 @@ proyecto01/
   <tema-en-minuscula>/
     <tema-en-minuscula>.md
 ```
+# Sistemas No Lineales - MCP
+
+Servidor MCP para resolución de sistemas de ecuaciones no lineales.
+
+## Estructura
+- `server.py`: servidor MCP y definición de tools.
+- `resultado.py`: contrato de salida común.
+- `validacion.py`: validaciones de entrada.
+- `metodos/`: implementaciones de métodos numéricos.
+- `tests/`: pruebas unitarias.
+
+## Instalación
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt

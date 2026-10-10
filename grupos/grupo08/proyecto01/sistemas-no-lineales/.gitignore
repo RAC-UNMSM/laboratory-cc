@@ -1,0 +1,25 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+
+# Archivos de entorno
+.env
+.env.*
+
+# Salidas de pruebas
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Archivos de IDE
+.vscode/
+.idea/
