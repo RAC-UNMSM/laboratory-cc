@@ -1,0 +1,857 @@
+{
+  "$defs": {
+    "Application": {
+      "additionalProperties": false,
+      "properties": {
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variable": {
+          "default": "x",
+          "enum": [
+            "x",
+            "y",
+            "z",
+            "t",
+            "u",
+            "v"
+          ],
+          "title": "Variable",
+          "type": "string"
+        },
+        "operacion": {
+          "enum": [
+            "area",
+            "longitud_arco",
+            "volumen_revolucion"
+          ],
+          "title": "Operacion",
+          "type": "string"
+        },
+        "inferior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Inferior",
+          "type": "string"
+        },
+        "superior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Superior",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expresion",
+        "operacion",
+        "inferior",
+        "superior"
+      ],
+      "title": "Application",
+      "type": "object"
+    },
+    "Bound": {
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "enum": [
+            "x",
+            "y",
+            "z",
+            "t",
+            "u",
+            "v"
+          ],
+          "title": "Variable",
+          "type": "string"
+        },
+        "inferior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Inferior",
+          "type": "string"
+        },
+        "superior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Superior",
+          "type": "string"
+        }
+      },
+      "required": [
+        "variable",
+        "inferior",
+        "superior"
+      ],
+      "title": "Bound",
+      "type": "object"
+    },
+    "Continuity": {
+      "additionalProperties": false,
+      "properties": {
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variable": {
+          "default": "x",
+          "enum": [
+            "x",
+            "y",
+            "z",
+            "t",
+            "u",
+            "v"
+          ],
+          "title": "Variable",
+          "type": "string"
+        },
+        "operacion": {
+          "const": "continuidad",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "punto": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Punto",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expresion",
+        "operacion",
+        "punto"
+      ],
+      "title": "Continuity",
+      "type": "object"
+    },
+    "Derivative": {
+      "additionalProperties": false,
+      "properties": {
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variable": {
+          "default": "x",
+          "enum": [
+            "x",
+            "y",
+            "z",
+            "t",
+            "u",
+            "v"
+          ],
+          "title": "Variable",
+          "type": "string"
+        },
+        "operacion": {
+          "const": "derivada",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "orden": {
+          "default": 1,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Orden",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expresion",
+        "operacion"
+      ],
+      "title": "Derivative",
+      "type": "object"
+    },
+    "Directional": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "direccional",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variables": {
+          "items": {
+            "enum": [
+              "x",
+              "y",
+              "z",
+              "t",
+              "u",
+              "v"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Variables",
+          "type": "array"
+        },
+        "punto": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Punto",
+          "type": "array"
+        },
+        "direccion": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Direccion",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "expresion",
+        "variables",
+        "punto",
+        "direccion"
+      ],
+      "title": "Directional",
+      "type": "object"
+    },
+    "Extrema": {
+      "additionalProperties": false,
+      "properties": {
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variable": {
+          "default": "x",
+          "enum": [
+            "x",
+            "y",
+            "z",
+            "t",
+            "u",
+            "v"
+          ],
+          "title": "Variable",
+          "type": "string"
+        },
+        "operacion": {
+          "const": "extremos",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "inferior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Inferior",
+          "type": "string"
+        },
+        "superior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Superior",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expresion",
+        "operacion",
+        "inferior",
+        "superior"
+      ],
+      "title": "Extrema",
+      "type": "object"
+    },
+    "FieldOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "enum": [
+            "divergencia",
+            "rotacional"
+          ],
+          "title": "Operacion",
+          "type": "string"
+        },
+        "campo": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Campo",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "campo"
+      ],
+      "title": "FieldOperation",
+      "type": "object"
+    },
+    "Gauss": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "gauss",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "campo": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Campo",
+          "type": "array"
+        },
+        "limites": {
+          "items": {
+            "$ref": "#/$defs/Bound"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Limites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "campo",
+        "limites"
+      ],
+      "title": "Gauss",
+      "type": "object"
+    },
+    "Green": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "green",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "campo": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Campo",
+          "type": "array"
+        },
+        "limites": {
+          "items": {
+            "$ref": "#/$defs/Bound"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Limites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "campo",
+        "limites"
+      ],
+      "title": "Green",
+      "type": "object"
+    },
+    "Integral": {
+      "additionalProperties": false,
+      "properties": {
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variable": {
+          "default": "x",
+          "enum": [
+            "x",
+            "y",
+            "z",
+            "t",
+            "u",
+            "v"
+          ],
+          "title": "Variable",
+          "type": "string"
+        },
+        "operacion": {
+          "const": "integral",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "inferior": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inferior"
+        },
+        "superior": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Superior"
+        }
+      },
+      "required": [
+        "expresion",
+        "operacion"
+      ],
+      "title": "Integral",
+      "type": "object"
+    },
+    "Lagrange": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "lagrange",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variables": {
+          "items": {
+            "enum": [
+              "x",
+              "y",
+              "z",
+              "t",
+              "u",
+              "v"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Variables",
+          "type": "array"
+        },
+        "restriccion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Restriccion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operacion",
+        "expresion",
+        "variables",
+        "restriccion"
+      ],
+      "title": "Lagrange",
+      "type": "object"
+    },
+    "Limit": {
+      "additionalProperties": false,
+      "properties": {
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variable": {
+          "default": "x",
+          "enum": [
+            "x",
+            "y",
+            "z",
+            "t",
+            "u",
+            "v"
+          ],
+          "title": "Variable",
+          "type": "string"
+        },
+        "operacion": {
+          "const": "limite",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "punto": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Punto",
+          "type": "string"
+        },
+        "direccion": {
+          "default": "ambos",
+          "enum": [
+            "ambos",
+            "+",
+            "-"
+          ],
+          "title": "Direccion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expresion",
+        "operacion",
+        "punto"
+      ],
+      "title": "Limit",
+      "type": "object"
+    },
+    "Line": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "integral_linea",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "campo": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Campo",
+          "type": "array"
+        },
+        "curva": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Curva",
+          "type": "array"
+        },
+        "inferior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Inferior",
+          "type": "string"
+        },
+        "superior": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Superior",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operacion",
+        "campo",
+        "curva",
+        "inferior",
+        "superior"
+      ],
+      "title": "Line",
+      "type": "object"
+    },
+    "Multi": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "enum": [
+            "gradiente",
+            "hessiano"
+          ],
+          "title": "Operacion",
+          "type": "string"
+        },
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "variables": {
+          "items": {
+            "enum": [
+              "x",
+              "y",
+              "z",
+              "t",
+              "u",
+              "v"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Variables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "expresion",
+        "variables"
+      ],
+      "title": "Multi",
+      "type": "object"
+    },
+    "Multiple": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "integral_multiple",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "expresion": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Expresion",
+          "type": "string"
+        },
+        "limites": {
+          "items": {
+            "$ref": "#/$defs/Bound"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Limites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "expresion",
+        "limites"
+      ],
+      "title": "Multiple",
+      "type": "object"
+    },
+    "Stokes": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "stokes",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "campo": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Campo",
+          "type": "array"
+        },
+        "superficie": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Superficie",
+          "type": "array"
+        },
+        "limites": {
+          "items": {
+            "$ref": "#/$defs/Bound"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Limites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "campo",
+        "superficie",
+        "limites"
+      ],
+      "title": "Stokes",
+      "type": "object"
+    },
+    "Surface": {
+      "additionalProperties": false,
+      "properties": {
+        "operacion": {
+          "const": "flujo_superficie",
+          "title": "Operacion",
+          "type": "string"
+        },
+        "campo": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Campo",
+          "type": "array"
+        },
+        "superficie": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Superficie",
+          "type": "array"
+        },
+        "limites": {
+          "items": {
+            "$ref": "#/$defs/Bound"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Limites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "operacion",
+        "campo",
+        "superficie",
+        "limites"
+      ],
+      "title": "Surface",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "area": "#/$defs/Application",
+      "continuidad": "#/$defs/Continuity",
+      "derivada": "#/$defs/Derivative",
+      "direccional": "#/$defs/Directional",
+      "divergencia": "#/$defs/FieldOperation",
+      "extremos": "#/$defs/Extrema",
+      "flujo_superficie": "#/$defs/Surface",
+      "gauss": "#/$defs/Gauss",
+      "gradiente": "#/$defs/Multi",
+      "green": "#/$defs/Green",
+      "hessiano": "#/$defs/Multi",
+      "integral": "#/$defs/Integral",
+      "integral_linea": "#/$defs/Line",
+      "integral_multiple": "#/$defs/Multiple",
+      "lagrange": "#/$defs/Lagrange",
+      "limite": "#/$defs/Limit",
+      "longitud_arco": "#/$defs/Application",
+      "rotacional": "#/$defs/FieldOperation",
+      "stokes": "#/$defs/Stokes",
+      "volumen_revolucion": "#/$defs/Application"
+    },
+    "propertyName": "operacion"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Limit"
+    },
+    {
+      "$ref": "#/$defs/Continuity"
+    },
+    {
+      "$ref": "#/$defs/Derivative"
+    },
+    {
+      "$ref": "#/$defs/Extrema"
+    },
+    {
+      "$ref": "#/$defs/Integral"
+    },
+    {
+      "$ref": "#/$defs/Application"
+    },
+    {
+      "$ref": "#/$defs/Multi"
+    },
+    {
+      "$ref": "#/$defs/Directional"
+    },
+    {
+      "$ref": "#/$defs/Lagrange"
+    },
+    {
+      "$ref": "#/$defs/Multiple"
+    },
+    {
+      "$ref": "#/$defs/FieldOperation"
+    },
+    {
+      "$ref": "#/$defs/Line"
+    },
+    {
+      "$ref": "#/$defs/Surface"
+    },
+    {
+      "$ref": "#/$defs/Green"
+    },
+    {
+      "$ref": "#/$defs/Gauss"
+    },
+    {
+      "$ref": "#/$defs/Stokes"
+    }
+  ]
+}

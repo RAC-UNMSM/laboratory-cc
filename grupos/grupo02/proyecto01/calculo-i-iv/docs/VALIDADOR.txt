@@ -1,0 +1,42 @@
+
+REVISIÓN DE ENTREGA: grupo02
+============================================================
+  [ERROR] bloquea el PR   [FALTA] falta para desplegar   [AVISO] conviene corregir
+
+## Git: qué se está subiendo
+  [AVISO] No se pudo consultar git; se revisa solo el contenido de la carpeta.
+
+## `.gitignore`: lo que se instala o se genera en local
+  [OK]    No encontré entornos virtuales, caches, instaladores ni archivos generados en tu carpeta.
+
+## Estructura de carpetas
+  [OK]    Las apps están en `<semana>/<tema>/` como espera el despliegue.
+
+## App `grupos/grupo02/proyecto01/calculo-i-iv`
+  [OK]    `docker-compose.yml` cumple las reglas del despliegue.
+  [OK]    El Dockerfile copia todos los módulos que usa `server.py`.
+  [INFO]  Los tests usan `pytest`, que no está en `requirements.txt`. Solo importa si quieres correr los tests dentro del contenedor.
+  [OK]    `requirements.txt` cubre todas las librerías que importa el código.
+  [OK]    Nombre del servidor MCP: `grupo02-calculo-i-iv`.
+  [OK]    Arranque correcto: streamable-http en 0.0.0.0:8000.
+  [INFO]  Tools que expone el servidor (5): resolver, catalogo, leccion, verificar_respuesta, graficar.
+  [AVISO] `server.py:167` apunta a `http://127.0.0.1`. Dentro del contenedor `localhost` es el propio contenedor, no el servidor: el storage se alcanza como `http://seaweedfs:8333`.
+  [AVISO] `server.py:168` apunta a `http://localhost`. Dentro del contenedor `localhost` es el propio contenedor, no el servidor: el storage se alcanza como `http://seaweedfs:8333`.
+  [INFO]  La ruta pública de imágenes `/img/grupo02-calculo-i-iv/` se crea sola al desplegar.
+  [OK]    Storage: bucket `grupo02-calculo-i-iv-imgs`, URL pública `/img/grupo02-calculo-i-iv`.
+
+============================================================
+## ¿Qué se despliega si se fusiona este PR?
+
+  ✓ grupo02_proyecto01_calculo-i-iv: completa. Contenedor `lab-grupo02_proyecto01_calculo-i-iv`.
+      URL del MCP una vez desplegado (la ruta se crea sola): https://rac-unmsm.vekthos.org/grupo02/grupo02_proyecto01_calculo-i-iv/mcp
+
+## Veredicto
+
+  LISTO: se puede subir y va a desplegar.
+  Además hay 3 aviso(s) que conviene corregir.
+
+## Mensaje para el administrador (Julios Castillo Melchor)
+
+  Nada que pedirle en esta entrega.
+

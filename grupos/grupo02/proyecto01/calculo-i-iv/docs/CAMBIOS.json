@@ -1,0 +1,230 @@
+[
+  {
+    "ruta": "grupos/grupo02/.gitignore",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/Integrantes/README.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/Integrantes/grupo01-julios-castillo-melchor.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/Integrantes/grupo02-Jefferson-Vilcapoma-Pariona.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/Integrantes/grupo02-Yhin-Rosales.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/Integrantes/grupo02-carlos-lauh.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/Integrantes/grupo02-hiron-ortega-yucra.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/README.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/README.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/.dockerignore",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/CHANGELOG.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/Dockerfile",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/README.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/calculo-i-iv.md",
+    "cambio": "modificado"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docker-compose.yml",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/API.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/ARQUITECTURA.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/DESARROLLO.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/DESPLIEGUE.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/REVISION.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/SEGURIDAD.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/VALIDACION.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/VALIDADOR.txt",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/docs/problem.schema.json",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/engine.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/examples/requests.json",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/models.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/pytest.ini",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/requirements-dev.txt",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/requirements.lock",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/requirements.txt",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/runtime.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/server.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/skills/skill_paso_a_paso.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/skills/skill_resolver_examen.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/skills/skill_tutor_interactivo.md",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/storage.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tests/test_http.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tests/test_math.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tests/test_mcp.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tests/test_runtime.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tests/test_storage_plot.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tests/test_tutor.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tests/test_validation.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/__init__.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/calculo_multivariable.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/campos_vectoriales.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/common.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/derivadas_optimizacion.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/integrales.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/integrales_aplicaciones.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/integrales_multiples.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tools/limites_continuidad.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/tutor.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/validacion.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/visualizacion.py",
+    "cambio": "nuevo"
+  },
+  {
+    "ruta": "grupos/grupo02/proyecto01/calculo-i-iv/worker.py",
+    "cambio": "nuevo"
+  }
+]

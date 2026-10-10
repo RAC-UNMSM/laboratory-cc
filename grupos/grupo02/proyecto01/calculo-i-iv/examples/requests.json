@@ -1,0 +1,222 @@
+[
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "limite",
+        "expresion": "sin(x)/x",
+        "punto": "0"
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "derivada",
+        "expresion": "sin(x**2)"
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "integral",
+        "expresion": "2*x"
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "gradiente",
+        "expresion": "x**2+y**2",
+        "variables": [
+          "x",
+          "y"
+        ]
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "integral_multiple",
+        "expresion": "1",
+        "limites": [
+          {
+            "variable": "y",
+            "inferior": "0",
+            "superior": "x"
+          },
+          {
+            "variable": "x",
+            "inferior": "0",
+            "superior": "1"
+          }
+        ]
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "lagrange",
+        "expresion": "x+y",
+        "variables": [
+          "x",
+          "y"
+        ],
+        "restriccion": "x**2+y**2-1"
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "green",
+        "campo": [
+          "-y/2",
+          "x/2"
+        ],
+        "limites": [
+          {
+            "variable": "y",
+            "inferior": "0",
+            "superior": "1"
+          },
+          {
+            "variable": "x",
+            "inferior": "0",
+            "superior": "1"
+          }
+        ]
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "stokes",
+        "campo": [
+          "-y/2",
+          "x/2",
+          "0"
+        ],
+        "superficie": [
+          "u",
+          "v",
+          "0"
+        ],
+        "limites": [
+          {
+            "variable": "u",
+            "inferior": "0",
+            "superior": "1"
+          },
+          {
+            "variable": "v",
+            "inferior": "0",
+            "superior": "1"
+          }
+        ]
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "gauss",
+        "campo": [
+          "x",
+          "y",
+          "z"
+        ],
+        "limites": [
+          {
+            "variable": "z",
+            "inferior": "0",
+            "superior": "1"
+          },
+          {
+            "variable": "y",
+            "inferior": "0",
+            "superior": "1"
+          },
+          {
+            "variable": "x",
+            "inferior": "0",
+            "superior": "1"
+          }
+        ]
+      },
+      "modo": "paso_a_paso"
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "extremos",
+        "expresion": "x**2",
+        "inferior": "-1",
+        "superior": "2"
+      }
+    }
+  },
+  {
+    "tool": "resolver",
+    "arguments": {
+      "problema": {
+        "operacion": "integral_linea",
+        "campo": [
+          "-y",
+          "x"
+        ],
+        "curva": [
+          "cos(t)",
+          "sin(t)"
+        ],
+        "inferior": "0",
+        "superior": "2*pi"
+      }
+    }
+  },
+  {
+    "tool": "graficar",
+    "arguments": {
+      "expresion": "x**2",
+      "inferior": "-2",
+      "superior": "2"
+    }
+  },
+  {
+    "tool": "leccion",
+    "arguments": {
+      "tema": "integrales",
+      "nivel": "desde_cero"
+    }
+  },
+  {
+    "tool": "verificar_respuesta",
+    "arguments": {
+      "tema": "integrales",
+      "respuesta": "sin(x)+7"
+    }
+  }
+]
