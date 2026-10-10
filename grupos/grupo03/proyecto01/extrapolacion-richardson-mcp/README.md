@@ -33,7 +33,6 @@ prueban sin levantar el servidor.
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest                                                 # 50 pruebas
 python server.py                                       # http://localhost:8000/mcp
 claude mcp add --transport http richardson-local http://localhost:8000/mcp
 ```
