@@ -1,54 +1,13 @@
-### Estado actual del proyecto
+# Proyecto 01 — Grupo 09
 
-#### `datos_validacion.py` 
-**Responsable: Orquestador / Datos**
+## [`edos-lineales-no-lineales-y-retrato-de-fase/`](edos-lineales-no-lineales-y-retrato-de-fase/)
 
-- Valida el modelo recibido.
-- Valida las condiciones iniciales y su dimensión.
-- Comprueba que el intervalo de tiempo sea válido.
-- Valida los parámetros antes de enviarlos al solver.
+Agente MCP de EDOs lineales y no lineales, retratos de fase, sistemas dinámicos
+caóticos, atractores extraños y fractales. Clasifica cada problema, elige el
+método del balotario del grupo, hace el desarrollo con sympy y scipy, lo
+verifica y publica un informe HTML interactivo con las gráficas y las fórmulas.
 
-#### `modelos_referencia.py` 
-
-Actualmente contiene tres modelos de prueba:
-
-- Lineal: $x'=-ax$.
-- Logístico: $x'=rx(1-x/K)$.
-- Sistema de Lorenz.
-
-También contiene los puntos de equilibrio conocidos para los modelos lineal y logístico y la función `obtener_modelo()` para cargar cada configuración.
-
-#### `modelo_edos.py` 
-
-- Resolución numérica mediante `solve_ivp`.
-- Método RK45.
-- Manejo de `rtol` y `atol`.
-- Trabaja con las validaciones de entrada.
-- Actualmente genera 300 puntos para representar la solución.
-
-#### `analisis_estabilidad.py` 
-
-- Cálculo numérico del Jacobiano.
-- Cálculo de autovalores.
-- Clasificación de los puntos de equilibrio como estables, inestables o no concluyentes.
-
-Actualmente funciona con los modelos lineal y logístico.
-
-#### `visualizacion.py` 
-
-- Gráficas de las soluciones en función del tiempo.
-- Soporte para sistemas de hasta 3 variables.
-- Retrato de fase para modelos 1D.
-- Representación de puntos de equilibrio y dirección del sistema.
-- Comparación de trayectorias con distintas condiciones iniciales.
-- Las gráficas se guardan automáticamente en formato PNG.
-
-#### `server.py` 
-**Responsable: Orquestador / Backend**
-
-Actualmente permite ejecutar:
-
-```bash
-python server.py --modelo lineal
-python server.py --modelo logistico
-python server.py --modelo lorenz
+- Documentación de uso y de la arquitectura: [`README.md`](edos-lineales-no-lineales-y-retrato-de-fase/README.md)
+- Propuesta del proyecto: [`edos-lineales-no-lineales-y-retrato-de-fase.md`](edos-lineales-no-lineales-y-retrato-de-fase/edos-lineales-no-lineales-y-retrato-de-fase.md)
+- URL del servidor MCP desplegado:
+  `https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lineales-no-lineales-y-retrato-de-fase/mcp`
