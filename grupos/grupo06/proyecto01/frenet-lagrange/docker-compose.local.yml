@@ -1,0 +1,45 @@
+# Entorno de PRUEBA completo en tu PC: SeaweedFS + Caddy + grupo06-frenet-lagrange.
+#
+#   docker compose -f docker-compose.local.yml up -d --build
+#
+# Luego:
+#   endpoint MCP  → http://localhost:8080/grupo06/grupo06_proyecto01_frenet-lagrange/mcp
+#   salud         → http://localhost:8080/grupo06/grupo06_proyecto01_frenet-lagrange/salud
+#   archivos      → http://localhost:8080/img/grupo06-frenet-lagrange/grupo06/<id>/reporte.html
+#   prueba        → curl http://localhost:8080/grupo06/grupo06_proyecto01_frenet-lagrange/salud
+services:
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: "server -dir=/data -s3 -s3.port=8333 -volume.max=50 -master.volumeSizeLimitMB=256"
+    volumes:
+      - seaweed_datos:/data
+    networks: [lab_net]
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./despliegue/Caddyfile.local:/etc/caddy/Caddyfile:ro
+    depends_on: [seaweedfs, grupo06-frenet-lagrange]
+    networks: [lab_net]
+
+  grupo06-frenet-lagrange:
+    build: .
+    container_name: grupo06-frenet-lagrange
+    init: true
+    environment:
+      SEAWEEDFS_S3_URL: http://seaweedfs:8333
+      IMG_BUCKET: grupo06-frenet-lagrange-imgs
+      PUBLIC_IMG_BASE_URL: http://localhost:8080/img/grupo06-frenet-lagrange
+      MCP_MATH_PROCESOS: "1"
+      MCP_MATH_WORKERS: "2"
+    depends_on: [seaweedfs]
+    networks: [lab_net]
+
+volumes:
+  seaweed_datos:
+
+networks:
+  lab_net:
+    name: lab_net
