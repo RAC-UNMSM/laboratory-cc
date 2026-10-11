@@ -1,0 +1,23 @@
+# Entornos virtuales locales
+.venv/
+venv/
+env/
+
+# Caché de Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Archivos de la base de datos local de uv y mcp
+.mcp/
+uv.lock
+.python-version
+
+# Archivos de reporte temporales o locales (opcional, pero buena práctica)
+*.html
+*.png
+
+# Archivos de git y editores
+.git/
+.gitignore
+.vscode/
