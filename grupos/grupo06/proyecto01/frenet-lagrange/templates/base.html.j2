@@ -1,0 +1,37 @@
+{#- Plantilla base de los reportes (Jinja2). La rellena core/reporte.py. -#}
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ titulo }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+{{ plotly_tag | safe }}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+{{ css | safe }}
+</style></head><body>
+<header class="hero"><div class="wrap"><div class="eyebrow">{{ eyebrow }}</div><h1>{{ titulo }}</h1>
+<div class="enunciado" id="enunciado"></div><div class="meta" id="meta"></div></div></header>
+<nav class="tabs"><div class="wrap">
+<button class="tab activo" data-tab="resumen"><span class="n">1</span>Resumen</button>
+<button class="tab" data-tab="proc"><span class="n">2</span>Procedimiento</button>
+<button class="tab" data-tab="g3d"><span class="n">3</span>Gráfico 3D dinámico</button>
+<button class="tab" data-tab="g2d"><span class="n">4</span>Gráficos 2D</button>
+<button class="tab" data-tab="json"><span class="n">5</span>JSON generado</button>
+</div></nav>
+<main class="wrap">
+<section id="tab-resumen" class="panel activo"></section><section id="tab-proc" class="panel"></section>
+<section id="tab-g3d" class="panel"></section><section id="tab-g2d" class="panel"></section><section id="tab-json" class="panel"></section>
+</main>
+<footer>{{ pie }}</footer>
+<script>
+/* ── datos inyectados por core/reporte.py ── */
+const R = {{ resultado_json | safe }};
+const D = {{ datos_json | safe }};
+const FUNCION_MCP = {{ funcion | tojson }}, NOMBRE_JSON = {{ nombre_json | tojson }};
+{{ js_base | safe }}
+/* ── módulo: {{ metodo }} ── */
+{{ js_modulo | safe }}
+{{ js_arranque | safe }}
+</script></body></html>
