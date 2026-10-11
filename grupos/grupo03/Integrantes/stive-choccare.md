@@ -1,1 +1,0 @@
-Soy Stive Choccare y pertenezco al grupo 03
