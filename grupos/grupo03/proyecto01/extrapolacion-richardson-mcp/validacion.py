@@ -29,6 +29,7 @@ _CONSTANTES = {"pi": math.pi, "e": math.e}
 _BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)
 _UNOPS = (ast.UAdd, ast.USub)
 MAX_LONGITUD = 200
+MAX_EVALUACIONES = 1_000_000
 
 
 def _chequear(nodo: ast.AST, nombres: set[str]) -> None:
@@ -153,3 +154,20 @@ def validar_intervalo(a, b) -> tuple[float, float]:
     if a == b:
         raise ErrorValidacion("El intervalo es degenerado (a == b).")
     return a, b
+
+
+def validar_costo_trapecio(a: float, b: float, h0: float, niveles: int) -> int:
+    """Devuelve n0 (subintervalos del primer nivel) o falla si la tabla completa
+    exigiría más de MAX_EVALUACIONES evaluaciones de la función."""
+    cociente = abs(b - a) / h0
+    if not math.isfinite(cociente) or cociente > MAX_EVALUACIONES:
+        raise ErrorValidacion(
+            f"El paso h0={h0:g} es demasiado pequeño para el intervalo [{a:g}, {b:g}]. "
+            "Use un h0 más grande.")
+    n0 = max(1, round(cociente))
+    total = n0 * (2 ** niveles - 1)
+    if total > MAX_EVALUACIONES:
+        raise ErrorValidacion(
+            f"La tabla pediría unas {total:,} evaluaciones de la función "
+            f"(máximo {MAX_EVALUACIONES:,}). Use un h0 más grande o menos niveles.")
+    return n0
