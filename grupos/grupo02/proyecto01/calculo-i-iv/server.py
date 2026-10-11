@@ -154,8 +154,26 @@ def _error(exc: Exception) -> dict[str, Any]:
     return {"estado": "error", "mensaje": detalle}
 
 
+# --- Límites de cómputo y protección contra sobrecarga ---------------------
+_MAX_LONGITUD_EXPRESION = 500
+_MAX_ORDEN_DERIVADA = 10
+_MAX_VARIABLES_GRADIENTE = 4
+_MAX_ANCHO_INTERVALO = 1000.0
+_MIN_ANCHO_INTERVALO = 1e-6
+
+
+def _validar_longitud(texto: str, nombre: str = "expresion") -> None:
+    """Evita entradas gigantes que puedan colgar o desbordar SymPy."""
+    if len(texto) > _MAX_LONGITUD_EXPRESION:
+        raise ValueError(
+            f"'{nombre}' supera el límite máximo de {_MAX_LONGITUD_EXPRESION} caracteres "
+            f"({len(texto)} recibidos)"
+        )
+
+
 @mcp.tool(name="calcular_derivada")
 def calcular_derivada(expresion: str, variable: str = "x", orden: int = 1) -> dict[str, Any]:
+
     """HERRAMIENTA OBLIGATORIA: Invoca SIEMPRE esta herramienta para calcular derivadas.
     NUNCA calcules derivadas de memoria ni a mano.
 
@@ -173,8 +191,9 @@ def calcular_derivada(expresion: str, variable: str = "x", orden: int = 1) -> di
     criticos son un extra.
     """
     try:
-        if orden < 1:
-            raise ValueError("'orden' debe ser >= 1")
+        _validar_longitud(expresion)
+        if orden < 1 or orden > _MAX_ORDEN_DERIVADA:
+            raise ValueError(f"'orden' debe estar entre 1 y {_MAX_ORDEN_DERIVADA}")
         v = sp.Symbol(variable)
         f = sp.sympify(expresion)
         df = sp.diff(f, v, orden)
@@ -221,6 +240,11 @@ def calcular_integral(
     de fallar.
     """
     try:
+        _validar_longitud(expresion)
+        if limite_inferior is not None:
+            _validar_longitud(limite_inferior, "limite_inferior")
+        if limite_superior is not None:
+            _validar_longitud(limite_superior, "limite_superior")
         v = sp.Symbol(variable)
         f = sp.sympify(expresion)
         definido = limite_inferior is not None or limite_superior is not None
@@ -261,8 +285,11 @@ def calcular_gradiente(expresion: str, variables: list[str]) -> dict[str, Any]:
     `variables` es una lista de nombres sueltos, ej. ["x", "y"].
     """
     try:
+        _validar_longitud(expresion)
         if not variables:
             raise ValueError("'variables' no puede estar vacia")
+        if len(variables) > _MAX_VARIABLES_GRADIENTE:
+            raise ValueError(f"máximo {_MAX_VARIABLES_GRADIENTE} variables permitidas para el gradiente")
         simbolos = [sp.Symbol(n) for n in variables]
         f = sp.sympify(expresion)
         grad = [sp.diff(f, v) for v in simbolos]
@@ -319,6 +346,11 @@ def verificar_respuesta(
     try:
         if not respuesta_alumno:
             raise ValueError("'respuesta_alumno' no puede estar vacia")
+        _validar_longitud(respuesta_alumno, "respuesta_alumno")
+        if expresion is not None:
+            _validar_longitud(expresion, "expresion")
+        if referencia is not None:
+            _validar_longitud(referencia, "referencia")
         v = sp.Symbol(variable)
         alumno = sp.sympify(respuesta_alumno)
 
@@ -369,10 +401,19 @@ async def estado_del_servidor() -> dict[str, Any]:
         "modulos_cargados": sorted(_MODULOS_CARGADOS),
         "modulos_faltantes": sorted(set(MODULOS_CALCULO) - set(_MODULOS_CARGADOS)),
         "total_tools": len(await mcp.list_tools()),
+        "limites_computo": {
+            "max_longitud_expresion": _MAX_LONGITUD_EXPRESION,
+            "max_orden_derivada": _MAX_ORDEN_DERIVADA,
+            "max_variables_gradiente": _MAX_VARIABLES_GRADIENTE,
+            "max_funciones_grafico": _MAX_FUNCIONES,
+            "max_ancho_intervalo": _MAX_ANCHO_INTERVALO,
+            "memoria_contenedor": "512MB",
+        },
         # False en local (python server.py): los graficos se generan pero no
         # se suben. True en el despliegue, donde el compose pasa las variables.
         "storage_configurado": bool(storage.IMG_BUCKET and storage.PUBLIC_IMG_BASE_URL),
     }
+
 
 
 # =========================================================================
@@ -397,6 +438,7 @@ _MAX_FUNCIONES = 5
 
 def _numero(texto: str, nombre: str) -> float:
     """Limite de un intervalo: acepta valores exactos como "pi" o "2*pi"."""
+    _validar_longitud(texto, nombre)
     try:
         valor = float(sp.sympify(texto))
     except Exception as exc:
@@ -410,6 +452,15 @@ def _intervalo(minimo: str, maximo: str, nombre: str) -> tuple[float, float]:
     a, b = _numero(minimo, f"{nombre}_min"), _numero(maximo, f"{nombre}_max")
     if a >= b:
         raise visualizacion.GraficoError(f"{nombre}_min debe ser menor que {nombre}_max")
+    ancho = b - a
+    if ancho > _MAX_ANCHO_INTERVALO:
+        raise visualizacion.GraficoError(
+            f"el ancho del intervalo de {nombre} ({ancho:.3g}) supera el máximo permitido ({_MAX_ANCHO_INTERVALO})"
+        )
+    if ancho < _MIN_ANCHO_INTERVALO:
+        raise visualizacion.GraficoError(
+            f"el ancho del intervalo de {nombre} ({ancho:.3g}) es demasiado estrecho (< {_MIN_ANCHO_INTERVALO})"
+        )
     return a, b
 
 
@@ -419,6 +470,7 @@ def _expresion_en(texto: str, variables: list[str]) -> sp.Expr:
     Sin este control, "a*x**2" se aceptaria y luego fallaria al evaluar con
     un error de numpy incomprensible para el alumno.
     """
+    _validar_longitud(texto)
     simbolos = {n: sp.Symbol(n) for n in variables}
     try:
         expr = sp.sympify(texto, locals=simbolos)
