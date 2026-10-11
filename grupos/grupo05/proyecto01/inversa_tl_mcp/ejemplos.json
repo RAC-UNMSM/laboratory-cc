@@ -1,0 +1,13 @@
+[
+  {"tool":"calcular_inversa_tl","arguments":{"n":2,"regla":["3x1+2x2","x1+x2"]}},
+  {"tool":"hallar_inversa","arguments":{"dominio":"R2","codominio":"R2","regla":"[\"2*x1+x2\",\"x1-x2\"]"}},
+  {"tool":"hallar_inversa","arguments":{"dominio":"R3","codominio":"R3","regla":"[\"x1\",\"x2+x3\",\"x2-x3\"]"}},
+  {"tool":"hallar_inversa","arguments":{"dominio":"P2","codominio":"R3","matriz":"[[1,0,0],[1,1,1],[1,2,4]]"}},
+  {"tool":"hallar_inversa","arguments":{"dominio":"R6","codominio":"M2x3","matriz":"[[1,0,0,0,0,0],[0,1,0,0,0,0],[0,0,1,0,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1]]"}},
+  {"tool":"hallar_inversa","arguments":{"dominio":"R2","codominio":"R2","matriz":"[[2,1],[1,-1]]","base_dominio":"[[1,1],[0,1]]","base_codominio":"[[1,0],[1,1]]"}},
+  {"tool":"analizar_transformacion","arguments":{"dominio":"R2","codominio":"R3","regla":"[\"x1\",\"x2\",\"x1+x2\"]"}},
+  {"tool":"visualizar_transformacion","arguments":{"matriz":"[[2,1],[1,-1]]","vector":"[1,2]"}},
+  {"tool":"cifrar_hill","arguments":{"texto":"HOLA","clave":"[[3,3],[2,5]]"}},
+  {"tool":"descifrar_hill","arguments":{"texto":"LGHW","clave":"[[3,3],[2,5]]"}},
+  {"tool":"analizar_clave_hill","arguments":{"clave":"[[2,0],[0,1]]"}}
+]

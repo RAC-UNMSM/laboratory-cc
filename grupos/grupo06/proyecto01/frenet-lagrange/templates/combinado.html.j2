@@ -1,0 +1,167 @@
+{#- Plantilla del reporte COMBINADO (varios ejercicios en una sola página). La rellena core/combinado.py.
+    Cada ejercicio es su reporte individual completo, mostrado en un iframe (srcdoc) que se carga al abrirlo. -#}
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ titulo }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+:root{--bg:#f4efe8;--card:#fffcf8;--tx:#2b2420;--mu:#7b6e64;--bd:#e5d9cc;--soft:#f8f2eb;--ac:#b0502c;--ac2:#8c3d20;
+--code:#f3ebe1;--lagrange:#b0502c;--hessiana:#3f6e7d;--frenet:#7a5873;--sh:0 1px 2px rgba(60,35,20,.05),0 10px 30px rgba(60,35,20,.06)}
+@media (prefers-color-scheme:dark){:root{--bg:#191512;--card:#221d19;--tx:#ece4da;--mu:#a4968a;--bd:#3a3029;--soft:#2a241f;
+--ac:#d87a52;--ac2:#eaa07e;--code:#1e1a16;--lagrange:#d87a52;--hessiana:#78a9b8;--frenet:#b58fae;--sh:none}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column}
+code{font:13px "JetBrains Mono",monospace;background:var(--code);padding:1px 6px;border-radius:5px;word-break:break-word}
+.barra{flex:none;color:#fbf1e8;background:radial-gradient(700px 260px at 90% -40%,rgba(255,214,186,.22),transparent 70%),linear-gradient(125deg,#3e2117 0%,#6f341f 42%,#a44a28 100%);box-shadow:0 2px 14px rgba(40,20,10,.25);z-index:5}
+.fila{display:flex;align-items:center;gap:12px 18px;padding:12px 20px;flex-wrap:wrap}
+.fila+.fila{padding-top:0}
+.izq{flex:1 1 280px;min-width:0}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.78;font-weight:600}
+.titulo{font:600 21px/1.25 "Source Serif 4",Georgia,serif;margin-top:2px}
+.nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:inherit;font:600 14px Inter,sans-serif;padding:8px 14px;border-radius:10px;cursor:pointer;transition:background .15s,opacity .15s;white-space:nowrap}
+.btn:hover:not(:disabled){background:rgba(255,255,255,.18)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn.pri{background:#fbf1e8;color:#6f341f;border-color:#fbf1e8}
+.btn.pri:hover:not(:disabled){background:#fff}
+.pos{font:600 13px Inter,sans-serif;opacity:.9;padding:0 4px;white-space:nowrap}
+.chip{display:inline-block;padding:3px 11px;border-radius:99px;color:#fff;font-size:12px;font-weight:600;white-space:nowrap}
+.chip.lagrange{background:var(--lagrange)}.chip.hessiana{background:var(--hessiana)}.chip.frenet{background:var(--frenet)}
+.barra .chip{border:1px solid rgba(255,255,255,.35)}
+.desc{flex:1 1 300px;min-width:0;font-size:14px;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.puntos{display:flex;gap:6px;flex-wrap:wrap}
+.punto{appearance:none;width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:transparent;color:inherit;font:600 11px Inter,sans-serif;cursor:pointer;padding:0}
+.punto:hover{background:rgba(255,255,255,.15)}
+.punto.activo{background:#fbf1e8;color:#6f341f;border-color:#fbf1e8}
+.visor{flex:1;position:relative;min-height:0}
+.visor iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:none;background:var(--bg)}
+.visor iframe.activo{display:block}
+.indice{position:absolute;inset:0;overflow:auto;background:var(--bg);display:none;z-index:2}
+.indice.abierto{display:block}
+.wrap{max-width:1100px;margin:0 auto;padding:26px 20px 40px}
+h2{font:600 24px "Source Serif 4",Georgia,serif;margin:0 0 4px}
+.sub{color:var(--mu);font-size:14px;margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:18px 20px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:10px;min-width:0;border-top:4px solid var(--c,var(--ac))}
+.card .cab{display:flex;align-items:center;gap:10px}
+.num{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--soft);border:1px solid var(--bd);font-weight:700;font-size:13px}
+.card .enun{font-size:14.5px;overflow-x:auto}
+.card ul{margin:0;padding-left:18px;color:var(--mu);font-size:13px}
+.card .acc{margin-top:auto;padding-top:4px}
+.card .ver{appearance:none;border:1px solid var(--ac);background:var(--ac);color:#fff;font:600 13px Inter,sans-serif;padding:7px 13px;border-radius:10px;cursor:pointer}
+.card .ver:hover{background:var(--ac2);border-color:var(--ac2)}
+.ayuda{color:var(--mu);font-size:13px;margin-top:22px}
+kbd{font:12px "JetBrains Mono",monospace;border:1px solid var(--bd);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--card)}
+@media (max-width:640px){.titulo{font-size:18px}.fila{padding:10px 14px}.desc{white-space:normal}.btn{padding:7px 11px;font-size:13px}}
+</style></head><body>
+<header class="barra">
+  <div class="fila">
+    <div class="izq">
+      <div class="eyebrow">Reporte combinado · {{ total }} ejercicio{{ "s" if total != 1 }} · {{ fecha }}</div>
+      <div class="titulo">{{ titulo }}</div>
+    </div>
+    <nav class="nav" aria-label="Navegación entre ejercicios">
+      <button class="btn" id="bIndice" type="button">☰ Índice</button>
+      <button class="btn" id="bAnt" type="button">← Anterior</button>
+      <span class="pos" id="pos" aria-live="polite"></span>
+      <button class="btn pri" id="bSig" type="button">Siguiente ejercicio →</button>
+    </nav>
+  </div>
+  <div class="fila">
+    <span class="chip" id="chip"></span>
+    <span class="desc" id="desc"></span>
+    <div class="puntos" id="puntos" aria-label="Ir a un ejercicio"></div>
+  </div>
+</header>
+<main class="visor" id="visor">
+  <section class="indice" id="indice" aria-label="Índice de ejercicios"><div class="wrap">
+    <h2>Índice de ejercicios</h2>
+    <p class="sub">Cada ejercicio conserva su reporte completo: Resumen, Procedimiento, Gráfico 3D dinámico, Gráficos 2D y JSON generado.</p>
+    <div class="grid" id="grid"></div>
+    <p class="ayuda">Atajos: <kbd>←</kbd> <kbd>→</kbd> para cambiar de ejercicio · <kbd>I</kbd> para abrir o cerrar este índice. Lote <code>{{ id_lote }}</code>.</p>
+  </div></section>
+</main>
+<script>
+/* ── datos inyectados por core/combinado.py ── */
+const EJ = {{ ejercicios_json | safe }}, TITULO = {{ titulo | tojson }};
+const N = EJ.length, $ = i => document.getElementById(i);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const tex = (s, d) => { try { return katex.renderToString(String(s), {displayMode:!!d, throwOnError:false}); } catch (e) { return esc(s); } };
+const mt = s => esc(s).replace(/\$\$([^$]+)\$\$/g, (_, m) => tex(m, true)).replace(/\$([^$]+)\$/g, (_, m) => tex(m));
+const GRIEGO = {kappa:"κ", tau:"τ", lambda:"λ", mu:"μ", alpha:"α", beta:"β", theta:"θ", pi:"π", nabla:"∇", cdot:"·",
+                langle:"⟨", rangle:"⟩", times:"×", leq:"≤", geq:"≥", to:"→", infty:"∞", partial:"∂"};
+const plano = s => String(s || "").replace(/\$+/g, "").replace(/\\(mathbf|text|mathrm|operatorname)\{([^}]*)\}/g, "$2")
+  .replace(/\\([A-Za-z]+)/g, (m, c) => GRIEGO[c] !== undefined ? GRIEGO[c] : c).replace(/\\[,;! ]/g, " ").replace(/[{}]/g, "");
+
+const visor = $("visor"), marcos = [];
+let actual = -1;
+EJ.forEach((e, i) => {
+  const f = document.createElement("iframe");
+  f.title = `Ejercicio ${i + 1}: ${e.nombre_metodo}`;
+  visor.appendChild(f); marcos.push(f);
+  const p = document.createElement("button");
+  p.className = "punto"; p.type = "button"; p.textContent = i + 1; p.title = `Ejercicio ${i + 1} · ${e.nombre_metodo}`;
+  p.onclick = () => ir(i); $("puntos").appendChild(p);
+});
+$("grid").innerHTML = EJ.map((e, i) => `
+  <article class="card" style="--c:var(--${e.metodo})">
+    <div class="cab"><span class="num">${i + 1}</span><span class="chip ${e.metodo}">${esc(e.nombre_metodo)}</span></div>
+    ${e.enunciado ? `<div class="enun">${mt(e.enunciado)}</div>` : ""}
+    <div><code>${esc(e.descripcion)}</code></div>
+    ${e.resumen.length ? `<ul>${e.resumen.slice(0, 4).map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+    <div class="acc"><button class="ver" type="button" data-i="${i}">Ver ejercicio ${i + 1} →</button></div>
+  </article>`).join("");
+document.querySelectorAll(".ver").forEach(b => b.onclick = () => ir(+b.dataset.i));
+
+const indiceAbierto = () => $("indice").classList.contains("abierto");
+function abrirIndice(si) {
+  $("indice").classList.toggle("abierto", si);
+  $("bIndice").textContent = si ? "✕ Cerrar índice" : "☰ Índice";
+  if (si) $("indice").scrollTop = 0;
+}
+function pintar() {
+  const e = EJ[actual];
+  $("pos").textContent = `Ejercicio ${actual + 1} de ${N}`;
+  $("bAnt").disabled = actual === 0;
+  $("bSig").disabled = actual === N - 1;
+  $("bSig").textContent = actual === N - 1 ? "Último ejercicio" : "Siguiente ejercicio →";
+  $("chip").className = "chip " + e.metodo; $("chip").textContent = e.nombre_metodo;
+  if (e.enunciado) $("desc").innerHTML = mt(e.enunciado); else $("desc").textContent = e.descripcion;
+  $("desc").title = plano(e.enunciado) || e.descripcion;
+  document.querySelectorAll(".punto").forEach((p, k) => p.classList.toggle("activo", k === actual));
+  document.title = `${actual + 1}/${N} · ${e.nombre_metodo} — ` + TITULO;
+}
+function ir(i) {
+  i = Math.max(0, Math.min(N - 1, i));
+  abrirIndice(false);
+  if (i === actual) return;
+  const f = marcos[i];
+  if (!f.srcdoc) f.srcdoc = EJ[i].html;        // cada reporte se carga la primera vez que se abre
+  marcos.forEach((m, k) => m.classList.toggle("activo", k === i));
+  actual = i; pintar();
+  try { history.replaceState(null, "", "#ej-" + (i + 1)); } catch (e) {}
+}
+$("bAnt").onclick = () => ir(actual - 1);
+$("bSig").onclick = () => ir(actual + 1);
+$("bIndice").onclick = () => abrirIndice(!indiceAbierto());
+document.addEventListener("keydown", ev => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) return;
+  if (ev.key === "ArrowRight") ir(actual + 1);
+  else if (ev.key === "ArrowLeft") ir(actual - 1);
+  else if (ev.key === "i" || ev.key === "I") abrirIndice(!indiceAbierto());
+  else if (ev.key === "Escape") abrirIndice(false);
+});
+/* los botones del pie de cada reporte (dentro del iframe) avisan por postMessage */
+window.addEventListener("message", ev => {
+  const d = ev.data || {};
+  if (typeof d.loteIr === "number") ir(d.loteIr);
+  else if (d.loteIndice) abrirIndice(true);
+});
+const h = /^#ej-(\d+)$/.exec(location.hash);
+ir(h ? +h[1] - 1 : 0);
+</script></body></html>
