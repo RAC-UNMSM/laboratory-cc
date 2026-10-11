@@ -7,12 +7,11 @@ Expone, con el SDK oficial de MCP para Python 2.x (mcp==2.1.1, clase MCPServer),
     optimizar_con_restricciones   → Multiplicadores de Lagrange   (methods/metodo_lagrange.py)
     analizar_puntos_criticos      → Puntos críticos + Hessiana    (methods/metodo_hessiana.py)
     analizar_curva_frenet         → Triedro de Frenet, κ y τ      (methods/metodo_frenet.py)
-    listar_resultados / obtener_resultado → historial guardado por storage.py
+    obtener_resultado             → recuperar un cálculo guardado por storage.py
     combinar_reportes             → UN reporte HTML con los ejercicios que se elijan (core/combinado.py)
 
-Reporte combinado AUTOMÁTICO: después de publicar cada ejercicio, core/motor.publicar llama a
-core/combinado.agregar_a_sesion, que regenera grupo06/lote-sesion-actual/reporte_combinado.html
-con todos los ejercicios de la sesión (prefijo fijo; no se crea un id de lote nuevo cada vez).
+Los reportes combinados se crean SOLO a pedido con combinar_reportes: cada cálculo se guarda en su
+propia carpeta grupo06/<id>/ y no se agrega a ningún reporte compartido.
 
 Transporte (MCP_TRANSPORT):
     streamable-http (por defecto) — escucha en 0.0.0.0:8000, ruta /mcp, para la red Docker lab_net
@@ -59,7 +58,7 @@ from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations  # noqa: E402
 from pydantic import Field  # noqa: E402
 
-from core.combinado import Combinador, ErrorCombinado, configurar_sesion  # noqa: E402
+from core.combinado import Combinador, ErrorCombinado  # noqa: E402
 from core.diagnostico import diagnosticar  # noqa: E402
 from core.motor import compactar, ejecutar, publicar  # noqa: E402
 from core.validacion import (SolicitudCombinar, SolicitudConsulta, SolicitudDiagnostico,  # noqa: E402
@@ -101,7 +100,6 @@ Detalle = Literal["compacto", "completo"]
 
 almacen = Almacen(elegir_backend(TRANSPORTE))
 combinador = Combinador(almacen)
-configurar_sesion(almacen)                           # reporte combinado automático de la sesión
 
 INSTRUCCIONES = """\
 Servidor de cálculo simbólico EXACTO (SymPy) para tres temas de Cálculo en varias variables.
@@ -118,11 +116,11 @@ Elige la herramienta según la ESTRUCTURA del problema, no solo según las palab
   → analizar_curva_frenet.
 • Si el enunciado es ambiguo o está en lenguaje natural, llama primero a diagnosticar_problema:
   devuelve el método recomendado y los argumentos ya extraídos.
-• REPORTE COMBINADO AUTOMÁTICO: cada ejercicio resuelto se añade solo al reporte de la sesión
-  (grupo06/lote-sesion-actual/reporte_combinado.html); su enlace viene en 'reporte_sesion' y en el
-  Markdown. No hace falta llamar a combinar_reportes para eso. Pasa en 'enunciado' el texto del
-  ejercicio tal como lo escribió el usuario para que se vea en el índice. Menciona ambas rutas:
-  el reporte individual y el reporte combinado de la sesión.
+• VARIOS EJERCICIOS EN UN MISMO MENSAJE: resuelve cada uno con su herramienta y, al
+  terminar, llama a combinar_reportes con los 'id_resultado' de ESOS ejercicios (y solo
+  esos). Entrega al usuario el enlace del reporte combinado junto con los individuales.
+  Con un solo ejercicio no hace falta combinar: entrega su reporte individual.
+  Pasa en 'enunciado' el texto del ejercicio tal como lo escribió el usuario.
 
 Sintaxis de las expresiones (tipo calculadora): ^ potencia, * producto (se acepta 2x y x y),
 sin cos tan exp log sqrt, pi, e (número de Euler: e^t = exp(t)). Las restricciones se escriben como igualdades 'x^2 + y^2 = 8'.
@@ -315,7 +313,7 @@ def _miniatura(png: bytes | None, lado_max: int = 1024) -> bytes | None:
         return None
 
 
-def _markdown(metodo: str, enlaces: dict[str, str], sesion: str | None = None, n_sesion: int | None = None) -> str:
+def _markdown(metodo: str, enlaces: dict[str, str]) -> str:
     """Enlaces públicos listos para pegar en el chat (Markdown)."""
     lineas: list[str] = []
     if "html" in enlaces:
@@ -326,16 +324,12 @@ def _markdown(metodo: str, enlaces: dict[str, str], sesion: str | None = None, n
         lineas.append(f"[Abrir el reporte interactivo (procedimiento + gráfico 3D)]({enlaces['html']})")
     if "resultado" in enlaces:
         lineas.append(f"[Resultado en JSON]({enlaces['resultado']})")
-    if sesion:
-        cuantos = f" ({n_sesion} ejercicio{'s' if n_sesion != 1 else ''})" if n_sesion else ""
-        lineas.append(f"[Reporte combinado de la sesión{cuantos}]({sesion})")
     return "\n\n".join(lineas)
 
 
 async def _calcular(metodo: Metodo, s: Any, detalle: Detalle, ctx: Context | None) -> CallToolResult:
     """Común a las tres herramientas: calcula en un proceso aparte (HTML y PNG como bytes, en
-    memoria), publica en grupo06/<id>/ y actualiza el reporte combinado de la sesión
-    (core.motor.publicar), y arma la respuesta."""
+    memoria), publica en grupo06/<id>/ (core.motor.publicar) y arma la respuesta."""
     if ctx is not None:
         await ctx.info(f"Verificando y resolviendo con el método de {metodo}…")
     id_ = almacen.nuevo_id(metodo)
@@ -347,11 +341,9 @@ async def _calcular(metodo: Metodo, s: Any, detalle: Detalle, ctx: Context | Non
     r["artefactos"] = _artefactos(r.get("artefactos"))
     descripcion = _descripcion(metodo, s)
     avisos: list[str] = []
-    sesion: str | None = None
-    n_sesion: int | None = None
     try:
-        pub = await asyncio.to_thread(publicar, almacen, id_, metodo, descripcion, r, s.enunciado or descripcion)
-        enlaces, sesion, n_sesion = pub["archivos"], pub["sesion"], pub.get("n_sesion")
+        pub = await asyncio.to_thread(publicar, almacen, id_, metodo, descripcion, r)
+        enlaces = pub["archivos"]
         avisos.extend(pub["avisos"])
     except ErrorAlmacen as e:                        # el cálculo es válido aunque no se haya podido publicar
         log.error("No se pudo guardar %s: %s", id_, e)
@@ -360,7 +352,7 @@ async def _calcular(metodo: Metodo, s: Any, detalle: Detalle, ctx: Context | Non
                       "vuelve a intentarlo más tarde para obtener los enlaces.")
     png = _miniatura(r["artefactos"].get("png")) if s.salida.incluir_imagen else None
 
-    md = _markdown(metodo, enlaces, sesion, n_sesion)
+    md = _markdown(metodo, enlaces)
     datos: dict[str, Any] = {
         "ok": True,
         "metodo": metodo,
@@ -369,7 +361,6 @@ async def _calcular(metodo: Metodo, s: Any, detalle: Detalle, ctx: Context | Non
         "verificacion_previa": r["verificacion_previa"],
         "resultado": r["resultado"] if detalle == "completo" else compactar(r["resultado"]),
         "archivos": enlaces,
-        "reporte_sesion": sesion,
         "markdown": md,
         "tiempo_s": r["tiempo_s"],
         **({"advertencias": avisos} if avisos else {}),
@@ -495,21 +486,6 @@ async def analizar_curva_frenet(solicitud: SolicitudFrenet, detalle: _DETALLE = 
     return await _calcular("frenet", solicitud, detalle, ctx)
 
 
-@mcp.tool(title="Listar resultados guardados",
-          annotations=ToolAnnotations(title="Listar resultados", read_only_hint=True, open_world_hint=False))
-async def listar_resultados(metodo: Annotated[Metodo | None, Field(description="Filtra por método (opcional).")] = None,
-                            limite: Annotated[int, Field(ge=1, le=100, description="Máximo de resultados.")] = 20
-                            ) -> dict[str, Any]:
-    """Lista los cálculos ya realizados (más recientes primero) con su id, método, fecha y una
-    descripción. Úsala cuando el usuario pregunte por un ejercicio anterior ("¿qué salió en el de
-    la hélice?", "muéstrame el último de Lagrange") y luego llama a obtener_resultado con el id."""
-    try:
-        return {"resultados": await asyncio.to_thread(almacen.listar, metodo, limite), "almacen": almacen.descripcion}
-    except ErrorAlmacen as e:
-        raise ToolError(json.dumps({"ok": False, "codigo": "ALMACEN_NO_DISPONIBLE", "mensaje": str(e),
-                                    "sugerencia": "Verifica que SeaweedFS esté en línea."}, ensure_ascii=False)) from e
-
-
 @mcp.tool(title="Obtener un resultado guardado",
           annotations=ToolAnnotations(title="Obtener resultado", read_only_hint=True, open_world_hint=False))
 async def obtener_resultado(solicitud: SolicitudConsulta, detalle: _DETALLE = "compacto") -> dict[str, Any]:
@@ -522,7 +498,8 @@ async def obtener_resultado(solicitud: SolicitudConsulta, detalle: _DETALLE = "c
                                     "sugerencia": "Verifica que SeaweedFS esté en línea."}, ensure_ascii=False)) from e
     except KeyError as e:
         raise ToolError(json.dumps({"ok": False, "codigo": "NO_ENCONTRADO", "mensaje": str(e).strip("'\""),
-                                    "sugerencia": "Usa listar_resultados para ver los ids disponibles."},
+                                    "sugerencia": "Revisa el id_resultado; lo devuelve la herramienta de cálculo "
+                                                  "al publicar el ejercicio."},
                                    ensure_ascii=False)) from e
     if detalle == "compacto" and r.get("resultado"):
         r["resultado"] = compactar(r["resultado"])
@@ -536,20 +513,20 @@ async def obtener_resultado(solicitud: SolicitudConsulta, detalle: _DETALLE = "c
 async def combinar_reportes(solicitud: SolicitudCombinar) -> dict[str, Any]:
     """REPORTE COMBINADO — reúne en UNA página HTML los reportes de varios ejercicios YA resueltos.
 
-    NO hace falta para el reporte de la sesión: ese se actualiza SOLO después de cada cálculo
-    (grupo06/lote-sesion-actual/reporte_combinado.html). Usa esta herramienta únicamente cuando el
-    usuario pida un reporte APARTE con ejercicios concretos (por ejemplo, solo los de una tarea, o
-    ejercicios resueltos otro día: búscalos con listar_resultados), en el orden que él indique.
+    Úsala cuando se hayan resuelto DOS O MÁS ejercicios de un mismo mensaje (pasa sus 'id_resultado'
+    en 'ids') o cuando el usuario pida expresamente un reporte con ejercicios concretos, en el orden
+    que él indique. Pasa SIEMPRE los identificadores explícitos: no existe ningún combinado
+    automático ni una opción de "los últimos N" (eso mezclaría ejercicios de otros usuarios).
 
     Qué hace: copia el reporte completo de cada ejercicio (sus 5 pestañas: Resumen, Procedimiento,
     Gráfico 3D, Gráficos 2D y JSON) dentro de una sola página con barra de navegación
     «← Anterior / Siguiente ejercicio →», índice y atajos de teclado. NO recalcula nada ni modifica
-    los reportes individuales. Lo publica en su propio prefijo:
+    los reportes individuales. Lo publica en su propio prefijo, siempre con un id nuevo:
     grupo06/lote-AAAAMMDD-HHMMSS-xxxxxxxx/reporte_combinado.html (+ lote.json).
 
     Pasa en 'enunciados' el texto de cada ejercicio (mismo orden) para que se vea en el índice.
     Devuelve: id_lote, la lista de ejercicios incluidos, la URL pública del HTML combinado y su Markdown.
-    Error típico: NO_ENCONTRADO (algún id no existe; usa listar_resultados).
+    Error típico: NO_ENCONTRADO (algún id no existe o ya se borró).
     """
     try:
         return await asyncio.to_thread(combinador.combinar, solicitud.ids, solicitud.titulo, solicitud.enunciados)

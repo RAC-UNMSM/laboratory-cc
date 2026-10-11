@@ -11,10 +11,7 @@ Cada cálculo se guarda bajo una "carpeta virtual" (prefijo S3) propia del grupo
         │   ├── resultado.json      ← JSON exacto del método
         │   ├── entrada.json        ← la solicitud validada
         │   └── meta.json           ← id, método, fecha, descripción y resumen (se escribe AL FINAL)
-        ├── lote-20261006-153500-9f8e7d6c/      ← reporte combinado pedido explícitamente
-        │   ├── reporte_combinado.html
-        │   └── lote.json
-        └── lote-sesion-actual/                 ← reporte combinado AUTOMÁTICO (se sobrescribe)
+        └── lote-20261006-153500-9f8e7d6c/      ← reporte combinado pedido explícitamente
             ├── reporte_combinado.html
             └── lote.json
 
@@ -56,7 +53,7 @@ from urllib.parse import quote, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
 __all__ = ["Almacen", "BackendS3", "RegistroResultado", "ErrorAlmacen", "ID_PATRON", "ID_LOTE",
-           "ID_SESION", "nuevo_id", "nuevo_id_lote", "elegir_backend", "GRUPO",
+           "nuevo_id", "nuevo_id_lote", "elegir_backend", "GRUPO",
            "SEAWEEDFS_S3_URL", "IMG_BUCKET", "PUBLIC_IMG_BASE_URL"]
 
 log = logging.getLogger("mcp_math.storage")
@@ -69,8 +66,6 @@ PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange
 # 8 hex (uuid4) en los ids nuevos; se aceptan 6 hex para leer resultados antiguos.
 ID_PATRON = re.compile(r"^(lagrange|hessiana|frenet)-\d{8}-\d{6}-[0-9a-f]{6}(?:[0-9a-f]{2})?$")
 ID_LOTE = re.compile(r"^lote-\d{8}-\d{6}-[0-9a-f]{6}(?:[0-9a-f]{2})?$")
-#: Prefijo FIJO del reporte combinado automático de la sesión (core/combinado.agregar_a_sesion).
-ID_SESION = "lote-sesion-actual"
 ARCHIVOS = {"html": "reporte.html", "png": "grafico.png", "resultado": "resultado.json",
             "entrada": "entrada.json", "meta": "meta.json"}
 TIPOS = {".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -300,7 +295,7 @@ class Almacen:
 
     # ── claves y URLs ────────────────────────────────────────────────────────
     def clave(self, id_: str, nombre: str) -> str:
-        if not (ID_PATRON.match(id_) or ID_LOTE.match(id_) or id_ == ID_SESION):
+        if not (ID_PATRON.match(id_) or ID_LOTE.match(id_)):
             raise KeyError(f"Id con formato inválido: '{id_}'.")
         if "/" in nombre or nombre.startswith("."):
             raise KeyError(f"Nombre de archivo inválido: '{nombre}'.")

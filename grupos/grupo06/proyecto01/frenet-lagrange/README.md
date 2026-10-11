@@ -27,9 +27,9 @@ Cliente MCP (Claude, MCP Inspector…)
 
 | Tarea | Requisito | Dónde |
 |---|---|---|
-| 1 | Reporte combinado **automático** en prefijo fijo `grupo06/lote-sesion-actual/` | `core/combinado.py` → `agregar_a_sesion(id_nuevo_ejercicio, enunciado)` |
-| 1 | Se llama **justo después** de subir `reporte.html` y `grafico.png` | `core/motor.py` → `publicar()` (primero `almacen.guardar`, luego `agregar_a_sesion`) |
-| 1 | Sobrescribe `reporte_combinado.html` y `lote.json` **sin crear un id de lote nuevo** | `Combinador.combinar(..., id_lote=ID_SESION)` |
+| 1 | Reporte **individual** por cálculo en `grupo06/<id>/` (`reporte.html`, `grafico.png`, …) | `core/motor.py` → `publicar()` (solo `almacen.guardar`) |
+| 1 | Reportes combinados **solo a pedido**, cada uno con un id nuevo `grupo06/lote-…/` | `core/combinado.py` → `Combinador.combinar(ids, …)` |
+| 1 | Sin reporte combinado **automático** ni prefijo compartido entre usuarios | por decisión del administrador (ver la observación del PR #113) |
 | 2 | Sin cliente LLM ni dependencia `openai`: el servidor no usa ningún modelo de lenguaje | no existe `agente.py`; `requirements.txt` no incluye `openai` |
 | 3 | `mcp==2.1.1` exacto | `requirements.txt` |
 | 3 | `from mcp.server.mcpserver import MCPServer` y `mcp = MCPServer("grupo06-frenet-lagrange")` | `server.py` |
@@ -51,11 +51,9 @@ directamente y el `except TypeError` queda como respaldo para un SDK que no los 
   existen, `MCP_HOST` / `MCP_PORT` (las pruebas usan otro puerto). Con `host="0.0.0.0"` el SDK no
   activa la protección anti DNS-rebinding, así que acepta el `Host` público que reenvía Caddy.
 
-**Concurrencia del reporte de sesión.** Las actualizaciones de `lote-sesion-actual` pasan por un
-candado del proceso: varios usuarios a la vez en el mismo contenedor no se pisan (probado con 8
-clientes simultáneos). Con **varias réplicas** del contenedor, la última escritura gana, porque
-`lote.json` es un objeto compartido. Además, el reporte de sesión crece con cada ejercicio; si hace
-falta, `MCP_SESION_MAX` limita cuántos ejercicios recientes conserva (0 = todos, el valor por defecto).
+**Concurrencia.** Cada cálculo escribe **solo** en su propio prefijo `grupo06/<id>/`, con claves
+que nadie más usa: varios usuarios a la vez no se pisan (probado con 8 clientes simultáneos). Ya no
+hay un reporte de sesión compartido que actualizar; los reportes combinados se crean solo a pedido.
 
 ## Estructura
 
@@ -69,9 +67,9 @@ frenet-lagrange/
 │   ├── diagnostico.py       lenguaje natural → método + argumentos
 │   ├── visualizacion.py     todo lo gráfico (Plotly/matplotlib)
 │   ├── reporte.py           inyecta resultados en las plantillas Jinja2
-│   ├── combinado.py         varios ejercicios en UNA página; agregar_a_sesion (grupo06/lote-sesion-actual/)
+│   ├── combinado.py         varios ejercicios en UNA página (combinar_reportes)
 │   ├── esquema.py           JSON Schema MCP portable (lo verifican las pruebas)
-│   ├── motor.py             un cálculo completo (todo en bytes) y publicar(): subir + reporte de sesión
+│   ├── motor.py             un cálculo completo (todo en bytes) y publicar(): subir los artefactos a S3
 │   └── trabajador.py        proceso de cálculo (tuberías propias; se mata si excede el tiempo)
 ├── templates/               base.html.j2, combinado*.html.j2, static/ (CSS y JS)
 ├── server.py                servidor MCP (MCPServer, SDK 2.1.1) — streamable-http o STDIO
@@ -93,12 +91,9 @@ s3://grupo06-frenet-lagrange-imgs/
     │   ├── resultado.json    resultado exacto
     │   ├── entrada.json      solicitud validada
     │   └── meta.json         id, método, fecha, descripción, resumen y URLs (se escribe AL FINAL)
-    ├── lote-20261006-153500-9f8e7d6c/    reporte combinado pedido con combinar_reportes (id nuevo)
-    │   ├── reporte_combinado.html
-    │   └── lote.json
-    └── lote-sesion-actual/               reporte combinado AUTOMÁTICO (mismo prefijo siempre)
-        ├── reporte_combinado.html        todos los ejercicios de la sesión, en orden
-        └── lote.json                     [{id, enunciado}, …]
+    └── lote-20261006-153500-9f8e7d6c/    reporte combinado pedido con combinar_reportes (id nuevo)
+        ├── reporte_combinado.html
+        └── lote.json
 ```
 
 **Por qué no hay índice compartido.** Con un `indice.json` único, dos réplicas que guardan a la vez
@@ -114,11 +109,12 @@ aparece en el listado.
   ![Reporte de cálculo](https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange/grupo06/<id>/reporte.html)
   ![Gráfico — hessiana](https://rac-unmsm.vekthos.org/img/grupo06-frenet-lagrange/grupo06/<id>/grafico.png)
   [Abrir el reporte interactivo (procedimiento + gráfico 3D)](https://…/grupo06/<id>/reporte.html)
-  [Reporte combinado de la sesión (N ejercicios)](https://…/grupo06/lote-sesion-actual/reporte_combinado.html)
   ```
   Una imagen Markdown solo se dibuja si apunta a una imagen. Por eso, además del enlace al HTML que
   pide el enunciado, se agrega la del PNG, que es la que el chat muestra. El HTML se abre con el enlace.
-- **Texto 2:** el JSON del resultado (también va como `structured_content`), con `reporte_sesion`.
+  Si se resuelven varios ejercicios de un mismo mensaje, la herramienta `combinar_reportes` devuelve
+  además el enlace de un reporte combinado propio (`grupo06/lote-…/reporte_combinado.html`).
+- **Texto 2:** el JSON del resultado (también va como `structured_content`), con `archivos` (URLs).
 - **Image:** el PNG (≤1024 px, ~150–250 KB) como respaldo si el cliente no puede abrir las URLs.
   Se desactiva con `salida.incluir_imagen = false`.
 
@@ -170,7 +166,6 @@ python -m pytest -q                          # pruebas
 | `MCP_MATH_WORKERS` | `2` | cálculos simultáneos por contenedor |
 | `MCP_MATH_TIMEOUT` | `120` | segundos máximos por cálculo |
 | `MCP_MATH_PROCESOS` | `1` | `0` = calcular en el mismo proceso (depuración, sin límite de tiempo) |
-| `MCP_SESION_MAX` | `0` | ejercicios que conserva el reporte de sesión (0 = todos) |
 
 ## Herramientas MCP
 
@@ -180,8 +175,8 @@ python -m pytest -q                          # pruebas
 | `optimizar_con_restricciones` | máx/mín de f **sujeto a** igualdades g = c (Lagrange) |
 | `analizar_puntos_criticos` | máx/mín relativos, sillas, Hessiana, **sin** restricciones |
 | `analizar_curva_frenet` | curva r(t): T, N, B, curvatura, torsión, planos |
-| `listar_resultados` / `obtener_resultado` | historial (listado directo desde S3) |
-| `combinar_reportes` | solo si el usuario pide un reporte APARTE con ejercicios concretos (el de la sesión es automático) |
+| `obtener_resultado` | recuperar un cálculo por su `id_resultado` (el id solo lo conoce quien calculó) |
+| `combinar_reportes` | al resolver 2+ ejercicios de un mismo mensaje, o cuando el usuario pide un reporte con ejercicios concretos |
 
 ## Validación en dos capas
 
@@ -207,13 +202,13 @@ python -m pytest -q                          # pruebas
 - **la respuesta:** los Content-Type, las URLs públicas en Markdown y el bloque Image;
 - **el listado:** `ListObjectsV2` con prefijo y delimitador;
 - **la firma:** SigV4 cuando hay credenciales;
-- **la concurrencia:** 4 clientes simultáneos con ids distintos, y ninguno se pierde en la sesión;
-- **el reporte de sesión:** mismo prefijo `lote-sesion-actual`, orden, sin ids de lote nuevos;
+- **la concurrencia:** 4 clientes simultáneos con ids distintos, cada uno en su propio prefijo;
+- **el reporte combinado a pedido:** id de lote nuevo, contiene solo los ejercicios indicados;
 - **todo en memoria:** el HTML y el PNG son `bytes` y no aparece ningún archivo en disco;
 - **los requisitos del CI** (`tests/test_requisitos_ci.py`): `mcp==2.1.1`, `MCPServer`, la línea
   literal de `run`, sin el cliente del LLM, sin impresiones por pantalla, sin carpetas temporales,
   type hints y docstrings.
 
 También se comprobó la imagen Docker real con `docker-compose.local.yml` (SeaweedFS 4.48 + Caddy 2.10):
-8 clientes simultáneos, todos los archivos públicos con 200, la sesión con los 8 ejercicios y
+8 clientes simultáneos, todos los archivos públicos con 200, cada cálculo en su propio prefijo y
 `docker diff` sin ningún archivo escrito por el servidor.

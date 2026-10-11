@@ -16,8 +16,7 @@ Flujo:
          ──visualizacion──▶ datos de gráficos / PNG (bytes) ──reporte (Jinja2)──▶ reporte.html (bytes)
 
 Todo en MEMORIA: ``ejecutar`` devuelve el HTML y el PNG como ``bytes`` en ``"artefactos"``; nada se
-escribe en disco. ``publicar`` sube esos bytes a SeaweedFS y, justo después, actualiza el reporte
-combinado automático de la sesión (core.combinado.agregar_a_sesion).
+escribe en disco. ``publicar`` sube esos bytes a SeaweedFS y devuelve sus URLs públicas.
 """
 from __future__ import annotations
 
@@ -131,36 +130,19 @@ def ejecutar(metodo: Metodo, solicitud: dict[str, Any], generar_archivos: bool =
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# Publicación: subir a SeaweedFS y actualizar el reporte combinado de la sesión
+# Publicación: subir los artefactos a SeaweedFS
 # ════════════════════════════════════════════════════════════════════════════
-def publicar(almacen: Any, id_: str, metodo: Metodo, descripcion: str, r: dict[str, Any],
-             enunciado: str) -> dict[str, Any]:
+def publicar(almacen: Any, id_: str, metodo: Metodo, descripcion: str, r: dict[str, Any]) -> dict[str, Any]:
     """Final de un cálculo exitoso (lo llama server.py; corre en un hilo, no en el proceso de cálculo).
 
-    1. Sube los artefactos desde memoria: ``almacen.guardar(..., contenido_bytes={"html", "png"})``
-       → grupo06/<id>/{reporte.html, grafico.png, resultado.json, entrada.json, meta.json}.
-    2. Justo después de esa subida exitosa, ``agregar_a_sesion(id_, enunciado)`` regenera
-       grupo06/lote-sesion-actual/reporte_combinado.html con este ejercicio añadido.
+    Sube los artefactos desde memoria: ``almacen.guardar(..., contenido_bytes={"html", "png"})``
+    → grupo06/<id>/{reporte.html, grafico.png, resultado.json, entrada.json, meta.json}.
 
-    Devuelve {"archivos": URLs públicas, "sesion": URL del combinado o None, "avisos": [...]}.
-    Si falla la subida, se propaga storage.ErrorAlmacen (el servidor igual entrega el resultado);
-    si solo falla la sesión, se informa como aviso: el ejercicio ya quedó publicado."""
-    from core.combinado import ErrorCombinado, agregar_a_sesion
-    from storage import ErrorAlmacen
-
+    Devuelve {"archivos": URLs públicas, "avisos": [...]}. Si falla la subida, se propaga
+    storage.ErrorAlmacen (el servidor igual entrega el resultado)."""
     reg = almacen.guardar(id_, metodo, descripcion, r["solicitud"], r["resultado"], r["resumen"],
                           contenido_bytes=r.get("artefactos") or {})
-    out: dict[str, Any] = {"archivos": reg.archivos, "sesion": None, "avisos": []}
-    if "html" not in reg.archivos:               # sin reporte individual no hay nada que combinar
-        return out
-    try:
-        sesion = agregar_a_sesion(id_, enunciado)
-        out["sesion"] = sesion["archivos"]["html"]
-        out["n_sesion"] = sesion["n_ejercicios"]
-    except (ErrorCombinado, ErrorAlmacen, RuntimeError) as e:
-        log.warning("No se pudo actualizar el reporte de la sesión con %s: %s", id_, e)
-        out["avisos"].append(f"El reporte combinado de la sesión no se pudo actualizar ({e}).")
-    return out
+    return {"archivos": reg.archivos, "avisos": []}
 
 
 # ════════════════════════════════════════════════════════════════════════════
