@@ -37,7 +37,7 @@ def resolver_lotka_volterra(alpha, beta, delta, gamma, pre_ini, dep_ini, t_max):
     return solucion.t, solucion.y[0], solucion.y[1]
 
 
-def resolver_calor_2d(difusividad, malla, tiempo, longitud):
+def resolver_calor_2d(difusividad, malla, tiempo, longitud, radio_fuente):
     """
     Resuelve la Ecuación del Calor 2D por diferencias finitas explícitas.
     """
@@ -52,14 +52,15 @@ def resolver_calor_2d(difusividad, malla, tiempo, longitud):
     # 1. Inicializamos la matriz a temperatura ambiente (20°C)
     u = np.full((malla, malla), 20.0)
     
-    # 2. Generamos un sistema de coordenadas espaciales reales (de 0 a L)
+    # 2. Generamos un sistema de coordenadas espaciales reales
     x = np.linspace(0, L, malla)
     y = np.linspace(0, L, malla)
     X, Y = np.meshgrid(x, y)
     
-    # 3. Aplicamos la condición inicial circular: (x-5)^2 + (y-5)^2 <= 4
-    # (Usamos L/2 para que el centro sea dinámico si L cambia, en este caso 5)
-    mascara_circulo = (X - L/2)**2 + (Y - L/2)**2 <= 4.0
+    # 3. Aplicamos la condición inicial circular
+    # Reemplazamos el 4.0 estático por el cuadrado del radio dinámico
+    radio_cuadrado = radio_fuente ** 2
+    mascara_circulo = (X - L/2)**2 + (Y - L/2)**2 <= radio_cuadrado
     u[mascara_circulo] = 100.0
     
     # Variables para rastrear la evolución temporal
@@ -81,3 +82,20 @@ def resolver_calor_2d(difusividad, malla, tiempo, longitud):
         historial_temp_centro.append(u[centro_idx, centro_idx])
         
     return u, np.array(historial_tiempo), np.array(historial_temp_centro)
+
+
+
+def resolver_decaimiento_radiactivo(n0: float, lam: float, t_max: float, num_puntos: int = 100) -> tuple:
+    """
+    Calcula la curva de decaimiento radiactivo mediante su solución analítica exacta.
+    
+    Parámetros:
+        n0: Cantidad inicial de núcleos / sustancia.
+        lam: Constante de desintegración (lambda).
+        t_max: Tiempo total a simular.
+        num_puntos: Resolución del array temporal.
+    """
+    t = np.linspace(0, t_max, num_puntos)
+    n = n0 * np.exp(-lam * t) 
+    
+    return t, n
