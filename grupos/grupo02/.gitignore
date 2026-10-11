@@ -16,29 +16,29 @@ proyecto01/*/*/test/
 # --- Entornos virtuales -----------------------------------------------------
 # El .gitignore de la raiz ya los cubre, pero el validador de entrega los
 # revisa contra ESTE archivo, asi que se repiten aqui.
-.venv/
-.venv*
-venv/
-venv*
-env/
-virtualenv/
-pyvenv.cfg*
+**/.venv/
+**/.venv*
+**/venv/
+**/venv*
+**/env/
+**/virtualenv/
+**/pyvenv.cfg*
 **/site-packages/
 
 # --- Caches de Python --------------------------------------------------------
-__pycache__/
-__pycache__*
-*.py[cod]*
-*$py.class
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-*.egg-info/
+**/__pycache__/
+**/__pycache__*
+**/*.py[cod]*
+**/*$py.class
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
 
 # --- Credenciales: nunca al repositorio -------------------------------------
-.env
-.env*
-.env.*
+**/.env
+**/.env*
+**/.env.*
 !.env.example
 *.pem
 *.key

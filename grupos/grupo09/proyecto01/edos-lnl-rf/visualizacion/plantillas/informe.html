@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe del análisis · Agente de EDOs · grupo 09</title>
+
+<!--
+  PLANTILLA DEL INFORME. Es HTML de verdad: se abre, se edita y se previsualiza
+  como tal. No lleva ningún dato de ningún problema.
+
+  Los datos entran por el <script id="datos"> que el servidor rellena, y el
+  render ocurre aquí, en el navegador, con textContent (nunca innerHTML).
+
+  EL ASPECTO. La referencia no es un panel de control: es un cuaderno de
+  laboratorio. Papel cálido, tinta, una regla al margen con el número de cada
+  análisis colgando fuera del texto, numeración de parágrafo como en un
+  artículo, y las ecuaciones compuestas en un bloque aparte con filetes arriba
+  y abajo. Los números técnicos van en monoespaciada y alineados a la derecha,
+  como la salida de un instrumento.
+
+  LOS COLORES DE LAS FIGURAS NO ESTÁN EN LAS FIGURAS. Cada traza que manda el
+  servidor declara su rol (`meta.rol`) y aquí se le asigna el color leyéndolo
+  de las variables CSS de abajo. Por eso la misma figura se ve correcta en
+  claro y en oscuro: son dos juegos de valores, no un volteo automático.
+
+  La paleta está validada con el verificador de la guía de visualización:
+  banda de luminosidad, piso de croma, separación para daltonismo y contraste
+  contra cada superficie. El verde y el rojo de estable/inestable quedan en la
+  banda de advertencia para deutan, así que el color NO va solo: el marcador
+  cambia de forma (disco / aspa / rombo) y la etiqueta dice la palabra.
+-->
+
+<script src="https://cdn.jsdelivr.net/npm/plotly.js@3.6.0/dist/plotly.min.js" charset="utf-8"></script>
+
+<!-- KaTeX compone las fórmulas del desarrollo. Sin red, cada fórmula se
+     muestra como su LaTeX en monoespaciada: se lee igual, solo que sin componer. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" charset="utf-8"></script>
+
+<style>
+/* ===================== TOKENS ===================== */
+:root{
+  color-scheme: light;
+
+  /* Superficies: papel cálido, no el gris azulado de todos lados. */
+  --papel:        #f5f1e8;
+  --hoja:         #fbf9f4;
+  --hoja-honda:   #efeadd;
+  --regla:        #ddd5c3;
+  --filete:       #c9bfa8;
+
+  /* Tinta */
+  --tinta:        #1a1814;
+  --tinta-media:  #554f42;
+  --tinta-tenue:  #857c6a;
+
+  /* Series: validadas sobre --papel (CVD ΔE 10.3 / normal 18.0, contraste ≥3:1) */
+  --serie-1:      #3449b8;
+  --serie-2:      #c0462a;
+  --serie-3:      #0b8f78;
+  --serie-4:      #b07d10;
+  --serie-5:      #9c3d85;
+
+  /* Estado. Reservados: nunca se reutilizan como "serie 6". */
+  --estable:      #1f7a4d;
+  --inestable:    #b3321f;
+  --indefinido:   #7a7263;
+
+  --rejilla:      #e3dccb;
+  --campo:        #c4bba6;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --papel:      #15161a;
+    --hoja:       #1c1e23;
+    --hoja-honda: #121317;
+    --regla:      #2e3138;
+    --filete:     #3d414a;
+    --tinta:      #ece7dc;
+    --tinta-media:#a9a294;
+    --tinta-tenue:#7d7768;
+    --serie-1:    #6d7fe4;
+    --serie-2:    #dd5f3a;
+    --serie-3:    #13a07f;
+    --serie-4:    #b78f12;
+    --serie-5:    #c05fab;
+    --estable:    #3fa877;
+    --inestable:  #e8604a;
+    --indefinido: #8d8676;
+    --rejilla:    #262930;
+    --campo:      #3a3e46;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --papel:#15161a; --hoja:#1c1e23; --hoja-honda:#121317;
+  --regla:#2e3138; --filete:#3d414a;
+  --tinta:#ece7dc; --tinta-media:#a9a294; --tinta-tenue:#7d7768;
+  --serie-1:#6d7fe4; --serie-2:#dd5f3a; --serie-3:#13a07f;
+  --serie-4:#b78f12; --serie-5:#c05fab;
+  --estable:#3fa877; --inestable:#e8604a; --indefinido:#8d8676;
+  --rejilla:#262930; --campo:#3a3e46;
+}
+
+/* ===================== TIPOGRAFÍA ===================== */
+:root{
+  --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino,
+           "Book Antiqua", Georgia, serif;
+  --sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:  ui-monospace, "Cascadia Mono", "SF Mono", "JetBrains Mono",
+           Consolas, "Liberation Mono", monospace;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--papel); color:var(--tinta);
+  font:16px/1.65 var(--serif);
+  /* Rayado tenue de cuaderno. Puro adorno: se apaga al imprimir. */
+  background-image:
+    repeating-linear-gradient(to bottom,
+      transparent 0 31px, color-mix(in srgb, var(--regla) 30%, transparent) 31px 32px);
+}
+
+/* ===================== ESTRUCTURA ===================== */
+.hoja{max-width:1180px; margin:0 auto; padding:0 20px 80px}
+
+/* --- cabecera: placa de instrumento --- */
+.placa{
+  padding:40px 0 22px; margin-bottom:8px;
+  border-bottom:3px double var(--filete);
+}
+.placa .marca{
+  font:600 11px/1 var(--sans); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin:0 0 14px;
+}
+.placa h1{
+  font:400 clamp(28px,4.2vw,40px)/1.1 var(--serif);
+  margin:0 0 12px; letter-spacing:-.015em;
+}
+.placa .pie-placa{
+  display:flex; flex-wrap:wrap; gap:8px 22px; align-items:baseline;
+  font:13px/1.4 var(--sans); color:var(--tinta-media); margin:0;
+}
+.placa .pie-placa b{font-weight:600; color:var(--tinta); font-variant-numeric:tabular-nums}
+#latido{
+  width:7px; height:7px; border-radius:50%; background:var(--estable);
+  display:inline-block; margin-right:7px; opacity:.3; transition:opacity .25s;
+}
+#latido.activo{opacity:1}
+
+/* --- cuerpo con índice al costado --- */
+.cuerpo{display:grid; grid-template-columns:1fr; gap:0}
+@media (min-width:1040px){
+  .cuerpo{grid-template-columns:1fr 186px; gap:48px; align-items:start}
+}
+
+/* --- índice lateral --- */
+.indice-lateral{display:none}
+@media (min-width:1040px){
+  .indice-lateral{
+    display:block; position:sticky; top:28px; order:2;
+    font:13px/1.5 var(--sans); padding-top:34px;
+  }
+  .indice-lateral h2{
+    font:600 10px/1 var(--sans); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--tinta-tenue); margin:0 0 12px;
+  }
+  .indice-lateral ol{list-style:none; margin:0; padding:0}
+  .indice-lateral li{margin-bottom:9px; display:flex; gap:9px; align-items:baseline}
+  .indice-lateral .n{
+    font:600 11px var(--mono); color:var(--tinta-tenue); min-width:16px;
+    font-variant-numeric:tabular-nums;
+  }
+  .indice-lateral a{
+    color:var(--tinta-media); text-decoration:none;
+    border-bottom:1px solid transparent; padding-bottom:1px;
+  }
+  .indice-lateral a:hover{color:var(--tinta); border-bottom-color:var(--filete)}
+  .indice-lateral .punto{
+    width:6px; height:6px; border-radius:50%; flex:none;
+    margin-top:6px; background:var(--indefinido);
+  }
+  .indice-lateral .punto.ok{background:var(--estable)}
+  .indice-lateral .punto.mal{background:var(--inestable)}
+}
+
+main{order:1; min-width:0}
+
+/* --- estado vacío --- */
+.vacio{
+  margin-top:40px; padding:60px 32px; text-align:center;
+  border:1px solid var(--regla); border-radius:3px; background:var(--hoja);
+}
+.vacio .glifo{
+  font:300 46px/1 var(--serif); color:var(--filete); display:block; margin-bottom:18px;
+}
+.vacio p{margin:0 auto; max-width:46ch; color:var(--tinta-media)}
+.vacio strong{color:var(--tinta); font-weight:600}
+
+/* ===================== UN ANÁLISIS ===================== */
+article.analisis{
+  position:relative; padding:38px 0 30px;
+  border-bottom:1px solid var(--regla);
+}
+article.analisis:last-child{border-bottom:none}
+article.analisis.entrando{animation:aparecer .45s ease-out}
+@keyframes aparecer{
+  from{opacity:0; transform:translateY(10px)}
+  to{opacity:1; transform:none}
+}
+
+/* El número cuelga en el margen, como en un cuaderno rayado. */
+.folio{
+  font:600 13px/1 var(--mono); color:var(--tinta-tenue);
+  font-variant-numeric:tabular-nums; display:block; margin-bottom:10px;
+}
+@media (min-width:760px){
+  article.analisis:has(.folio){padding-left:72px}
+  .folio{
+    position:absolute; left:0; top:40px; margin:0;
+    width:52px; text-align:right; font-size:15px;
+    padding-top:4px; border-top:2px solid var(--tinta);
+  }
+}
+
+article.analisis h2{
+  font:400 clamp(21px,2.6vw,26px)/1.25 var(--serif);
+  margin:0 0 8px; letter-spacing:-.01em;
+}
+.linea-estado{
+  display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;
+  margin:0 0 26px; font:12px/1 var(--sans); color:var(--tinta-tenue);
+}
+
+/* --- distintivo de estado: forma + palabra, nunca color solo --- */
+.distintivo{
+  display:inline-flex; align-items:center; gap:6px;
+  font:600 11px/1 var(--sans); letter-spacing:.09em; text-transform:uppercase;
+  padding:5px 10px 5px 8px; border-radius:2px; border:1px solid currentColor;
+}
+.distintivo .glifo{font-size:12px; line-height:1}
+.distintivo.ok{color:var(--estable)}
+.distintivo.mal{color:var(--inestable)}
+.distintivo.medio{color:var(--indefinido)}
+
+/* --- rúbricas de sección --- */
+.rubrica{
+  font:600 10px/1 var(--sans); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin:32px 0 12px;
+  padding-bottom:7px; border-bottom:1px solid var(--regla);
+}
+.rubrica:first-of-type{margin-top:0}
+
+/* --- el sistema de ecuaciones, compuesto --- */
+.sistema{
+  margin:0; padding:22px 26px; background:var(--hoja);
+  border-top:2px solid var(--tinta); border-bottom:1px solid var(--regla);
+  font:17px/2.05 var(--mono); overflow-x:auto; white-space:pre;
+  letter-spacing:-.01em;
+}
+.sistema .lhs{color:var(--tinta-media)}
+
+/* --- ficha del planteamiento --- */
+.ficha{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  gap:0; margin:0; border-top:1px solid var(--regla);
+}
+.ficha>div{
+  padding:12px 16px 12px 0; border-bottom:1px solid var(--regla);
+  border-right:1px solid var(--regla);
+}
+.ficha dt{
+  font:600 10px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin:0 0 5px;
+}
+.ficha dd{
+  margin:0; font:14px/1.45 var(--mono); word-break:break-word;
+  font-variant-numeric:tabular-nums;
+}
+
+/* --- tablas --- */
+.tabla{width:100%; border-collapse:collapse; font:14px/1.5 var(--sans)}
+.tabla th{
+  text-align:left; font:600 10px/1 var(--sans); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--tinta-tenue);
+  padding:0 14px 9px 0; border-bottom:1px solid var(--filete);
+}
+.tabla th.der, .tabla td.der{text-align:right; padding-right:0}
+.tabla td{padding:11px 14px 11px 0; border-bottom:1px solid var(--regla); vertical-align:top}
+.tabla tr:last-child td{border-bottom:none}
+.tabla .cifra{
+  font:13px/1.5 var(--mono); font-variant-numeric:tabular-nums;
+  color:var(--tinta-media); white-space:nowrap;
+}
+.tabla .glosa{display:block; font:12px/1.45 var(--sans); color:var(--tinta-tenue); margin-top:3px}
+.tabla .nombre{font-weight:600}
+
+/* Medidor de holgura: cuánto margen sobró en una prueba, en escala log.
+   No es decoración -- "pasó" y "pasó por los pelos" no son lo mismo. */
+.holgura{
+  display:block; width:72px; height:5px; margin-top:6px; margin-left:auto;
+  background:var(--hoja-honda); border-radius:2px; overflow:hidden;
+}
+.holgura i{display:block; height:100%; border-radius:2px; background:var(--estable)}
+.holgura.mal i{background:var(--inestable)}
+
+/* Marca de aprobado/fallado en la tabla */
+.marca{font:600 15px/1 var(--mono)}
+.marca.ok{color:var(--estable)}
+.marca.mal{color:var(--inestable)}
+
+/* --- figuras --- */
+figure.lamina{
+  margin:18px 0 26px; padding:10px 6px 6px;
+  background:var(--hoja); border:1px solid var(--regla); border-radius:3px;
+  min-height:70px;
+}
+figure.lamina figcaption{
+  font:600 10px/1 var(--sans); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--tinta-tenue); padding:4px 10px 10px;
+}
+
+/* --- fallo --- */
+.fallo{
+  padding:16px 20px; background:var(--hoja);
+  border-left:3px solid var(--inestable);
+}
+.fallo .encabezado{
+  font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--inestable); display:block; margin-bottom:7px;
+}
+.fallo .detalle{font:15px/1.6 var(--serif); color:var(--tinta); margin:0}
+
+/* --- listas --- */
+.apuntes{margin:0; padding-left:22px; color:var(--tinta-media); font-size:15px}
+.apuntes li{margin-bottom:7px}
+.apuntes li::marker{color:var(--filete)}
+.apuntes strong{color:var(--tinta); font-weight:600}
+
+/* --- colofón --- */
+.colofon{
+  margin-top:48px; padding-top:18px; border-top:3px double var(--filete);
+  font:12px/1.6 var(--sans); color:var(--tinta-tenue);
+  display:flex; flex-wrap:wrap; gap:6px 18px; justify-content:space-between;
+}
+
+/* ===================== DESARROLLO MATEMÁTICO ===================== */
+.enunciado{
+  margin:0 0 22px; padding:14px 18px; background:var(--hoja);
+  border-left:3px solid var(--filete); font:16px/1.6 var(--serif); color:var(--tinta);
+}
+.enunciado .marca-enunciado{
+  display:block; font:600 10px/1 var(--sans); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--tinta-tenue); margin-bottom:8px;
+}
+.fichas{display:flex; flex-wrap:wrap; gap:6px 8px; margin:0 0 18px}
+.ficha-chip{
+  font:600 11px/1 var(--sans); letter-spacing:.06em; padding:6px 9px; border-radius:2px;
+  border:1px solid var(--regla); color:var(--tinta-media); background:var(--hoja);
+}
+.ficha-chip b{color:var(--tinta); font-weight:700}
+.desarrollo section{margin:0 0 26px}
+.desarrollo h3{
+  font:600 17px/1.35 var(--serif); margin:0 0 10px; color:var(--tinta);
+  padding-bottom:5px; border-bottom:1px solid var(--regla);
+}
+.desarrollo h3 .num{font:600 12px var(--mono); color:var(--tinta-tenue); margin-right:8px}
+.formula{
+  margin:6px 0; padding:4px 2px; overflow-x:auto; overflow-y:hidden;
+  font:14px/1.6 var(--mono); color:var(--tinta);
+}
+.formula .katex-display{margin:.35em 0}
+.formula.destacada{
+  margin:10px 0; padding:6px 14px; background:var(--hoja);
+  border:1px solid var(--filete); border-left:3px solid var(--serie-1); border-radius:2px;
+}
+.rotulo{margin:16px 0 4px; font:600 14px/1.5 var(--serif); color:var(--tinta)}
+.desarrollo p.prosa{margin:6px 0 8px; font:15px/1.6 var(--serif); color:var(--tinta-media)}
+.desarrollo .tabla{margin:8px 0 12px}
+.conclusiones{margin:0; padding-left:22px; font:15.5px/1.6 var(--serif); color:var(--tinta)}
+.conclusiones li{margin-bottom:8px}
+.alcance{
+  margin:0 0 20px; padding:14px 18px; background:var(--hoja);
+  border-left:3px solid var(--inestable);
+}
+.alcance strong{display:block; font:600 11px/1 var(--sans); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--inestable); margin-bottom:6px}
+.alcance p{margin:4px 0 0; font:15px/1.55 var(--serif)}
+.laminas{display:grid; grid-template-columns:1fr; gap:0 18px}
+@media (min-width:980px){
+  .laminas.varias{grid-template-columns:1fr 1fr}
+  .laminas.varias figure.lamina.ancha{grid-column:1 / -1}
+}
+.tipo-prueba{
+  display:inline-block; margin-left:6px; font:600 9px/1 var(--sans); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--tinta-tenue); border:1px solid var(--regla);
+  padding:2px 4px; border-radius:2px; vertical-align:middle;
+}
+
+/* ===================== IMPRESIÓN ===================== */
+@media print{
+  body{background:#fff; background-image:none; color:#000; font-size:11pt}
+  .hoja{max-width:none; padding:0}
+  .cuerpo{display:block}
+  .indice-lateral, #latido{display:none}
+  article.analisis{break-inside:avoid; padding-left:0; border-bottom:1px solid #bbb}
+  .folio{position:static; width:auto; text-align:left; border-top:none}
+  figure.lamina{break-inside:avoid; border-color:#bbb}
+  .sistema{background:#f7f7f7; border-color:#000}
+}
+@media (prefers-reduced-motion:reduce){
+  article.analisis.entrando{animation:none}
+  #latido{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="hoja">
+  <header class="placa">
+    <p class="marca">UNMSM · Laboratorio · Grupo 09</p>
+    <h1 id="titulo">Informe del análisis</h1>
+    <p class="pie-placa">
+      <span>Agente de EDOs y sistemas dinámicos</span>
+      <span><span id="latido"></span><span id="resumen"></span></span>
+    </p>
+  </header>
+
+  <div class="cuerpo">
+    <nav class="indice-lateral" id="indice" hidden>
+      <h2>En este informe</h2>
+      <ol id="indice-lista"></ol>
+    </nav>
+    <main id="secciones"></main>
+  </div>
+
+  <footer class="colofon">
+    <span id="colofon-izq"></span>
+    <span id="colofon-der"></span>
+  </footer>
+</div>
+
+<!-- El servidor reemplaza el contenido de este script por el JSON del análisis. -->
+<script type="application/json" id="datos">{"entradas": [], "sesion": null, "refresco": 0, "datos_url": null}</script>
+
+<script>
+(function () {
+  "use strict";
+
+  var ESTADO = leerDatos();
+  var dibujadas = 0;
+
+  function leerDatos() {
+    try {
+      return JSON.parse(document.getElementById("datos").textContent);
+    } catch (e) {
+      return { entradas: [], sesion: null, refresco: 0, datos_url: null };
+    }
+  }
+
+  // ---------- paleta: una sola fuente, el CSS de arriba ----------
+  function tono(nombre) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue("--" + nombre).trim();
+  }
+
+  function paleta() {
+    return {
+      series: ["serie-1", "serie-2", "serie-3", "serie-4", "serie-5"].map(tono),
+      estable: tono("estable"),
+      inestable: tono("inestable"),
+      indefinido: tono("indefinido"),
+      tinta: tono("tinta"),
+      tintaMedia: tono("tinta-media"),
+      tintaTenue: tono("tinta-tenue"),
+      rejilla: tono("rejilla"),
+      campo: tono("campo"),
+      hoja: tono("hoja")
+    };
+  }
+
+  // Cada traza dice QUÉ es (meta.rol); aquí se decide de qué color va.
+  function colorDeRol(rol, p) {
+    if (!rol) return null;
+    if (rol.indexOf("serie:") === 0) {
+      return p.series[parseInt(rol.slice(6), 10) % p.series.length];
+    }
+    if (rol.indexOf("equilibrio:") === 0 || rol.indexOf("rama:") === 0) {
+      var estado = rol.slice(rol.indexOf(":") + 1);
+      return estado === "estable" ? p.estable
+           : estado === "inestable" ? p.inestable : p.indefinido;
+    }
+    switch (rol) {
+      case "campo":        return p.campo;
+      case "nivel":        return p.campo;
+      case "trayectoria":  return p.series[0];
+      case "trayectoria3d": return p.series[0];
+      case "orbita":       return p.tintaTenue;
+      case "inicio":       return p.estable;
+      case "final":        return p.inestable;
+      case "crece":        return p.estable;
+      case "decrece":      return p.inestable;
+      case "analitica":    return p.series[0];
+      case "numerica":     return p.series[1];
+      case "familia":      return p.tintaTenue;
+      case "particular":   return p.series[2];
+      case "condicion_inicial": return p.series[3];
+      case "asintota":     return p.inestable;
+      case "separatriz":   return p.inestable;
+      case "variedad_estable":   return p.series[0];
+      case "variedad_inestable": return p.series[1];
+      case "nulclina_x":   return p.series[2];
+      case "nulclina_y":   return p.series[3];
+      case "direccion":    return p.series[4];
+      case "ciclo":        return p.estable;
+      case "lazo":         return p.series[4];
+      case "frontera":     return p.series[3];
+      case "critico":      return p.series[4];
+      case "region":       return p.series[2];
+      case "mapa":         return p.series[0];
+      case "diagonal":     return p.tintaTenue;
+      case "telarana":     return p.series[1];
+      case "referencia":   return p.tintaTenue;
+      default:             return null;
+    }
+  }
+
+  // "#3449b8" → "rgba(52,73,184,0.14)": las regiones se sombrean con el
+  // color de su rol, pero transparentes para no tapar las curvas.
+  function translucido(color, alfa) {
+    var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color || "");
+    if (!m) return color;
+    return "rgba(" + parseInt(m[1], 16) + "," + parseInt(m[2], 16) + "," +
+           parseInt(m[3], 16) + "," + alfa + ")";
+  }
+
+  var EJE = function (p) {
+    return {
+      gridcolor: p.rejilla, zerolinecolor: p.rejilla, linecolor: p.rejilla,
+      tickfont: { color: p.tintaTenue, size: 11 },
+      title: { font: { color: p.tintaMedia, size: 12 } },
+      showline: true, ticks: "outside", ticklen: 4, tickcolor: p.rejilla
+    };
+  };
+
+  function vestir(spec) {
+    var p = paleta();
+    var datos = (spec.data || []).map(function (traza) {
+      var t = Object.assign({}, traza);
+      var color = colorDeRol((t.meta || {}).rol, p);
+      if (color && t.type === "contour") {
+        // Curvas de nivel de un solo tono: lo que importa es la forma, no la escala.
+        t.colorscale = [[0, color], [1, color]];
+        t.showscale = false;
+        return t;
+      }
+      if (color && t.fill === "toself") {
+        t.fillcolor = translucido(color, 0.14);
+        t.line = Object.assign({}, t.line, { color: "rgba(0,0,0,0)" });
+        return t;
+      }
+      if (color) {
+        if (t.line && !t.line.colorscale) t.line = Object.assign({}, t.line, { color: color });
+        if (t.marker) {
+          t.marker = Object.assign({}, t.marker, { color: color });
+          // Un aro del color del papel separa un marcador de lo que tenga debajo.
+          if (t.marker.line) t.marker.line = Object.assign({}, t.marker.line, { color: p.hoja });
+        }
+        if (t.textfont === undefined && t.mode && t.mode.indexOf("text") >= 0) {
+          t.textfont = { color: p.tintaMedia, size: 11 };
+        }
+      }
+      return t;
+    });
+
+    var eje = EJE(p);
+    var layout = Object.assign({}, spec.layout, {
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      font: { color: p.tintaMedia, size: 12,
+              family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' },
+      title: Object.assign({}, spec.layout && spec.layout.title, {
+        font: { color: p.tinta, size: 15 }, x: 0, xanchor: "left", pad: { l: 6 }
+      }),
+      legend: { font: { color: p.tintaMedia, size: 11 }, bgcolor: "rgba(0,0,0,0)",
+                orientation: "h", y: -0.18, x: 0 },
+      xaxis: Object.assign({}, spec.layout && spec.layout.xaxis, eje),
+      yaxis: Object.assign({}, spec.layout && spec.layout.yaxis, eje),
+      hoverlabel: { bgcolor: p.hoja, bordercolor: p.tintaTenue,
+                    font: { color: p.tinta, size: 12 } }
+    });
+    if (spec.layout && spec.layout.scene) {
+      var ejeTres = Object.assign({ backgroundcolor: "rgba(0,0,0,0)", showbackground: false },
+                                  eje);
+      layout.scene = Object.assign({}, spec.layout.scene, {
+        xaxis: Object.assign({}, spec.layout.scene.xaxis, ejeTres),
+        yaxis: Object.assign({}, spec.layout.scene.yaxis, ejeTres),
+        zaxis: Object.assign({}, spec.layout.scene.zaxis, ejeTres)
+      });
+    }
+    // La recta F = 0 de la línea de fase.
+    if (layout.shapes) {
+      layout.shapes = layout.shapes.map(function (s) {
+        return Object.assign({}, s, {
+          line: Object.assign({}, s.line, { color: p.tintaTenue })
+        });
+      });
+    }
+    return { data: datos, layout: layout };
+  }
+
+  // ---------- formato ----------
+  function num(valor, modo) {
+    if (valor === null || valor === undefined || valor === "") return "—";
+    var n = Number(valor);
+    if (!isFinite(n)) return String(valor);
+    if (modo === "exp") return n.toExponential(2);
+    if (n === 0) return "0";
+    if (Math.abs(n) >= 1e5 || Math.abs(n) < 1e-4) return n.toExponential(2);
+    return parseFloat(n.toPrecision(6)).toString();
+  }
+
+  function autovalor(v) {
+    if (v && typeof v === "object" && "re" in v) {
+      if (v.im) {
+        return num(v.re) + (v.im >= 0 ? " + " : " − ") + num(Math.abs(v.im)) + "i";
+      }
+      return num(v.re);
+    }
+    return num(v);
+  }
+
+  // Todo nodo se crea con textContent: lo que escribió el usuario en un título
+  // o en un nombre de variable entra como texto y no puede volverse marcado.
+  function el(etiqueta, clase, texto) {
+    var nodo = document.createElement(etiqueta);
+    if (clase) nodo.className = clase;
+    if (texto !== undefined && texto !== null) nodo.textContent = String(texto);
+    return nodo;
+  }
+
+  function estadoDe(entrada) {
+    if (!entrada.ok) return { clase: "mal", glifo: "✕", palabra: "no superado" };
+    if ((entrada.verificacion || {}).ok) return { clase: "ok", glifo: "✓", palabra: "verificado" };
+    return { clase: "medio", glifo: "◇", palabra: "sin verificar" };
+  }
+
+  // ---------- bloques ----------
+  function bloqueSistema(cfg) {
+    var variables = cfg.variables_estado || [], ecuaciones = cfg.ecuaciones || [];
+    if (!variables.length || !ecuaciones.length) return null;
+    var t = cfg.variable_independiente || "t";
+    var pre = el("pre", "sistema");
+    variables.forEach(function (v, i) {
+      pre.appendChild(el("span", "lhs", "d" + v + "/d" + t + "  =  "));
+      pre.appendChild(document.createTextNode(String(ecuaciones[i] || "")));
+      if (i < variables.length - 1) pre.appendChild(document.createTextNode("\n"));
+    });
+    return pre;
+  }
+
+  function bloqueFicha(cfg) {
+    var filas = [], variables = cfg.variables_estado || [];
+    if (cfg.y0 && cfg.y0.length) {
+      filas.push(["Condición inicial", cfg.y0.map(function (v, i) {
+        return (variables[i] || ("x" + i)) + " = " + num(v);
+      }).join("   ")]);
+    }
+    if (cfg.intervalo && cfg.intervalo.length === 2) {
+      filas.push(["Intervalo", (cfg.variable_independiente || "t") + " ∈ [" +
+                  num(cfg.intervalo[0]) + ", " + num(cfg.intervalo[1]) + "]"]);
+    }
+    if (cfg.parametros && Object.keys(cfg.parametros).length) {
+      filas.push(["Parámetros", Object.keys(cfg.parametros).map(function (k) {
+        return k + " = " + num(cfg.parametros[k]);
+      }).join("   ")]);
+    }
+    if (cfg.metodo) filas.push(["Integrador", cfg.metodo]);
+    if (cfg.rtol != null) {
+      filas.push(["Tolerancias", "rtol " + num(cfg.rtol, "exp") + "   atol " + num(cfg.atol, "exp")]);
+    }
+    if (cfg.puntos) filas.push(["Malla", cfg.puntos + " puntos"]);
+    if (!filas.length) return null;
+
+    var dl = el("dl", "ficha");
+    filas.forEach(function (par) {
+      var caja = el("div");
+      caja.appendChild(el("dt", null, par[0]));
+      caja.appendChild(el("dd", null, par[1]));
+      dl.appendChild(caja);
+    });
+    return dl;
+  }
+
+  function cabeceraTabla(columnas) {
+    var thead = el("thead"), fila = el("tr");
+    columnas.forEach(function (c) {
+      var th = el("th", c.der ? "der" : null, c.texto);
+      fila.appendChild(th);
+    });
+    thead.appendChild(fila);
+    return thead;
+  }
+
+  function bloqueEquilibrios(analisis) {
+    var est = (analisis || {}).estabilidad || {};
+    var puntos = est.equilibrios || [];
+    if (!puntos.length) {
+      return est.nota ? el("p", "apuntes", est.nota) : null;
+    }
+    var tabla = el("table", "tabla");
+    tabla.appendChild(cabeceraTabla([
+      { texto: "Punto" }, { texto: "Clasificación" }, { texto: "Autovalores" }
+    ]));
+    var tbody = el("tbody");
+    puntos.forEach(function (eq) {
+      var tr = el("tr");
+      tr.appendChild(el("td", "cifra",
+        "(" + (eq.punto || []).map(function (c) { return num(c); }).join(",  ") + ")"));
+
+      var clas = String(eq.clasificacion || "?");
+      var clase = clas.indexOf("estable") === 0 ? "ok"
+                : (clas.indexOf("inestable") === 0 ? "mal" : "medio");
+      var glifo = clase === "ok" ? "●" : (clase === "mal" ? "✕" : "◇");
+      var td = el("td");
+      var marca = el("span", "distintivo " + clase);
+      marca.appendChild(el("span", "glifo", glifo));
+      marca.appendChild(document.createTextNode(eq.tipo || clas));
+      td.appendChild(marca);
+      tr.appendChild(td);
+
+      tr.appendChild(el("td", "cifra",
+        (eq.autovalores || []).map(autovalor).join("    ")));
+      tbody.appendChild(tr);
+    });
+    tabla.appendChild(tbody);
+    return tabla;
+  }
+
+  // Cuánto margen sobró, en décadas: un "pasó" holgado y un "pasó raspando"
+  // no se leen igual, y en una verificación esa diferencia importa.
+  function medidorDeHolgura(medida, umbral, ok) {
+    if (medida == null || umbral == null) return null;
+    var m = Math.abs(Number(medida)), u = Math.abs(Number(umbral));
+    if (!isFinite(m) || !isFinite(u) || u === 0) return null;
+    var decadas = Math.log10(u / Math.max(m, u * 1e-6));   // >0 = sobró margen
+    var fraccion = Math.max(0.06, Math.min(1, (decadas + 1) / 7));
+    var caja = el("span", "holgura" + (ok ? "" : " mal"));
+    var barra = el("i");
+    barra.style.width = (ok ? fraccion * 100 : 100) + "%";
+    caja.appendChild(barra);
+    caja.title = ok ? ("Pasó con " + decadas.toFixed(1) + " décadas de margen")
+                    : "No pasó";
+    return caja;
+  }
+
+  var CLAVES_MEDIDA = ["desvio", "residuo_relativo", "desvio_ventana",
+                       "error_maximo", "residuo", "medida"];
+
+  function bloqueVerificacion(verificacion) {
+    var pruebas = (verificacion || {}).pruebas || [];
+    if (!pruebas.length) return null;
+    var tabla = el("table", "tabla");
+    tabla.appendChild(cabeceraTabla([
+      { texto: "" }, { texto: "Prueba" },
+      { texto: "Medido", der: true }, { texto: "Umbral", der: true }
+    ]));
+    var tbody = el("tbody");
+    pruebas.forEach(function (p) {
+      var tr = el("tr");
+      var tdMarca = el("td");
+      // ◇: la comprobación no pudo decidir; no cuenta en contra ni a favor.
+      var concluyente = p.concluyente !== false;
+      tdMarca.appendChild(el("span", "marca " + (!concluyente ? "" : (p.ok ? "ok" : "mal")),
+                             !concluyente ? "◇" : (p.ok ? "✓" : "✕")));
+      tr.appendChild(tdMarca);
+
+      var td = el("td");
+      td.appendChild(el("span", "nombre", p.nombre || "?"));
+      if (p.tipo) td.appendChild(el("span", "tipo-prueba", p.tipo === "simbolica" ? "simbólica" : "numérica"));
+      if (p.descripcion) td.appendChild(el("span", "glosa", p.descripcion));
+      tr.appendChild(td);
+
+      var medida = null;
+      for (var i = 0; i < CLAVES_MEDIDA.length; i++) {
+        if (CLAVES_MEDIDA[i] in p) { medida = p[CLAVES_MEDIDA[i]]; break; }
+      }
+      var umbral = ("umbral_efectivo" in p) ? p.umbral_efectivo : p.umbral;
+
+      var tdMedida = el("td", "cifra der", num(medida, "exp"));
+      var medidor = medidorDeHolgura(medida, umbral, p.ok);
+      if (medidor) tdMedida.appendChild(medidor);
+      tr.appendChild(tdMedida);
+      tr.appendChild(el("td", "cifra der", num(umbral, "exp")));
+      tbody.appendChild(tr);
+    });
+    tabla.appendChild(tbody);
+    return tabla;
+  }
+
+  function listaDeNotas(notas) {
+    if (!notas || !notas.length) return null;
+    var ul = el("ul", "apuntes");
+    notas.forEach(function (n) { ul.appendChild(el("li", null, n)); });
+    return ul;
+  }
+
+  function conRubrica(contenedor, texto, nodo) {
+    if (!nodo) return;
+    contenedor.appendChild(el("p", "rubrica", texto));
+    contenedor.appendChild(nodo);
+  }
+
+  var NOMBRE_DE_FIGURA = {
+    series: "Series temporales",
+    linea_fase: "Línea de fase",
+    plano_fase: "Retrato de fase",
+    trayectoria_3d: "Trayectoria en el espacio de fases",
+    solucion: "Solución",
+    retrato_fase: "Retrato de fase",
+    retrato_antes: "Antes de la bifurcación",
+    retrato_despues: "Después de la bifurcación",
+    diagrama_bifurcacion: "Diagrama de bifurcación",
+    traza_determinante: "Plano traza-determinante",
+    telarana: "Diagrama de telaraña",
+    convergencia_lyapunov: "Convergencia del exponente de Lyapunov",
+    separacion: "Separación"
+  };
+
+  function nombreDeFigura(nombre) {
+    if (NOMBRE_DE_FIGURA[nombre]) return NOMBRE_DE_FIGURA[nombre];
+    var m = /^retrato_fase_(\d+)$/.exec(nombre || "");
+    return m ? "Retrato de fase · régimen " + m[1] : (nombre || "Figura");
+  }
+
+  // ---------- fórmulas ----------
+  // Las fórmulas las escribe el servidor (salen de sympy), pero se componen con
+  // KaTeX sin `trust`: no hay forma de que una fórmula inserte marcado. Sin
+  // KaTeX (sin red) queda el LaTeX como texto, que se sigue leyendo.
+  function componer(nodo, fuente, enBloque) {
+    if (window.katex) {
+      try {
+        window.katex.render(String(fuente), nodo, { displayMode: !!enBloque, throwOnError: false,
+                                                     strict: "ignore", trust: false });
+        return nodo;
+      } catch (e) { /* cae al texto plano */ }
+    }
+    nodo.textContent = String(fuente);
+    return nodo;
+  }
+
+  // Texto con LaTeX en línea entre $...$ (títulos de sección).
+  function textoConFormulas(contenedor, texto) {
+    String(texto || "").split(/(\$[^$]+\$)/).forEach(function (trozo) {
+      if (!trozo) return;
+      if (trozo.charAt(0) === "$" && trozo.length > 1 && trozo.charAt(trozo.length - 1) === "$") {
+        contenedor.appendChild(componer(el("span"), trozo.slice(1, -1), false));
+      } else {
+        contenedor.appendChild(document.createTextNode(trozo));
+      }
+    });
+    return contenedor;
+  }
+
+  function bloqueDeDesarrollo(bloque) {
+    if (bloque.tipo === "formula") {
+      return componer(el("div", "formula" + (bloque.destacada ? " destacada" : "")), bloque.latex, true);
+    }
+    if (bloque.tipo === "rotulo") {
+      return componer(el("div", "rotulo"), bloque.latex, false);
+    }
+    if (bloque.tipo === "tabla") {
+      var tabla = el("table", "tabla");
+      tabla.appendChild(cabeceraTabla((bloque.columnas || []).map(function (c) { return { texto: c }; })));
+      var tbody = el("tbody");
+      (bloque.filas || []).forEach(function (fila) {
+        var tr = el("tr");
+        fila.forEach(function (celda) {
+          var td = el("td", "cifra");
+          if (celda && celda.latex) componer(td, celda.latex, false);
+          else td.textContent = celda && celda.texto !== undefined ? celda.texto : "";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      tabla.appendChild(tbody);
+      return tabla;
+    }
+    return el("p", "prosa", bloque.texto || "");
+  }
+
+  function bloqueFichas(desarrollo) {
+    var fichas = el("div", "fichas");
+    function chip(etiqueta, valor) {
+      if (!valor) return;
+      var c = el("span", "ficha-chip");
+      c.appendChild(document.createTextNode(etiqueta + " "));
+      c.appendChild(el("b", null, valor));
+      fichas.appendChild(c);
+    }
+    chip("Familia", desarrollo.nombre);
+    chip("Método", desarrollo.metodo);
+    chip("Tratamiento", (desarrollo.tratamiento || []).join(" · "));
+    if ((desarrollo.balotario || []).length) chip("Balotario", desarrollo.balotario.join(", "));
+    chip("", desarrollo.tema);
+    return fichas;
+  }
+
+  function bloqueDesarrollo(desarrollo) {
+    if (!desarrollo || !(desarrollo.secciones || []).length) return null;
+    var caja = el("div", "desarrollo");
+    caja.appendChild(bloqueFichas(desarrollo));
+    desarrollo.secciones.forEach(function (seccion, i) {
+      var s = el("section");
+      s.dataset.clave = seccion.clave || "";
+      var h = el("h3");
+      h.appendChild(el("span", "num", String(i + 1).padStart(2, "0")));
+      textoConFormulas(h, seccion.titulo);
+      s.appendChild(h);
+      (seccion.bloques || []).forEach(function (b) { s.appendChild(bloqueDeDesarrollo(b)); });
+      caja.appendChild(s);
+    });
+    return caja;
+  }
+
+  function listaDeConclusiones(desarrollo) {
+    var conclusiones = (desarrollo || {}).conclusiones || [];
+    if (!conclusiones.length) return null;
+    var ul = el("ul", "conclusiones");
+    conclusiones.forEach(function (c) { ul.appendChild(el("li", null, c)); });
+    return ul;
+  }
+
+  // Lo que no pertenece a los temas del proyecto se dice arriba, no al pie:
+  // el mensaje trae una línea por tema, y cada línea va en su párrafo.
+  function avisoDeAlcance(entrada) {
+    var avisos = ((entrada.desarrollo || {}).advertencias || []).filter(function (a) {
+      return a.indexOf("Fuera del alcance") === 0;
+    });
+    if (entrada.etapa === "fuera_de_alcance" && entrada.error) avisos.push(entrada.error);
+    if (!avisos.length) return null;
+    var caja = el("div", "alcance");
+    caja.appendChild(el("strong", null, "Fuera del alcance del proyecto"));
+    avisos.forEach(function (a) {
+      String(a).split("\n").forEach(function (linea) {
+        if (linea.trim()) caja.appendChild(el("p", null, linea.trim()));
+      });
+    });
+    return caja;
+  }
+
+  // ---------- una sección ----------
+  function construirAnalisis(entrada, indice) {
+    var cfg = entrada.configuracion || {};
+    var art = el("article", "analisis entrando");
+    art.id = "analisis-" + indice;
+
+    // Numerar "01" cuando no hay un 02 no dice nada.
+    if ((ESTADO.entradas || []).length > 1) {
+      art.appendChild(el("span", "folio", String(indice).padStart(2, "0")));
+    }
+    art.appendChild(el("h2", null, entrada.titulo || ("Análisis " + indice)));
+
+    var estado = estadoDe(entrada);
+    var linea = el("p", "linea-estado");
+    var distintivo = el("span", "distintivo " + estado.clase);
+    distintivo.appendChild(el("span", "glifo", estado.glifo));
+    distintivo.appendChild(document.createTextNode(estado.palabra));
+    linea.appendChild(distintivo);
+    if (entrada.momento) linea.appendChild(el("span", null, entrada.momento));
+    var n = (cfg.variables_estado || []).length;
+    if (n) linea.appendChild(el("span", null, n + (n === 1 ? " variable" : " variables")));
+    art.appendChild(linea);
+
+    // El enunciado, si vino: es lo que se está respondiendo.
+    if (entrada.enunciado) {
+      var enunciado = el("div", "enunciado");
+      enunciado.appendChild(el("span", "marca-enunciado", "Enunciado"));
+      textoConFormulas(enunciado, entrada.enunciado);
+      art.appendChild(enunciado);
+    }
+
+    var alcance = avisoDeAlcance(entrada);
+    if (alcance) art.appendChild(alcance);
+    if (!entrada.ok && entrada.etapa === "fuera_de_alcance") return art;
+
+    if (!entrada.ok) {
+      var sistema = bloqueSistema(cfg);
+      if (sistema) art.appendChild(sistema);
+      var fallo = el("div", "fallo");
+      fallo.appendChild(el("span", "encabezado",
+                           "Etapa no superada · " + (entrada.etapa || "desconocida")));
+      fallo.appendChild(el("p", "detalle", entrada.error || ""));
+      art.appendChild(fallo);
+      conRubrica(art, "Verificación", bloqueVerificacion(entrada.verificacion));
+      conRubrica(art, "Planteamiento", bloqueFicha(cfg));
+      return art;
+    }
+
+    // Primero las gráficas: son lo que el usuario viene a ver. Las del
+    // desarrollo (las que responden la pregunta) llegan antes que las numéricas.
+    var figuras = entrada.figuras || [];
+    if (figuras.length) {
+      var laminas = el("div", "laminas" + (figuras.length > 1 ? " varias" : ""));
+      figuras.forEach(function (figura, i) {
+        var ancha = i === 0 && figuras.length % 2 === 1;
+        var lamina = el("figure", "lamina" + (ancha ? " ancha" : ""));
+        lamina.dataset.figura = JSON.stringify(figura.spec || {});
+        lamina.appendChild(el("figcaption", null, nombreDeFigura(figura.nombre)));
+        laminas.appendChild(lamina);
+      });
+      art.appendChild(laminas);
+    }
+
+    conRubrica(art, "Conclusiones", listaDeConclusiones(entrada.desarrollo));
+    var desarrollo = bloqueDesarrollo(entrada.desarrollo);
+    if (desarrollo) {
+      conRubrica(art, "Desarrollo matemático", desarrollo);
+    } else {
+      var sistemaSolo = bloqueSistema(cfg);
+      if (sistemaSolo) art.appendChild(sistemaSolo);
+    }
+    conRubrica(art, "Verificación", bloqueVerificacion(entrada.verificacion));
+    conRubrica(art, "Equilibrios con los parámetros dados", bloqueEquilibrios(entrada.analisis));
+    conRubrica(art, "Notas", listaDeNotas(entrada.notas));
+    conRubrica(art, "Configuración del cálculo", bloqueFicha(cfg));
+    return art;
+  }
+
+  function dibujarFiguras(art) {
+    if (typeof Plotly === "undefined") return;
+    Array.prototype.forEach.call(art.querySelectorAll("figure[data-figura]"), function (lamina) {
+      var spec;
+      try { spec = JSON.parse(lamina.dataset.figura); } catch (e) { return; }
+      delete lamina.dataset.figura;
+      var caja = document.createElement("div");
+      lamina.insertBefore(caja, lamina.firstChild);
+      var vestida = vestir(spec);
+      Plotly.newPlot(caja, vestida.data, vestida.layout,
+                     { displaylogo: false, responsive: true,
+                       modeBarButtonsToRemove: ["lasso2d", "select2d"] });
+    });
+  }
+
+  // ---------- índice lateral ----------
+  function anotarIndice(entrada, indice) {
+    var nav = document.getElementById("indice");
+    var lista = document.getElementById("indice-lista");
+    // Un índice de un solo renglón no orienta a nadie; es ruido al lado del
+    // texto. En modo "ultimo" el informe tiene siempre una sección, así que
+    // esta comprobación lo apaga del todo sin que haga falta saber el modo.
+    nav.hidden = (ESTADO.entradas || []).length < 2;
+    var estado = estadoDe(entrada);
+    var li = el("li");
+    li.appendChild(el("span", "punto " + (estado.clase === "medio" ? "" : estado.clase)));
+    var a = el("a", null, entrada.titulo || ("Análisis " + indice));
+    a.href = "#analisis-" + indice;
+    li.appendChild(a);
+    // Arriba, igual que las secciones: el índice y el cuerpo tienen que leerse
+    // en el mismo orden o el índice deja de servir para orientarse.
+    lista.insertBefore(li, lista.firstChild);
+  }
+
+  // ---------- render incremental ----------
+  function pintar() {
+    var contenedor = document.getElementById("secciones");
+    var entradas = ESTADO.entradas || [];
+
+    document.getElementById("resumen").textContent = !entradas.length
+      ? "todavía sin análisis"
+      : (entradas.length === 1
+           ? "generado " + (ESTADO.momento || "")
+           : entradas.length + " análisis · actualizado " + (ESTADO.momento || ""));
+    document.getElementById("colofon-izq").textContent =
+      "Agente de EDOs y sistemas dinámicos · grupo 09 · UNMSM";
+
+    if (!entradas.length) {
+      if (!contenedor.querySelector(".vacio")) {
+        contenedor.textContent = "";
+        var caja = el("div", "vacio");
+        caja.appendChild(el("span", "glifo", "∫"));
+        var p = el("p");
+        p.appendChild(el("strong", null, "El informe todavía está vacío. "));
+        p.appendChild(document.createTextNode(
+          "Pídele al agente que resuelva o analice un problema: aparecerá aquí con " +
+          "sus gráficas, su desarrollo matemático y su verificación, sin que tengas " +
+          "que recargar."));
+        caja.appendChild(p);
+        contenedor.appendChild(caja);
+      }
+      return;
+    }
+    if (contenedor.querySelector(".vacio")) { contenedor.textContent = ""; dibujadas = 0; }
+
+    // Modo "ultimo": el servidor manda una sola entrada y cada pregunta
+    // reemplaza a la anterior. Como la lista no crece, el render incremental no
+    // detectaría el cambio -- hay que rehacer la sección.
+    if (entradas.length === 1 && dibujadas === 1) {
+      contenedor.textContent = "";
+      document.getElementById("indice-lista").textContent = "";
+      dibujadas = 0;
+    }
+
+    // Lo último preguntado va ARRIBA: al abrir el informe, lo primero que se ve
+    // es la respuesta que se acaba de pedir, no la primera de la conversación.
+    //
+    // La numeración NO se invierte: el análisis 1 sigue siendo el primero que se
+    // preguntó. Renumerar al insertar cambiaría el número de secciones que el
+    // usuario ya tiene a la vista, y los enlaces del índice apuntarían a otra
+    // cosa de un segundo para otro.
+    //
+    // Solo se construye lo que no está en pantalla, para no redibujar una
+    // gráfica que el usuario ya movió.
+    var altoAntes = document.documentElement.scrollHeight;
+    var desplazado = window.scrollY;
+
+    for (var i = dibujadas; i < entradas.length; i++) {
+      var art = construirAnalisis(entradas[i], i + 1);
+      contenedor.insertBefore(art, contenedor.firstChild);
+      dibujarFiguras(art);
+      anotarIndice(entradas[i], i + 1);
+    }
+    dibujadas = entradas.length;
+
+    // Insertar arriba empuja hacia abajo lo que el usuario estaba leyendo. Si
+    // había bajado, se compensa el desplazamiento para que el texto no se le
+    // mueva de debajo de los ojos; si estaba en el encabezado, se le deja ahí
+    // para que vea llegar lo nuevo.
+    if (desplazado > 0) {
+      var crecio = document.documentElement.scrollHeight - altoAntes;
+      if (crecio > 0) window.scrollTo(0, desplazado + crecio);
+    }
+  }
+
+  // ---------- actualización ----------
+  function latir() {
+    var punto = document.getElementById("latido");
+    punto.classList.add("activo");
+    setTimeout(function () { punto.classList.remove("activo"); }, 700);
+  }
+
+  function porFetch(url, segundos) {
+    document.getElementById("colofon-der").textContent =
+      "Se actualiza sola cada " + segundos + " s · no hace falta recargar";
+    setInterval(function () {
+      fetch(url, { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (datos) {
+          if (!datos) return;
+          latir();
+          // En modo "ultimo" siempre hay una sola entrada: el largo no cambia
+          // al llegar una pregunta nueva, pero el momento de escritura sí.
+          if ((datos.entradas || []).length !== (ESTADO.entradas || []).length ||
+              datos.momento !== ESTADO.momento) {
+            ESTADO = datos;
+            pintar();
+          }
+        })
+        .catch(function () { /* el servidor puede no estar listo todavía */ });
+    }, segundos * 1000);
+  }
+
+  function porRecarga(segundos) {
+    document.getElementById("colofon-der").textContent =
+      "Archivo local · se recarga cada " + segundos + " s conservando tu posición";
+    try {
+      var guardado = sessionStorage.getItem("informe-scroll");
+      if (guardado) window.scrollTo(0, parseInt(guardado, 10) || 0);
+    } catch (e) { /* sin sessionStorage solo se pierde el scroll */ }
+    window.addEventListener("beforeunload", function () {
+      try { sessionStorage.setItem("informe-scroll", String(window.scrollY)); } catch (e) {}
+    });
+    setTimeout(function () { location.reload(); }, segundos * 1000);
+  }
+
+  // Un cambio de tema del sistema repinta las figuras con la otra paleta: los
+  // colores viven en el CSS, pero plotly ya los copió al dibujar.
+  function seguirElTema() {
+    if (!window.matchMedia) return;
+    var consulta = window.matchMedia("(prefers-color-scheme: dark)");
+    var repintar = function () {
+      var contenedor = document.getElementById("secciones");
+      contenedor.textContent = "";
+      document.getElementById("indice-lista").textContent = "";
+      dibujadas = 0;
+      pintar();
+    };
+    if (consulta.addEventListener) consulta.addEventListener("change", repintar);
+  }
+
+  pintar();
+  seguirElTema();
+  var segundos = ESTADO.refresco || 0;
+  if (segundos > 0) {
+    if (ESTADO.datos_url && location.protocol !== "file:") {
+      porFetch(ESTADO.datos_url, segundos);
+    } else {
+      porRecarga(segundos);
+    }
+  } else {
+    document.getElementById("colofon-der").textContent = "Documento fijo";
+  }
+})();
+</script>
+</body>
+</html>

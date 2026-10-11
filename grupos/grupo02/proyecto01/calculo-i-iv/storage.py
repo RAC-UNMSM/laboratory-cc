@@ -8,6 +8,7 @@ En local, si las variables no están definidas, falla en silencio y devuelve Non
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import urllib.error
 import urllib.request
 import uuid
@@ -32,10 +33,25 @@ def ensure_bucket() -> None:
 def subir_imagen(png_bytes: bytes) -> str | None:
     """Sube el PNG a SeaweedFS con una clave aleatoria y devuelve la URL pública.
 
-    Devuelve None si el storage no respondió o si no está configurado (ej. en local).
+    En local (si no hay SeaweedFS configurado): guarda el archivo en una carpeta
+    temporal del sistema y lo abre en el visor de imágenes de Windows.
     """
     if not IMG_BUCKET or not PUBLIC_IMG_BASE_URL:
-        return None
+        # Modo local: guardar en carpeta temporal y abrir en Windows
+        try:
+            import tempfile
+            import subprocess
+            temp_dir = Path(tempfile.gettempdir()) / "mcp_calculo_graficos"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            archivo = temp_dir / f"grafico_{uuid.uuid4().hex[:8]}.png"
+            archivo.write_bytes(png_bytes)
+            # Abrir con la aplicacion predeterminada de Windows (Fotos / Paint)
+            if os.name == "nt":
+                os.startfile(str(archivo))
+            return archivo.as_uri()
+        except Exception:
+            return None
+
     key = f"{uuid.uuid4().hex}.png"
     try:
         req = urllib.request.Request(

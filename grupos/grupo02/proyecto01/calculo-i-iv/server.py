@@ -56,11 +56,27 @@ SKILLS_DIR = BASE_DIR / "skill"
 # dos personas del equipo nunca colisionen con el mismo nombre de tool.
 MODULOS_CALCULO = ("calculo1", "calculo2", "calculo3", "calculo4")
 
+def leer_skill(nombre_archivo: str) -> str:
+    """Lee un contexto desde `skill/`. Nunca lanza: si falta, avisa y sigue."""
+    ruta = SKILLS_DIR / nombre_archivo
+    if not ruta.is_file():
+        return (
+            f"[AVISO] No se encontro el contexto '{nombre_archivo}' en {SKILLS_DIR}. "
+            "Este modo responde con el comportamiento por defecto del servidor."
+        )
+    return ruta.read_text(encoding="utf-8")
+
+
 # El nombre del servidor DEBE seguir la regla del despliegue: "grupo + carpeta
 # del proyecto", o sea `grupo02-calculo-i-iv`. Es lo que verifica
 # .claude/skills/mcp-validator/scripts/validar_entrega.py; si no coincide con
 # el nombre de la carpeta, el PR se bloquea.
-mcp = MCPServer("grupo02-calculo-i-iv")
+# Actua como ORQUESTADOR: inyecta las directivas del meta-prompt a cualquier
+# cliente MCP (OpenCode, Claude, etc.) en el handshake de inicializacion.
+mcp = MCPServer(
+    "grupo02-calculo-i-iv",
+    instructions=leer_skill("skill_orquestador.md"),
+)
 
 
 def _normalizar(expr: Any) -> str:
@@ -74,15 +90,11 @@ def _normalizar(expr: Any) -> str:
 # Cada skill es un Markdown que le dice a la IA como comportarse: que tools
 # usar, que formato dar, que no inventar. Vive en un archivo aparte para que
 # Carlos (Prompts & QA) lo pueda editar sin tocar codigo.
-def leer_skill(nombre_archivo: str) -> str:
-    """Lee un contexto desde `skill/`. Nunca lanza: si falta, avisa y sigue."""
-    ruta = SKILLS_DIR / nombre_archivo
-    if not ruta.is_file():
-        return (
-            f"[AVISO] No se encontro el contexto '{nombre_archivo}' en {SKILLS_DIR}. "
-            "Este modo responde con el comportamiento por defecto del servidor."
-        )
-    return ruta.read_text(encoding="utf-8")
+
+@mcp.prompt(title="Orquestador Central de Calculo")
+def contexto_orquestador() -> str:
+    """Orquestador central: detecta la intencion y asume el rol (Examen, Paso a Paso o Tutor)."""
+    return leer_skill("skill_orquestador.md")
 
 
 @mcp.prompt(title="Resolutor - Modo Examen")
@@ -144,7 +156,8 @@ def _error(exc: Exception) -> dict[str, Any]:
 
 @mcp.tool(name="calcular_derivada")
 def calcular_derivada(expresion: str, variable: str = "x", orden: int = 1) -> dict[str, Any]:
-    """Deriva simbolicamente una funcion de una variable, hasta el orden pedido.
+    """HERRAMIENTA OBLIGATORIA: Invoca SIEMPRE esta herramienta para calcular derivadas.
+    NUNCA calcules derivadas de memoria ni a mano.
 
     `expresion` va en sintaxis de sympy/Python: "x**3*sin(x)", "exp(x)/x".
     NO uses "x^2" (en Python ^ es potencia bitwise, no exponente) ni nombres en
@@ -195,8 +208,10 @@ def calcular_integral(
     limite_inferior: str | None = None,
     limite_superior: str | None = None,
 ) -> dict[str, Any]:
-    """Integra simbolicamente una funcion: indefinida o definida en un intervalo.
+    """HERRAMIENTA OBLIGATORIA: Invoca SIEMPRE esta herramienta para calcular integrales.
+    NUNCA resuelvas integrales de memoria ni a mano.
 
+    Integra simbolicamente una funcion: indefinida o definida en un intervalo.
     Para la integral INDEFINIDA deja `limite_inferior` y `limite_superior` en
     None. Para la DEFINIDA pasa los dos limites como texto, ej. "0" y "pi/2".
 
@@ -272,7 +287,8 @@ def verificar_respuesta(
     referencia: str | None = None,
     variable: str = "x",
 ) -> dict[str, Any]:
-    """Verifica si la respuesta del alumno es CORRECTA. Usar solo en modo tutor.
+    """HERRAMIENTA OBLIGATORIA DE EVALUACIÓN: Invoca SIEMPRE esta herramienta para
+    verificar si la respuesta del alumno es CORRECTA. NUNCA evalúes a ojo o de memoria.
 
     Se le pasan dos cosas:
       - `respuesta_alumno`: lo que escribio el alumno, en sintaxis sympy

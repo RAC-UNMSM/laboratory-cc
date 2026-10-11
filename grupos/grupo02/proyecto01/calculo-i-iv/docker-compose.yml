@@ -27,7 +27,6 @@ services:
       # Nombres del storage de imagenes SeaweedFS, calculados por el despliegue
       LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}
       LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}
-    # Si el profesor pidiera el nombre fijo, es esta linea:
     #   container_name: lab-grupo02_proyecto01_calculo-i-iv
 
 networks:

@@ -1,0 +1,14 @@
+services:
+  edos:
+    build: .
+    container_name: ${LAB_CONTAINER_NAME}
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}
+      LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}
+
+networks:
+  default:
+    name: lab_net
+    external: true

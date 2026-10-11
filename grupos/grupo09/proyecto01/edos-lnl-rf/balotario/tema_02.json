@@ -1,0 +1,367 @@
+{
+  "schema_version": 1,
+  "tema": {
+    "id": "tema_02",
+    "titulo": "Retratos de Fase y Análisis Cualitativo en el Plano",
+    "orden": 2,
+    "origen": {
+      "archivo": "balotario.tex",
+      "seccion_latex": "Tema 2: Retratos de Fase y Análisis Cualitativo en el Plano",
+      "lineas": [874, 1755]
+    },
+    "notas": "Los cinco problemas son sistemas autónomos 2D, el caso que el motor cubre mejor: los equilibrios se obtienen exactos con sympy y se clasifican por autovalores. `clasificacion_balotario` guarda el término fino del .tex (silla, foco, centro, nodo) y `clasificacion_motor` el veredicto de la linealización (estable / inestable / no concluyente), que es lo que trae `analisis.estabilidad`. El tipo fino lo calcula el desarrollo de cada familia. El problema 2.5 lleva una `revision_matematica`: su conclusión no es correcta."
+  },
+  "problemas": [
+    {
+      "id": "2.1",
+      "orden": 1,
+      "titulo": "Sistema lineal con punto silla y trayectorias explícitas",
+      "enunciado": "Considere el sistema dinámico lineal en el plano $\\dot{x} = 2x$, $\\dot{y} = -3y$. Clasifique el origen $(0,0)$, halle la ecuación de las trayectorias en coordenadas cartesianas y trace el comportamiento cualitativo del retrato de fase.",
+      "tipo": "sistema_lineal_2d",
+      "dificultad": "basica",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = 2x, \\qquad \\dot{y} = -3y",
+        "forma": "sistema_primer_orden",
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y"],
+        "campo": ["2*x", "-3*y"],
+        "parametros": {},
+        "matriz_latex": "A = \\begin{pmatrix} 2 & 0 \\\\ 0 & -3 \\end{pmatrix}"
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [1.0, 1.0],
+        "intervalo_sugerido": [0.0, 0.5],
+        "ci_derivada": true,
+        "notas": "El enunciado pide el retrato de fase, no un PVI. Se elige (1,1) y un intervalo corto porque la componente x crece como e^{2t} y desborda rápido."
+      },
+      "numerico": { "metodo": "RK45", "rtol": 1e-11, "atol": 1e-13, "puntos": 300 },
+      "solucion_esperada": {
+        "tipo": "clasificacion_equilibrios",
+        "latex": "\\lambda_1 = 2, \\; \\lambda_2 = -3 \\implies (0,0) \\text{ es un punto silla inestable}; \\qquad y^2 x^3 = C",
+        "equilibrios": [
+          {
+            "punto": [0.0, 0.0],
+            "clasificacion_motor": "inestable",
+            "clasificacion_balotario": "punto silla (ensilladura) inestable",
+            "autovalores": [2.0, -3.0]
+          }
+        ],
+        "invariantes": [
+          {
+            "nombre": "trayectorias",
+            "tipo": "conservado",
+            "expresion": "y**2*x**3",
+            "latex": "y^2 x^3 = C",
+            "valor_inicial": 1.0,
+            "tolerancia": 1e-8,
+            "error_observado": 1.0e-11,
+            "notas": "Derivando a lo largo del flujo: d/dt(y^2 x^3) = 2y(-3y)x^3 + 3y^2x^2(2x) = 0."
+          }
+        ],
+        "datos_adicionales": {
+          "autovectores_latex": "\\mathbf{v}_1 = (1,0)^T, \\quad \\mathbf{v}_2 = (0,1)^T",
+          "variedad_estable_latex": "W^s(0,0) = \\{(0,y)\\}",
+          "variedad_inestable_latex": "W^u(0,0) = \\{(x,0)\\}",
+          "trayectorias_explicitas_latex": "y(x) = \\pm C x^{-3/2}"
+        }
+      },
+      "verificacion": { "clasificacion_equilibrios": true, "conservacion_invariante": true }
+    },
+    {
+      "id": "2.2",
+      "orden": 2,
+      "titulo": "Oscilador lineal amortiguado: clasificación según el parámetro",
+      "enunciado": "Clasifique el equilibrio $(0,0)$ del oscilador lineal según el parámetro $\\gamma \\ge 0$: $\\dot{x} = y$, $\\dot{y} = -4x - \\gamma y$.",
+      "tipo": "familia_lineal_2d",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = y, \\qquad \\dot{y} = -4x - \\gamma y",
+        "forma": "familia_parametrica",
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y"],
+        "campo": ["y", "-4*x - gamma*y"],
+        "parametros": { "gamma": 0.0 },
+        "parametro_de_barrido": "gamma",
+        "matriz_latex": "A = \\begin{pmatrix} 0 & 1 \\\\ -4 & -\\gamma \\end{pmatrix}"
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [1.0, 0.0],
+        "intervalo_sugerido": [0.0, 10.0],
+        "ci_derivada": true,
+        "notas": "El enunciado solo pide clasificar; la CI se fija para poder integrar una trayectoria de muestra."
+      },
+      "numerico": { "metodo": "RK45", "rtol": 1e-10, "atol": 1e-12, "puntos": 400 },
+      "solucion_esperada": {
+        "tipo": "bifurcacion",
+        "latex": "\\lambda_{1,2} = \\frac{-\\gamma \\pm \\sqrt{\\gamma^2 - 16}}{2}, \\qquad D = \\gamma^2 - 16",
+        "parametro": "gamma",
+        "valores_criticos": [0.0, 4.0],
+        "casos": [
+          {
+            "parametros": { "gamma": 0.0 },
+            "equilibrios": [{
+              "punto": [0.0, 0.0],
+              "clasificacion_motor": "no concluyente",
+              "clasificacion_balotario": "centro neutramente estable (órbitas elípticas cerradas)",
+              "autovalores": [{ "re": 0.0, "im": -2.0 }, { "re": 0.0, "im": 2.0 }]
+            }]
+          },
+          {
+            "parametros": { "gamma": 2.0 },
+            "equilibrios": [{
+              "punto": [0.0, 0.0],
+              "clasificacion_motor": "estable",
+              "clasificacion_balotario": "foco estable (espiral atractora asintóticamente estable)",
+              "autovalores": [{ "re": -1.0, "im": -1.7320508075688772 },
+                              { "re": -1.0, "im": 1.7320508075688772 }]
+            }]
+          },
+          {
+            "parametros": { "gamma": 4.0 },
+            "equilibrios": [{
+              "punto": [0.0, 0.0],
+              "clasificacion_motor": "estable",
+              "clasificacion_balotario": "nodo impropio degenerado estable (amortiguamiento crítico)",
+              "autovalores": [-2.0, -2.0]
+            }]
+          },
+          {
+            "parametros": { "gamma": 6.0 },
+            "equilibrios": [{
+              "punto": [0.0, 0.0],
+              "clasificacion_motor": "estable",
+              "clasificacion_balotario": "nodo estable (sobreamortiguado, dos raíces reales negativas)",
+              "autovalores": [-5.23606797749979, -0.7639320225002102]
+            }]
+          }
+        ],
+        "notas": "El .tex clasifica por rangos de gamma: 0 centro, (0,4) foco estable, 4 nodo degenerado, >4 nodo estable. Se toma un valor representativo de cada rango."
+      },
+      "verificacion": { "clasificacion_por_casos": true }
+    },
+    {
+      "id": "2.3",
+      "orden": 3,
+      "titulo": "Competencia de dos especies: equilibrios y linealización",
+      "enunciado": "Analice los puntos de equilibrio, la linealización y la estabilidad del sistema $\\dot{x} = x(3 - x - 2y)$, $\\dot{y} = y(2 - x - y)$ en el cuadrante biológico $x \\ge 0$, $y \\ge 0$.",
+      "tipo": "sistema_no_lineal_2d",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = x(3 - x - 2y), \\qquad \\dot{y} = y(2 - x - y)",
+        "forma": "sistema_primer_orden",
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y"],
+        "campo": ["x*(3 - x - 2*y)", "y*(2 - x - y)"],
+        "parametros": {},
+        "jacobiano_latex": "J(x,y) = \\begin{pmatrix} 3 - 2x - 2y & -2x \\\\ -y & 2 - x - 2y \\end{pmatrix}"
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [0.5, 0.5],
+        "intervalo_sugerido": [0.0, 20.0],
+        "ci_derivada": true,
+        "notas": "CI interior al cuadrante biológico, elegida para integrar una trayectoria de muestra. El enunciado solo pide el análisis de equilibrios."
+      },
+      "numerico": { "metodo": "RK45", "rtol": 1e-10, "atol": 1e-12, "puntos": 600 },
+      "solucion_esperada": {
+        "tipo": "clasificacion_equilibrios",
+        "latex": "P_1=(0,0), \\; P_2=(0,2), \\; P_3=(3,0), \\; P_4=(1,1)",
+        "equilibrios": [
+          {
+            "punto": [0.0, 0.0],
+            "clasificacion_motor": "inestable",
+            "clasificacion_balotario": "nodo inestable (fuente): extinción total",
+            "autovalores": [3.0, 2.0]
+          },
+          {
+            "punto": [0.0, 2.0],
+            "clasificacion_motor": "estable",
+            "clasificacion_balotario": "nodo asintóticamente estable (sumidero): exclusión de x",
+            "autovalores": [-1.0, -2.0]
+          },
+          {
+            "punto": [3.0, 0.0],
+            "clasificacion_motor": "estable",
+            "clasificacion_balotario": "nodo asintóticamente estable (sumidero): exclusión de y",
+            "autovalores": [-3.0, -1.0]
+          },
+          {
+            "punto": [1.0, 1.0],
+            "clasificacion_motor": "inestable",
+            "clasificacion_balotario": "punto silla inestable: coexistencia no viable",
+            "autovalores": [-2.414213562373095, 0.41421356237309515],
+            "autovalores_latex": "\\lambda_{1,2} = -1 \\pm \\sqrt{2}"
+          }
+        ],
+        "datos_adicionales": {
+          "nuloclinas_x_latex": "\\mathcal{N}_x: x = 0 \\;\\lor\\; x + 2y = 3",
+          "nuloclinas_y_latex": "\\mathcal{N}_y: y = 0 \\;\\lor\\; x + y = 2",
+          "interpretacion": "Exclusión competitiva: el resultado depende de la condición inicial, porque los dos sumideros compiten y la silla en (1,1) separa sus cuencas."
+        }
+      },
+      "verificacion": { "clasificacion_equilibrios": true }
+    },
+    {
+      "id": "2.4",
+      "orden": 4,
+      "titulo": "Sistema hamiltoniano: pozo doble y órbita homoclínica",
+      "enunciado": "Considere el sistema dinámico conservativo $\\dot{x} = y$, $\\dot{y} = x - x^3$. Halle su función hamiltoniana $H(x,y)$, clasifique sus puntos fijos y determine la ecuación exacta de la órbita homoclínica (separatriz).",
+      "tipo": "sistema_conservativo_no_lineal",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = y, \\qquad \\dot{y} = x - x^3",
+        "forma": "sistema_primer_orden",
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y"],
+        "campo": ["y", "x - x**3"],
+        "parametros": {}
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [0.5, 0.0],
+        "intervalo_sugerido": [0.0, 20.0],
+        "ci_derivada": true,
+        "notas": "Se suelta desde x=0.5 en reposo, dentro del pozo derecho, para que la órbita sea cerrada y la conservación de H se pueda medir sobre varias vueltas."
+      },
+      "numerico": { "metodo": "RK45", "rtol": 1e-12, "atol": 1e-14, "puntos": 2000 },
+      "solucion_esperada": {
+        "tipo": "invariantes",
+        "latex": "H(x,y) = \\frac{1}{2}y^2 - \\frac{1}{2}x^2 + \\frac{1}{4}x^4; \\qquad y_{\\text{hom}}(x) = \\pm x\\sqrt{1 - \\frac{x^2}{2}}",
+        "invariantes": [
+          {
+            "nombre": "hamiltoniano",
+            "tipo": "conservado",
+            "expresion": "0.5*y**2 - 0.5*x**2 + 0.25*x**4",
+            "latex": "H(x,y) = \\frac{1}{2}y^2 - \\frac{1}{2}x^2 + \\frac{1}{4}x^4",
+            "valor_inicial": -0.109375,
+            "tolerancia": 1e-9,
+            "error_observado": 1.2e-12
+          }
+        ],
+        "equilibrios": [
+          {
+            "punto": [0.0, 0.0],
+            "clasificacion_motor": "inestable",
+            "clasificacion_balotario": "punto silla inestable",
+            "autovalores": [-1.0, 1.0],
+            "energia": 0.0
+          },
+          {
+            "punto": [1.0, 0.0],
+            "clasificacion_motor": "no concluyente",
+            "clasificacion_balotario": "centro no lineal (estable en el sentido de Lyapunov)",
+            "autovalores": [{ "re": 0.0, "im": -1.4142135623730951 },
+                            { "re": 0.0, "im": 1.4142135623730951 }],
+            "energia": -0.25
+          },
+          {
+            "punto": [-1.0, 0.0],
+            "clasificacion_motor": "no concluyente",
+            "clasificacion_balotario": "centro no lineal (estable en el sentido de Lyapunov)",
+            "autovalores": [{ "re": 0.0, "im": -1.4142135623730951 },
+                            { "re": 0.0, "im": 1.4142135623730951 }],
+            "energia": -0.25
+          }
+        ],
+        "datos_adicionales": {
+          "separatriz_expresion": "x*sqrt(1 - x**2/2)",
+          "separatriz_latex": "y_{\\text{hom}}(x) = \\pm x\\sqrt{1 - x^2/2}, \\qquad x \\in [-\\sqrt{2}, \\sqrt{2}]",
+          "energia_separatriz": 0.0,
+          "dominio_separatriz": [-1.4142135623730951, 1.4142135623730951],
+          "vertices_latex": "(\\pm\\sqrt{2}, 0)",
+          "alturas_extremas_latex": "(\\pm 1, \\pm 1/\\sqrt{2})",
+          "notas_separatriz": "La órbita homoclínica vive en el nivel H = 0, el mismo de la silla del origen, y forma la figura de ocho que separa los dos pozos."
+        }
+      },
+      "verificacion": {
+        "conservacion_invariante": true,
+        "clasificacion_equilibrios": true,
+        "separatriz_sobre_nivel_de_energia": true
+      }
+    },
+    {
+      "id": "2.5",
+      "orden": 5,
+      "titulo": "Ciclo límite por Poincaré-Bendixson en región anular",
+      "enunciado": "Demuestre que el siguiente sistema dinámico posee al menos una órbita periódica cerrada (ciclo límite) no trivial: $\\dot{x} = x - y - x(x^2 + y^2) + \\frac{xy}{\\sqrt{x^2+y^2}}$, $\\dot{y} = x + y - y(x^2 + y^2) - \\frac{x^2}{\\sqrt{x^2+y^2}}$.",
+      "tipo": "ciclo_limite",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "revision_matematica": {
+        "estado": "conclusion_del_tex_incorrecta",
+        "resumen": "El sistema no tiene ninguna órbita periódica: el anillo K contiene el equilibrio (1, 0), así que Poincaré-Bendixson no aplica.",
+        "detalle": "La forma polar del propio .tex es ṙ = r(1 − r²), θ̇ = 1 − cos θ. θ̇ se anula en θ = 0, y en r = 1 también ṙ = 0: (1, 0) es un equilibrio (en cartesianas: ẋ = 1 − 0 − 1 + 0 = 0, ẏ = 1 + 0 − 0 − 1 = 0) y está dentro de K = {1/2 ≤ r ≤ 2}. El argumento del .tex ('K no contiene equilibrios') falla. El círculo r = 1 es invariante pero no es una órbita periódica: es un lazo que sale de (1, 0) y vuelve a él. Como θ̇ ≥ 0 y solo se anula en θ = 0, toda trayectoria con r > 0 tiende a (1, 0).",
+        "por_que_las_pruebas_numericas_no_lo_detectaban": "El radio de cualquier trayectoria converge a 1 (ṙ = r(1 − r²)), así que comprobar r → 1 no distingue un ciclo límite de la convergencia a un equilibrio situado sobre el círculo.",
+        "verificado_por": "matematica.sistemas_planos.desarrollar_ciclo_limite (equilibrio en cartesianas y convergencia numérica a (1, 0)); test/test_tema2.py",
+        "tex_modificado": false
+      },
+      "ecuacion": {
+        "latex": "\\dot{x} = x - y - x r^2 + \\frac{xy}{r}, \\qquad \\dot{y} = x + y - y r^2 - \\frac{x^2}{r}, \\qquad r = \\sqrt{x^2+y^2}",
+        "forma": "sistema_primer_orden",
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y"],
+        "campo": [
+          "x - y - x*(x**2 + y**2) + x*y/sqrt(x**2 + y**2)",
+          "x + y - y*(x**2 + y**2) - x**2/sqrt(x**2 + y**2)"
+        ],
+        "parametros": {},
+        "notas": "El campo es singular en el origen por los términos divididos entre r. Cualquier trayectoria debe arrancar con r > 0."
+      },
+      "condiciones_iniciales": {
+        "t0": 0.0,
+        "y0": [0.5, 0.0],
+        "intervalo_sugerido": [0.0, 60.0],
+        "ci_derivada": true,
+        "notas": "Se arranca en r=0.5, la frontera interior del anillo K del .tex, para ver la convergencia al ciclo desde dentro. El test también integra desde r=2, la frontera exterior."
+      },
+      "numerico": { "metodo": "RK45", "rtol": 1e-10, "atol": 1e-12, "puntos": 4000 },
+      "solucion_esperada": {
+        "tipo": "ciclo_limite",
+        "latex": "\\dot{r} = r(1 - r^2), \\quad \\dot{\\theta} = 1 - \\cos\\theta \\ge 0 \\implies r^* = 1 \\iff x^2 + y^2 = 1",
+        "radio": 1.0,
+        "radio_expresion": "sqrt(x**2 + y**2)",
+        "estabilidad": "asintóticamente estable (atractor)",
+        "radios_iniciales_de_prueba": [0.5, 2.0],
+        "tolerancia": 1e-6,
+        "error_observado": 1.7e-10,
+        "fraccion_final_evaluada": 0.25,
+        "equilibrios": [
+          {
+            "punto": [0.0, 0.0],
+            "clasificacion_motor": "inestable",
+            "clasificacion_balotario": "foco inestable (fuente repulsora)",
+            "parte_real_autovalores": 1.0,
+            "nota": "El origen es singular para el campo cartesiano; el .tex lo clasifica a partir de la forma polar, no por el Jacobiano numérico."
+          }
+        ],
+        "datos_adicionales": {
+          "region_anular_latex": "K = \\{1/2 \\le r \\le 2\\}",
+          "flujo_frontera_interior": "\\dot{r}|_{r=1/2} = 3/8 > 0 (entra a K)",
+          "flujo_frontera_exterior": "\\dot{r}|_{r=2} = -6 < 0 (entra a K)",
+          "argumento": "K es compacto, positivamente invariante y no contiene equilibrios, así que Poincaré-Bendixson garantiza al menos una órbita periódica en K."
+        },
+        "notas": "La verificación es asintótica: se integra desde dentro y desde fuera del anillo y se exige que el radio converja a 1. No hay comparación puntual porque el enunciado pide una demostración de existencia."
+      },
+      "verificacion": {
+        "convergencia_a_ciclo_limite": true,
+        "desde_dentro_y_desde_fuera": true
+      }
+    }
+  ]
+}
