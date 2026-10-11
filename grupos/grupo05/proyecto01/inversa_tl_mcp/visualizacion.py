@@ -1,152 +1,62 @@
-import os
-import numpy as np
+"""PNG en memoria para transformaciones de R2 y R3, sin almacenamiento externo."""
+from io import BytesIO
+from threading import Lock
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
+
+from validacion import ErrorDeEntrada
+
+_LOCK = Lock()
 
 
-def _a_numpy_2x2(matriz):
-    """
-    Convierte la matriz de entrada a un arreglo numpy 2x2.
-    Acepta lista de listas, tuplas, numpy array o matriz de SymPy.
-    """
-    try:
-        # Si viene de SymPy
-        matriz = np.array(matriz.tolist(), dtype=float)
-    except AttributeError:
-        matriz = np.array(matriz, dtype=float)
-
-    if matriz.shape != (2, 2):
-        raise ValueError("La visualización en este módulo solo está implementada para matrices 2x2.")
-
-    return matriz
-
-
-def _limites_grafica(vectores):
-    """
-    Calcula límites automáticos para la gráfica,
-    dejando margen suficiente para etiquetas y flechas.
-    """
-    xs = [v[0] for v in vectores]
-    ys = [v[1] for v in vectores]
-
-    max_x = max(abs(x) for x in xs + [0])
-    max_y = max(abs(y) for y in ys + [0])
-
-    maximo = max(max_x, max_y, 1)
-    margen = 0.8
-
-    return -maximo - margen, maximo + margen, -maximo - margen, maximo + margen
-
-
-def _dibujar_vector(ax, vector, color, etiqueta, grosor=2.2):
-    """
-    Dibuja un vector desde el origen y coloca su etiqueta cerca de la punta.
-    """
-    x, y = vector
-
-    ax.arrow(
-        0, 0, x, y,
-        head_width=0.10,
-        head_length=0.14,
-        length_includes_head=True,
-        linewidth=grosor,
-        color=color,
-        alpha=0.95
-    )
-
-    # Etiqueta al lado de la punta
-    desplazamiento_x = 0.08 if x >= 0 else -0.28
-    desplazamiento_y = 0.08 if y >= 0 else -0.20
-
-    ax.text(
-        x + desplazamiento_x,
-        y + desplazamiento_y,
-        etiqueta,
-        fontsize=10,
-        fontweight="bold",
-        color=color
-    )
-
-
-def generar_visualizacion_r2(matriz_estandar, ruta_salida):
-    """
-    Genera una visualización de una transformación lineal en R^2.
-
-    Parámetros:
-    - matriz_estandar: matriz 2x2 de la transformación.
-    - ruta_salida: ruta donde se guardará la imagen PNG.
-
-    Retorna:
-    Un diccionario con:
-    - ruta
-    - e1
-    - e2
-    - T_e1
-    - T_e2
-    """
-    A = _a_numpy_2x2(matriz_estandar)
-
-    e1 = np.array([1.0, 0.0])
-    e2 = np.array([0.0, 1.0])
-
-    T_e1 = A @ e1
-    T_e2 = A @ e2
-
-    vectores = [e1, e2, T_e1, T_e2]
-    xmin, xmax, ymin, ymax = _limites_grafica(vectores)
-
-    fig, ax = plt.subplots(figsize=(8, 8))
-
-    # Dibujar ejes
-    ax.axhline(0, color="gray", linewidth=1)
-    ax.axvline(0, color="gray", linewidth=1)
-
-    # Cuadrícula
-    ax.grid(True, linestyle="--", alpha=0.4)
-
-    # Dibujar vectores
-    _dibujar_vector(ax, e1, "royalblue", "e1")
-    _dibujar_vector(ax, e2, "seagreen", "e2")
-    _dibujar_vector(ax, T_e1, "crimson", "T(e1)")
-    _dibujar_vector(ax, T_e2, "darkorange", "T(e2)")
-
-    # Configuración de ejes
-    ax.set_xlim(xmin, xmax)
-    ax.set_ylim(ymin, ymax)
-    ax.set_aspect("equal", adjustable="box")
-
-    ax.set_xlabel("x1", fontsize=11)
-    ax.set_ylabel("x2", fontsize=11)
-    ax.set_title("Visualización de la transformación lineal en R²", fontsize=13, fontweight="bold")
-
-    # Texto con la matriz en la parte superior izquierda
-    texto_matriz = (
-        "Matriz estándar A =\n"
-        f"[[{A[0,0]:.2f}, {A[0,1]:.2f}],\n"
-        f" [{A[1,0]:.2f}, {A[1,1]:.2f}]]"
-    )
-
-    ax.text(
-        0.02, 0.98,
-        texto_matriz,
-        transform=ax.transAxes,
-        fontsize=10,
-        verticalalignment="top",
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.85)
-    )
-
-    # Asegurar que exista la carpeta destino
-    carpeta = os.path.dirname(ruta_salida)
-    if carpeta:
-        os.makedirs(carpeta, exist_ok=True)
-
-    plt.tight_layout()
-    plt.savefig(ruta_salida, dpi=200, bbox_inches="tight")
-    plt.close(fig)
-
-    return {
-        "ruta": ruta_salida,
-        "e1": e1.tolist(),
-        "e2": e2.tolist(),
-        "T_e1": T_e1.tolist(),
-        "T_e2": T_e2.tolist(),
-    }
+def generar_grafico_png(A, vector):
+    if A.shape not in ((2,2),(3,3)):
+        raise ErrorDeEntrada("La visualización geométrica admite matrices 2x2 o 3x3.")
+    a, v = np.array(A,dtype=float), np.array(vector,dtype=float).reshape(-1)
+    if not np.isfinite(a).all() or not np.isfinite(v).all() or max(np.max(np.abs(a)),np.max(np.abs(v))) > 1000:
+        raise ErrorDeEntrada("Para graficar, usa valores finitos con magnitud <= 1000.")
+    with _LOCK, plt.rc_context({"font.size": 10, "axes.spines.top": False, "axes.spines.right": False}):
+        fig = plt.figure(figsize=(12,5),layout="constrained")
+        try:
+            if A.rows == 2:
+                axs = fig.subplots(1,2)
+                for ax,mat,titulo in zip(axs,[np.eye(2),a],["Plano original", "Imagen bajo T"]):
+                    extremos = []
+                    for k in range(-3,4):
+                        for linea in (np.array([[-3,k],[3,k]]).T,np.array([[k,-3],[k,3]]).T):
+                            puntos = mat@linea
+                            ax.plot(*puntos,color="#cad5e0",linewidth=.7)
+                            extremos.extend(puntos.T)
+                    for e,color,nombre in zip([np.array([1,0]),np.array([0,1]),v],["#2563eb","#0d9488","#d97706"],["e1","e2","v"]):
+                        imagen = mat@e
+                        etiqueta = nombre if titulo == "Plano original" else f"T({nombre})"
+                        ax.quiver(0,0,*imagen,angles="xy",scale_units="xy",scale=1,color=color,label=etiqueta)
+                        extremos.append(imagen)
+                    limite = max(1.5,float(np.max(np.abs(extremos)))*1.12)
+                    ax.set(xlim=(-limite,limite),ylim=(-limite,limite),xlabel="x1",ylabel="x2",title=titulo)
+                    ax.axhline(0,color="#64748b",linewidth=.7); ax.axvline(0,color="#64748b",linewidth=.7)
+                    ax.set_aspect("equal"); ax.legend()
+            else:
+                for pos,mat,titulo in [(121,np.eye(3),"Vectores originales"),(122,a,"Imagen bajo T")]:
+                    ax = fig.add_subplot(pos,projection="3d")
+                    elementos = [mat[:,j] for j in range(3)] + [mat@v]
+                    for e,color,nombre in zip(elementos,["#2563eb","#0d9488","#a855f7","#d97706"],["e1","e2","e3","v"]):
+                        etiqueta = nombre if pos == 121 else f"T({nombre})"
+                        ax.quiver(0,0,0,*e,color=color,label=etiqueta)
+                    limite=max(1.5,float(np.max(np.abs(elementos)))*1.15)
+                    ax.set(xlim=(-limite,limite),ylim=(-limite,limite),zlim=(-limite,limite),xlabel="x1",ylabel="x2",zlabel="x3",title=titulo)
+                    ax.set_box_aspect((1,1,1)); ax.legend()
+            imagen = A*vector
+            recorrido = f"v = {list(vector)}  ->  T(v) = {list(imagen)}"
+            if A.det() != 0:
+                recorrido += f"  ->  T^(-1)(T(v)) = {list(A.inv()*imagen)}"
+            else:
+                recorrido += "  |  Matriz singular: sin inversa global"
+            fig.suptitle("Transformación lineal: base, vector y geometría\n" + recorrido,fontsize=11)
+            salida=BytesIO(); fig.savefig(salida,format="png",dpi=140)
+            return salida.getvalue()
+        finally:
+            plt.close(fig)

@@ -1,15 +1,14 @@
-# Integrantes
+# Integrantes - Grupo 05
 
-Completar con los datos de cada integrante del grupo:
+Datos registrados según la relación de integrantes proporcionada por el grupo.
 
 | Nombre completo | Correo institucional | Usuario de GitHub |
 |---|---|---|
-|franco solimano  |franco.solimano@unmsm.edu.pe  |franco-solimano  |
-|  |  |  |
-|  |  |  |
-|  |  |  |
-|  |  |  |
-|  |  |  |
+| Eguiluz Poma Mario César | mario.eguiluz@unmsm.edu.pe | mario-eguiluz |
+| Castillo Milián Alexis Aarón | alexis.castillom@unmsm.edu.pe | alexis-castillom |
+| Muguruza Cabanillas Jaime | jaime.muguruza@unmsm.edu.pe | Jaime-Muguruza |
+| Solimano Cure Franco David | franco.solimano@unmsm.edu.pe | francosoli |
+| Gonzales Mora Beckham Luis | beckham.gonzales@unmsm.edu.pe | Beckham-Gonzales |
+| Huayta Huillcahuare Luis Enrique | luis.huayta8@unmsm.edu.pe | Luis-Huayta |
 
-El usuario de GitHub se deriva del correo institucional
-`nombre.apellido@unmsm.edu.pe` -> `nombre-apellido`.
+Cada integrante tiene también una ficha individual en esta carpeta. Los usuarios se conservan como figuran en la relación, sin derivarlos del correo.
