@@ -37,6 +37,10 @@ mcp = MCPServer("grupo03-extrapolacion-richardson-mcp")
 
 storage.ensure_bucket()
 
+# Topes de Bulirsch-Stoer: limitan el tiempo de cómputo y el tamaño de la respuesta.
+MAX_PASOS_BS = 20_000
+MAX_PUNTOS_BS = 500
+
 # Va al final del docstring de CADA tool. El docstring es metadata de confianza
 # (lo lee la IA para saber cómo usar la tool); el resultado de la tool, en
 # cambio, son datos no confiables y por eso ahí el link va sin ningún imperativo.
@@ -174,8 +178,9 @@ def richardson_generico(metodo: str, expresion: str, h0: float = 0.5, niveles: i
                         tolerancia: float | None = None, variable: str = "x"):
     """Aplica extrapolación de Richardson a un método base elegido por `metodo`:
     "diferencia_adelante" o "diferencia_central" (requieren x0) o "trapecio" (requiere a y b;
-    h0 se ajusta a (b-a)/n0 con n0 entero). Devuelve el resultado, la tabla de extrapolación,
-    el orden final alcanzado y un gráfico de la tabla.
+    h0 se ajusta a (b-a)/n0 con n0 entero). Con `trapecio`, el total de evaluaciones
+    `n0 · (2^niveles − 1)` no puede pasar de un millón. Devuelve el resultado, la tabla de
+    extrapolación, el orden final alcanzado y un gráfico de la tabla.
     """
     if metodo not in rg.METODOS_BASE:
         raise val.ErrorValidacion(f"Método desconocido '{metodo}'. Opciones: {sorted(rg.METODOS_BASE)}.")
@@ -189,7 +194,7 @@ def richardson_generico(metodo: str, expresion: str, h0: float = 0.5, niveles: i
         if a is None or b is None:
             raise val.ErrorValidacion("El método 'trapecio' requiere a y b.")
         a, b = val.validar_intervalo(a, b)
-        n0 = max(1, round((b - a) / h0))
+        n0 = val.validar_costo_trapecio(a, b, h0, niveles)
         h0 = (b - a) / n0
         base = rg.trapecio(f, a, b)
     else:
@@ -209,8 +214,9 @@ def richardson_generico(metodo: str, expresion: str, h0: float = 0.5, niveles: i
 def bulirsch_stoer(expresion: str, t0: float, y0: float, tf: float, tolerancia: float = 1e-8):
     """Resuelve la EDO y' = f(t, y) con y(t0) = y0 en [t0, tf] con Bulirsch-Stoer (punto medio
     modificado + Richardson). `expresion` es f(t, y) con las variables t e y, p. ej. "-y" o
-    "t*y + sin(t)". Devuelve la solución en cada paso aceptado, y(tf), estadísticas del
-    integrador y el gráfico de la trayectoria.
+    "t*y + sin(t)". El integrador admite hasta 20 000 pasos. Devuelve la solución con un máximo
+    de 500 puntos repartidos de forma pareja (`puntos_totales` indica cuántos se calcularon),
+    y(tf), estadísticas del integrador y el gráfico de la trayectoria.
     """
     g = val.envolver_finita(val.compilar_funcion(expresion, ("t", "y")))
     t0, tf = val.validar_real(t0, "t0"), val.validar_real(tf, "tf")
@@ -223,13 +229,23 @@ def bulirsch_stoer(expresion: str, t0: float, y0: float, tf: float, tolerancia: 
         return np.array([g(t, float(y[0]))])
 
     try:
-        res = bs.bulirsch_stoer(f, t0, y0, tf, tol)
+        res = bs.bulirsch_stoer(f, t0, y0, tf, tol, max_pasos=MAX_PASOS_BS)
     except RuntimeError as exc:
         raise val.ErrorValidacion(str(exc)) from exc
     res["expresion"] = f"y' = {expresion}"
     titulo = f"y' = {expresion}, y({t0:g}) = {y0:g}"
-    return _respuesta(res, exp.explicar_bulirsch_stoer(res),
-                      ("Trayectoria de la solución", viz.grafico_trayectoria(res["t"], res["y"], titulo)))
+    # El texto y el gráfico usan la solución completa; solo después se recortan las listas.
+    texto = exp.explicar_bulirsch_stoer(res)
+    grafico = viz.grafico_trayectoria(res["t"], res["y"], titulo)
+
+    total = len(res["t"])
+    res["puntos_totales"] = total
+    if total > MAX_PUNTOS_BS:
+        idx = np.unique(np.linspace(0, total - 1, MAX_PUNTOS_BS).round().astype(int))
+        res["t"] = [res["t"][i] for i in idx]
+        res["y"] = [res["y"][i] for i in idx]
+    res["puntos_devueltos"] = len(res["t"])
+    return _respuesta(res, texto, ("Trayectoria de la solución", grafico))
 
 
 @mcp.tool()
