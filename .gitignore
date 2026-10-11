@@ -125,6 +125,10 @@ nohup.out
 *.synctex.gz
 *.toc
 
+# --- Notas del profesor ------------------------------------------------------
+# Observaciones a los PRs y otros apuntes locales: no se publican.
+/docs/
+
 # --- Herramientas locales ----------------------------------------------------
 # De .claude/ solo se versionan las skills del repo (ej. mcp-validator);
 # la configuración local de cada quien se queda fuera.

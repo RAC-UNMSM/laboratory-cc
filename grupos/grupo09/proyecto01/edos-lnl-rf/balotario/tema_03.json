@@ -1,0 +1,981 @@
+{
+  "schema_version": 1,
+  "tema": {
+    "id": "tema_03",
+    "titulo": "Teoría de Bifurcaciones",
+    "orden": 3,
+    "origen": {
+      "archivo": "balotario.tex",
+      "seccion_latex": "Tema 3: Teoría de Bifurcaciones",
+      "lineas": [
+        1756,
+        2577
+      ]
+    },
+    "notas": "Todos son familias paramétricas: lo que se verifica no es una trayectoria sino cómo cambian los equilibrios y su estabilidad al mover el parámetro. Por eso estos problemas no llevan `condiciones_iniciales` y no se piden con `resolver_graficar_y_analizar_edo`, que exige un PVI, sino con `analizar_equilibrios`: con `parametro` declarado (p. ej. \"mu\") una sola llamada hace el análisis completo de la bifurcación, y con el `parametros` de cada caso se clasifican los equilibrios de ese régimen. Cada problema trae `casos` con un valor representativo de cada régimen, y los equilibrios de cada caso se obtienen exactos con sympy. Este tema es la especificación de `matematica/analisis_bifurcaciones.py`, y estos casos son parte de su suite de aceptación. El problema 3.5 lleva una `revision_matematica`: el .tex tiene un error en la integral de Melnikov."
+  },
+  "problemas": [
+    {
+      "id": "3.1",
+      "orden": 1,
+      "titulo": "Bifurcación silla-nodo",
+      "enunciado": "Estudie los puntos fijos, su estabilidad y dibuje el diagrama de bifurcación para el sistema $\\dot{x} = \\mu - x^2$, $\\mu \\in \\mathbb{R}$.",
+      "tipo": "bifurcacion_silla_nodo",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = \\mu - x^2",
+        "forma": "familia_parametrica",
+        "dimension": 1,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": [
+          "x"
+        ],
+        "campo": [
+          "mu - x**2"
+        ],
+        "parametros": {
+          "mu": 1.0
+        },
+        "parametro_de_barrido": "mu"
+      },
+      "solucion_esperada": {
+        "tipo": "bifurcacion",
+        "latex": "x^* = \\pm\\sqrt{\\mu} \\text{ para } \\mu > 0; \\quad \\nexists x^* \\text{ para } \\mu < 0; \\quad \\mu_c = 0",
+        "parametro": "mu",
+        "valores_criticos": [
+          0.0
+        ],
+        "clase": "silla-nodo (fold)",
+        "casos": [
+          {
+            "parametros": {
+              "mu": -1.0
+            },
+            "equilibrios": [],
+            "nota": "x^2 = mu < 0 no tiene solución real: no existen equilibrios."
+          },
+          {
+            "parametros": {
+              "mu": 0.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "no concluyente",
+                "clasificacion_balotario": "equilibrio no hiperbólico semiestable",
+                "autovalores": [
+                  0.0
+                ]
+              }
+            ],
+            "nota": "En mu_c = 0 los dos equilibrios colisionan y lambda = 0: se pierde la hiperbolicidad."
+          },
+          {
+            "parametros": {
+              "mu": 1.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  -1.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "rama inestable (repulsora)",
+                "autovalores": [
+                  2.0
+                ]
+              },
+              {
+                "punto": [
+                  1.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "rama estable (atractora)",
+                "autovalores": [
+                  -2.0
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": 4.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  -2.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "rama inestable (repulsora)",
+                "autovalores": [
+                  4.0
+                ]
+              },
+              {
+                "punto": [
+                  2.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "rama estable (atractora)",
+                "autovalores": [
+                  -4.0
+                ]
+              }
+            ]
+          }
+        ],
+        "datos_adicionales": {
+          "derivada_latex": "f'(x;\\mu) = -2x",
+          "transversalidad_latex": "f_\\mu(0;0) = 1 \\neq 0",
+          "no_degeneracion_latex": "f_{xx}(0;0) = -2 \\neq 0",
+          "conclusion": "Se satisfacen las hipótesis de la bifurcación silla-nodo genérica en mu = 0."
+        }
+      },
+      "verificacion": {
+        "clasificacion_por_casos": true,
+        "conteo_de_equilibrios": true
+      }
+    },
+    {
+      "id": "3.2",
+      "orden": 2,
+      "titulo": "Bifurcación transcrítica e intercambio de estabilidad",
+      "enunciado": "Analice la bifurcación del sistema $\\dot{x} = \\mu x - x^2$ y determine el intercambio de estabilidad.",
+      "tipo": "bifurcacion_transcritica",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = \\mu x - x^2 = x(\\mu - x)",
+        "forma": "familia_parametrica",
+        "dimension": 1,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": [
+          "x"
+        ],
+        "campo": [
+          "mu*x - x**2"
+        ],
+        "parametros": {
+          "mu": 1.0
+        },
+        "parametro_de_barrido": "mu"
+      },
+      "solucion_esperada": {
+        "tipo": "bifurcacion",
+        "latex": "x_1^*(\\mu) = 0, \\quad x_2^*(\\mu) = \\mu \\quad \\forall \\mu; \\qquad \\mu_c = 0",
+        "parametro": "mu",
+        "valores_criticos": [
+          0.0
+        ],
+        "clase": "transcrítica",
+        "casos": [
+          {
+            "parametros": {
+              "mu": -1.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  -1.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "rama x* = mu, inestable (repulsor)",
+                "autovalores": [
+                  1.0
+                ]
+              },
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "origen asintóticamente estable (atractor)",
+                "autovalores": [
+                  -1.0
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": 0.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "no concluyente",
+                "clasificacion_balotario": "colisión transversal de las dos ramas, lambda = 0",
+                "autovalores": [
+                  0.0
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": 1.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "origen inestable (repulsor)",
+                "autovalores": [
+                  1.0
+                ]
+              },
+              {
+                "punto": [
+                  1.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "rama x* = mu, asintóticamente estable (atractor)",
+                "autovalores": [
+                  -1.0
+                ]
+              }
+            ]
+          }
+        ],
+        "datos_adicionales": {
+          "derivada_latex": "f'(x;\\mu) = \\mu - 2x",
+          "transversalidad_latex": "f_{x\\mu}(0;0) = 1 \\neq 0",
+          "no_degeneracion_latex": "f_{xx}(0;0) = -2 \\neq 0",
+          "conclusion": "Las dos ramas existen para todo mu y se cruzan en mu = 0 intercambiando estabilidad; ninguna desaparece, que es lo que distingue a la transcrítica de la silla-nodo."
+        }
+      },
+      "verificacion": {
+        "clasificacion_por_casos": true,
+        "intercambio_de_estabilidad": true
+      }
+    },
+    {
+      "id": "3.3",
+      "orden": 3,
+      "titulo": "Horquilla supercrítica frente a subcrítica con histéresis",
+      "enunciado": "Compare la naturaleza de las bifurcaciones: (A) $\\dot{x} = \\mu x - x^3$ y (B) $\\dot{x} = \\mu x + x^3 - x^5$.",
+      "tipo": "bifurcacion_horquilla",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\text{(A) } \\dot{x} = \\mu x - x^3 \\qquad \\text{(B) } \\dot{x} = \\mu x + x^3 - x^5",
+        "forma": "familia_parametrica",
+        "dimension": 1,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": [
+          "x"
+        ],
+        "campo": [
+          "mu*x - x**3"
+        ],
+        "parametros": {
+          "mu": 1.0
+        },
+        "parametro_de_barrido": "mu",
+        "notas": "El campo declarado es el caso (A). El caso (B) va en `variantes`, porque el enunciado compara dos sistemas distintos en un solo problema."
+      },
+      "variantes": [
+        {
+          "id": "3.3B",
+          "etiqueta": "subcritica",
+          "latex": "\\dot{x} = \\mu x + x^3 - x^5",
+          "campo": [
+            "mu*x + x**3 - x**5"
+          ],
+          "variables_estado": [
+            "x"
+          ],
+          "variable_independiente": "t",
+          "parametros": {
+            "mu": 0.5
+          },
+          "dimension": 1,
+          "autonomo": true,
+          "forma": "familia_parametrica"
+        }
+      ],
+      "solucion_esperada": {
+        "tipo": "bifurcacion",
+        "latex": "\\text{(A) } x_0^*=0,\\; x_\\pm^*=\\pm\\sqrt{\\mu}; \\qquad \\text{(B) } x^*_{\\text{int,ext}} = \\pm\\sqrt{\\frac{1 \\mp \\sqrt{1+4\\mu}}{2}}",
+        "parametro": "mu",
+        "valores_criticos": [
+          0.0
+        ],
+        "clase": "horquilla supercrítica (A) frente a subcrítica con histéresis (B)",
+        "simetria_latex": "f(-x;\\mu) = -f(x;\\mu): invarianza bajo x \\to -x en ambos casos",
+        "casos": [
+          {
+            "parametros": {
+              "mu": -1.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "único equilibrio real, asintóticamente estable",
+                "autovalores": [
+                  -1.0
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": 0.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "no concluyente",
+                "clasificacion_balotario": "pérdida de hiperbolicidad en mu_c = 0",
+                "autovalores": [
+                  0.0
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": 1.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  -1.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "rama x* = -sqrt(mu), estable",
+                "autovalores": [
+                  -2.0
+                ]
+              },
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "origen inestable",
+                "autovalores": [
+                  1.0
+                ]
+              },
+              {
+                "punto": [
+                  1.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "rama x* = +sqrt(mu), estable",
+                "autovalores": [
+                  -2.0
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": 4.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  -2.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "rama estable",
+                "autovalores": [
+                  -8.0
+                ]
+              },
+              {
+                "punto": [
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "origen inestable",
+                "autovalores": [
+                  4.0
+                ]
+              },
+              {
+                "punto": [
+                  2.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "rama estable",
+                "autovalores": [
+                  -8.0
+                ]
+              }
+            ]
+          }
+        ],
+        "casos_variante": {
+          "3.3B": [
+            {
+              "parametros": {
+                "mu": -0.3
+              },
+              "equilibrios": [
+                {
+                  "punto": [
+                    0.0
+                  ],
+                  "clasificacion_motor": "estable",
+                  "clasificacion_balotario": "único atractor; mu < -1/4",
+                  "autovalores": [
+                    -0.3
+                  ]
+                }
+              ],
+              "nota": "Por debajo de mu_s = -1/4 solo sobrevive el origen."
+            },
+            {
+              "parametros": {
+                "mu": -0.25
+              },
+              "equilibrios": [
+                {
+                  "punto": [
+                    -0.7071067811865476
+                  ],
+                  "clasificacion_motor": "no concluyente",
+                  "clasificacion_balotario": "silla-nodo: las ramas interior y exterior se aniquilan",
+                  "autovalores": [
+                    0.0
+                  ]
+                },
+                {
+                  "punto": [
+                    0.0
+                  ],
+                  "clasificacion_motor": "estable",
+                  "clasificacion_balotario": "origen estable",
+                  "autovalores": [
+                    -0.25
+                  ]
+                },
+                {
+                  "punto": [
+                    0.7071067811865476
+                  ],
+                  "clasificacion_motor": "no concluyente",
+                  "clasificacion_balotario": "silla-nodo: las ramas interior y exterior se aniquilan",
+                  "autovalores": [
+                    0.0
+                  ]
+                }
+              ],
+              "nota": "mu_s = -1/4 es el punto de pliegue donde nacen las ramas de gran amplitud."
+            },
+            {
+              "parametros": {
+                "mu": -0.2
+              },
+              "equilibrios": [
+                {
+                  "punto": [
+                    -0.8506508083520399
+                  ],
+                  "clasificacion_motor": "estable",
+                  "clasificacion_balotario": "rama exterior de gran amplitud, estable",
+                  "autovalores": [
+                    -0.6472135954999579
+                  ]
+                },
+                {
+                  "punto": [
+                    -0.5257311121191336
+                  ],
+                  "clasificacion_motor": "inestable",
+                  "clasificacion_balotario": "rama intermedia inestable",
+                  "autovalores": [
+                    0.24721359549995786
+                  ]
+                },
+                {
+                  "punto": [
+                    0.0
+                  ],
+                  "clasificacion_motor": "estable",
+                  "clasificacion_balotario": "origen estable",
+                  "autovalores": [
+                    -0.2
+                  ]
+                },
+                {
+                  "punto": [
+                    0.5257311121191336
+                  ],
+                  "clasificacion_motor": "inestable",
+                  "clasificacion_balotario": "rama intermedia inestable",
+                  "autovalores": [
+                    0.24721359549995786
+                  ]
+                },
+                {
+                  "punto": [
+                    0.8506508083520399
+                  ],
+                  "clasificacion_motor": "estable",
+                  "clasificacion_balotario": "rama exterior de gran amplitud, estable",
+                  "autovalores": [
+                    -0.6472135954999579
+                  ]
+                }
+              ],
+              "nota": "Cinco equilibrios coexisten: el origen estable, dos ramas intermedias inestables y dos exteriores estables. Es la biestabilidad que produce la histéresis."
+            },
+            {
+              "parametros": {
+                "mu": 0.5
+              },
+              "equilibrios": [
+                {
+                  "punto": [
+                    -1.1687708944803676
+                  ],
+                  "clasificacion_motor": "estable",
+                  "clasificacion_balotario": "único atractor de gran amplitud",
+                  "autovalores": [
+                    -4.732050807568878
+                  ]
+                },
+                {
+                  "punto": [
+                    0.0
+                  ],
+                  "clasificacion_motor": "inestable",
+                  "clasificacion_balotario": "origen inestable",
+                  "autovalores": [
+                    0.5
+                  ]
+                },
+                {
+                  "punto": [
+                    1.1687708944803676
+                  ],
+                  "clasificacion_motor": "estable",
+                  "clasificacion_balotario": "único atractor de gran amplitud",
+                  "autovalores": [
+                    -4.732050807568878
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "datos_adicionales": {
+          "ramas_A_latex": "x_\\pm^* = \\pm\\sqrt{\\mu} \\text{ (estables, nacen para } \\mu>0)",
+          "ramas_B_intermedias_latex": "x_{\\text{int}}^* = \\pm\\sqrt{\\frac{1 - \\sqrt{1+4\\mu}}{2}} \\text{ (inestables)}",
+          "ramas_B_exteriores_latex": "x_{\\text{ext}}^* = \\pm\\sqrt{\\frac{1 + \\sqrt{1+4\\mu}}{2}} \\text{ (estables)}",
+          "punto_de_pliegue": -0.25,
+          "ciclo_histeresis_latex": "\\Delta\\mu = 0 - (-1/4) = 1/4",
+          "salto_en_mu_cero": 1.0,
+          "conclusion": "En (A) las ramas nacen continuamente y el cambio es reversible. En (B) existen para mu < 0, el estado salta discontinuamente a x* = ±1 cuando mu cruza 0 por arriba, y no regresa hasta mu = -1/4: un ciclo de histéresis de ancho 1/4."
+        }
+      },
+      "verificacion": {
+        "clasificacion_por_casos": true,
+        "casos_de_variante": true,
+        "conteo_de_equilibrios": true
+      }
+    },
+    {
+      "id": "3.4",
+      "orden": 4,
+      "titulo": "Bifurcación de Hopf supercrítica",
+      "enunciado": "Demuestre que el siguiente sistema presenta una bifurcación de Hopf en $\\mu = 0$ y determine la amplitud y estabilidad del ciclo límite que nace: $\\dot{x} = \\mu x - y - x(x^2 + y^2)$, $\\dot{y} = x + \\mu y - y(x^2 + y^2)$.",
+      "tipo": "bifurcacion_hopf",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = \\mu x - y - x(x^2+y^2), \\qquad \\dot{y} = x + \\mu y - y(x^2+y^2)",
+        "forma": "familia_parametrica",
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": [
+          "x",
+          "y"
+        ],
+        "campo": [
+          "mu*x - y - x*(x**2 + y**2)",
+          "x + mu*y - y*(x**2 + y**2)"
+        ],
+        "parametros": {
+          "mu": 1.0
+        },
+        "parametro_de_barrido": "mu",
+        "forma_polar_latex": "\\dot{r} = r(\\mu - r^2), \\qquad \\dot{\\theta} = 1"
+      },
+      "solucion_esperada": {
+        "tipo": "bifurcacion",
+        "latex": "\\lambda_{1,2}(\\mu) = \\mu \\pm i; \\qquad R(\\mu) = \\sqrt{\\mu}, \\quad T = 2\\pi, \\quad l_1 = -1 < 0",
+        "parametro": "mu",
+        "valores_criticos": [
+          0.0
+        ],
+        "clase": "Hopf supercrítica",
+        "casos": [
+          {
+            "parametros": {
+              "mu": -0.5
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "foco estable: único atractor global",
+                "autovalores": [
+                  {
+                    "re": -0.5,
+                    "im": -1.0
+                  },
+                  {
+                    "re": -0.5,
+                    "im": 1.0
+                  }
+                ]
+              }
+            ],
+            "ciclo_limite": null
+          },
+          {
+            "parametros": {
+              "mu": 0.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "no concluyente",
+                "clasificacion_balotario": "cruce transversal del eje imaginario",
+                "autovalores": [
+                  {
+                    "re": 0.0,
+                    "im": -1.0
+                  },
+                  {
+                    "re": 0.0,
+                    "im": 1.0
+                  }
+                ]
+              }
+            ],
+            "ciclo_limite": null
+          },
+          {
+            "parametros": {
+              "mu": 0.25
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "foco inestable",
+                "autovalores": [
+                  {
+                    "re": 0.25,
+                    "im": -1.0
+                  },
+                  {
+                    "re": 0.25,
+                    "im": 1.0
+                  }
+                ]
+              }
+            ],
+            "ciclo_limite": {
+              "radio": 0.5,
+              "estabilidad": "estable",
+              "radio_inicial_de_prueba": 0.05
+            }
+          },
+          {
+            "parametros": {
+              "mu": 1.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "foco inestable",
+                "autovalores": [
+                  {
+                    "re": 1.0,
+                    "im": -1.0
+                  },
+                  {
+                    "re": 1.0,
+                    "im": 1.0
+                  }
+                ]
+              }
+            ],
+            "ciclo_limite": {
+              "radio": 1.0,
+              "estabilidad": "estable",
+              "radio_inicial_de_prueba": 0.05
+            }
+          }
+        ],
+        "datos_adicionales": {
+          "amplitud_expresion": "sqrt(mu)",
+          "amplitud_latex": "R(\\mu) = \\sqrt{\\mu} \\text{ para } \\mu > 0",
+          "periodo": 6.283185307179586,
+          "periodo_latex": "T = 2\\pi",
+          "primer_coeficiente_de_lyapunov": -1.0,
+          "transversalidad_latex": "\\alpha'(\\mu) = \\frac{d}{d\\mu}\\mathrm{Re}(\\lambda) = 1 \\neq 0",
+          "conclusion": "l_1 = -1 < 0 implica bifurcación supercrítica: el ciclo límite es atractor y nace para mu > 0.",
+          "verificacion_periodo": "Integrando desde (1,0) con mu=1 exactamente T=2pi, el estado regresa a (1,0) con desvío 1.8e-12."
+        }
+      },
+      "verificacion": {
+        "clasificacion_por_casos": true,
+        "amplitud_del_ciclo": true,
+        "periodo_del_ciclo": true
+      }
+    },
+    {
+      "id": "3.5",
+      "orden": 5,
+      "titulo": "Bifurcación homoclínica de silla (global)",
+      "enunciado": "Considere el sistema en el plano $\\dot{x} = y$, $\\dot{y} = \\mu y + x - x^2 + x y$. Explique cómo la variación del parámetro $\\mu$ destruye la órbita homoclínica y da lugar a una bifurcación global de ciclo límite (Bifurcación Homoclínica de Silla).",
+      "tipo": "bifurcacion_homoclinica",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "revision_matematica": {
+        "estado": "error_aritmetico_en_el_tex",
+        "resumen": "La segunda integral de Melnikov es I₂ = 36/35, no 6/7: el cero de M(μ) es μ_M = −6/7, no −5/7. El valor real de la conexión homoclínica, por disparo numérico, es μ* ≈ −0.8645.",
+        "detalle": "Con el lazo y₀(x) = ±x√(1 − 2x/3), x ∈ [0, 3/2]: I₁ = 2∫₀^{3/2} x√(1 − 2x/3) dx = 6/5 (coincide con el .tex) e I₂ = 2∫₀^{3/2} x²√(1 − 2x/3) dx = 36/35. Entonces M(μ) = (6/5)μ + 36/35 y μ_M = −6/7 ≈ −0.857. Melnikov es una aproximación de primer orden y la perturbación μy + xy no es pequeña: el disparo sobre las variedades de la silla da μ* ≈ −0.86455.",
+        "mecanismo": "El ciclo límite estable nace en el Hopf supercrítico de (1, 0) en μ = −1 (primer coeficiente de Lyapunov a = −1/8), existe para −1 < μ < μ*, y al acercarse a μ* su periodo diverge como −(1/λᵤ) ln|μ − μ*| hasta convertirse en el lazo homoclínico. Para μ > μ* no hay ciclo y las órbitas escapan. El .tex dice lo contrario ('al cruzar μc nace un ciclo límite').",
+        "valores_corregidos": {"I1": 1.2, "I2": 1.0285714285714285, "mu_melnikov": -0.8571428571428571, "mu_numerico": -0.86455, "hopf_local": -1.0},
+        "verificado_por": "matematica.analisis_bifurcaciones.desarrollar_homoclinica (Melnikov exacto con sympy, disparo numérico, evidencia del ciclo a cada lado de μ* y ajuste de la divergencia del periodo); test/test_tema3.py",
+        "tex_modificado": false
+      },
+      "ecuacion": {
+        "latex": "\\dot{x} = y, \\qquad \\dot{y} = \\mu y + x - x^2 + xy",
+        "forma": "familia_parametrica",
+        "dimension": 2,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": [
+          "x",
+          "y"
+        ],
+        "campo": [
+          "y",
+          "mu*y + x - x**2 + x*y"
+        ],
+        "parametros": {
+          "mu": -0.5
+        },
+        "parametro_de_barrido": "mu"
+      },
+      "solucion_esperada": {
+        "tipo": "bifurcacion",
+        "latex": "P_1=(0,0) \\text{ silla } \\forall\\mu; \\quad P_2=(1,0) \\text{ cambia en } \\mu=-1; \\quad \\mu_c = -5/7",
+        "parametro": "mu",
+        "valores_criticos": [
+          -1.0,
+          -0.7142857142857143
+        ],
+        "clase": "homoclínica de silla (global), con un Hopf local previo",
+        "casos": [
+          {
+            "parametros": {
+              "mu": -1.5
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "punto silla hiperbólico",
+                "autovalores": [
+                  -2.0,
+                  0.5
+                ]
+              },
+              {
+                "punto": [
+                  1.0,
+                  0.0
+                ],
+                "clasificacion_motor": "estable",
+                "clasificacion_balotario": "foco asintóticamente estable (Tr J = mu+1 < 0)",
+                "autovalores": [
+                  {
+                    "re": -0.25,
+                    "im": -0.9682458365518543
+                  },
+                  {
+                    "re": -0.25,
+                    "im": 0.9682458365518543
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": -0.7142857142857143
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "punto silla hiperbólico",
+                "autovalores": [
+                  -1.4190049105227505,
+                  0.7047191962370362
+                ]
+              },
+              {
+                "punto": [
+                  1.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "foco inestable (Tr J = 2/7 > 0)",
+                "autovalores": [
+                  {
+                    "re": 0.14285714285714285,
+                    "im": -0.9897433186107869
+                  },
+                  {
+                    "re": 0.14285714285714285,
+                    "im": 0.9897433186107869
+                  }
+                ]
+              }
+            ],
+            "nota": "mu_c = -5/7: la integral de Melnikov M(mu) = (6/5)mu + 6/7 se anula y existe la conexión homoclínica global."
+          },
+          {
+            "parametros": {
+              "mu": -0.5
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "punto silla hiperbólico",
+                "autovalores": [
+                  -1.2807764064044151,
+                  0.7807764064044151
+                ]
+              },
+              {
+                "punto": [
+                  1.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "foco inestable",
+                "autovalores": [
+                  {
+                    "re": 0.25,
+                    "im": -0.9682458365518543
+                  },
+                  {
+                    "re": 0.25,
+                    "im": 0.9682458365518543
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "parametros": {
+              "mu": 0.0
+            },
+            "equilibrios": [
+              {
+                "punto": [
+                  0.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "punto silla hiperbólico",
+                "autovalores": [
+                  -1.0,
+                  1.0
+                ]
+              },
+              {
+                "punto": [
+                  1.0,
+                  0.0
+                ],
+                "clasificacion_motor": "inestable",
+                "clasificacion_balotario": "foco inestable",
+                "autovalores": [
+                  {
+                    "re": 0.5,
+                    "im": -0.8660254037844386
+                  },
+                  {
+                    "re": 0.5,
+                    "im": 0.8660254037844386
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "datos_adicionales": {
+          "autovalores_silla_latex": "\\lambda_{u,s} = \\frac{\\mu \\pm \\sqrt{\\mu^2+4}}{2}",
+          "traza_en_p2_latex": "\\mathrm{Tr}(J(1,0)) = \\mu + 1",
+          "hopf_local": -1.0,
+          "orbita_homoclinica_expresion": "x*sqrt(1 - 2*x/3)",
+          "orbita_homoclinica_latex": "y_0(x) = \\pm x\\sqrt{1 - \\frac{2}{3}x}, \\qquad x \\in [0, 3/2]",
+          "melnikov_latex": "M(\\mu) = \\frac{6}{5}\\mu + \\frac{6}{7}",
+          "mu_critico": -0.7142857142857143,
+          "periodo_divergente_latex": "T(\\mu) \\approx -\\frac{1}{\\lambda_u}\\ln|\\mu - \\mu_c|",
+          "conclusion": "Al cruzar mu_c = -5/7 la conexión homoclínica se rompe y nace un ciclo límite periódico estable de gran amplitud, cuyo periodo diverge logarítmicamente al acercarse a mu_c.",
+          "advertencia_numerica": "La órbita homoclínica solo existe exactamente en mu_c; cerca de ese valor el periodo diverge, así que una verificación por integración directa del ciclo requiere intervalos muy largos y no se incluye en los tests."
+        }
+      },
+      "verificacion": {
+        "clasificacion_por_casos": true,
+        "traza_cambia_de_signo": true,
+        "ciclo_limite_no_verificado_numericamente": true
+      }
+    }
+  ]
+}
