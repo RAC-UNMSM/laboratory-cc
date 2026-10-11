@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="file-id" content="b4a1794d49574e0e96d1a98704cfe438">
+  <title>Reporte de resultados numericos</title>
+  <style>
+    :root { color-scheme: light; font-family: Georgia, 'Times New Roman', serif; color: #20342d; }
+    body { margin: 0; padding: 2rem; background: #f2f5f2; }
+    main { max-width: 920px; margin: 0 auto; }
+    h1 { margin-bottom: .35rem; font-size: 1.8rem; font-weight: 500; }
+    h2 { margin-top: 2rem; font-size: 1.15rem; font-weight: 600; }
+    .math-block { margin: 1.25rem 0; padding: .8rem 1rem; background: #fff; border-left: 3px solid #146c5a; overflow-x: auto; }
+    .message { color: #53615c; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { padding: .7rem .85rem; border-bottom: 1px solid #dce4e1; text-align: left; }
+    th { width: 34%; color: #53615c; font-weight: 500; }
+    figure { margin: 0; padding: .75rem; background: #fff; border: 1px solid #dce4e1; }
+    svg { display: block; width: 100%; height: auto; }
+    li { margin: .4rem 0; }
+    .notice { padding: .8rem; border-left: 3px solid #b47613; background: #fff; }
+    @media (max-width: 600px) { body { padding: 1rem; } th, td { padding: .55rem; } }
+  </style>
+    <script>
+window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'global' }
+};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Reporte de resultados numericos</h1>
+    <p class="file-id">ID de archivo: <code>b4a1794d49574e0e96d1a98704cfe438</code></p>
+    <p class="message">Convergencia alcanzada.</p>
+    <div class="math-block">\[F(\mathbf{x})=\mathbf{0}\]</div>
+    <section><h2>Resumen</h2><table><tbody><tr><th scope="row">Metodo</th><td>newton_sistemas</td></tr>
+<tr><th scope="row">Estado</th><td>converged</td></tr>
+<tr><th scope="row">Solucion</th><td>\(\mathbf{x}^{*}=\left(0.70710678, 0.70710678\right)\)</td></tr>
+<tr><th scope="row">Iteraciones</th><td>4</td></tr>
+<tr><th scope="row">Error final \(e_f\)</th><td>1e-10</td></tr>
+<tr><th scope="row">Residuo final \(\|F(\mathbf{x})\|_2\)</th><td>1e-10</td></tr></tbody></table></section>
+
+    <section><h2>Trayectoria</h2><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 440" role="img" aria-label="Trayectoria de iteraciones">
+<title>Trayectoria de iteraciones</title>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<line x1="76" y1="48.00" x2="776" y2="48.00" stroke="#dce4e1" stroke-width="1"/>
+<text x="66" y="52.00" text-anchor="end" font-size="12" fill="#53615c">1.04</text>
+<line x1="76" y1="131.50" x2="776" y2="131.50" stroke="#dce4e1" stroke-width="1"/>
+<text x="66" y="135.50" text-anchor="end" font-size="12" fill="#53615c">0.895</text>
+<line x1="76" y1="215.00" x2="776" y2="215.00" stroke="#dce4e1" stroke-width="1"/>
+<text x="66" y="219.00" text-anchor="end" font-size="12" fill="#53615c">0.75</text>
+<line x1="76" y1="298.50" x2="776" y2="298.50" stroke="#dce4e1" stroke-width="1"/>
+<text x="66" y="302.50" text-anchor="end" font-size="12" fill="#53615c">0.605</text>
+<line x1="76" y1="382.00" x2="776" y2="382.00" stroke="#dce4e1" stroke-width="1"/>
+<text x="66" y="386.00" text-anchor="end" font-size="12" fill="#53615c">0.46</text>
+<line x1="76" y1="48" x2="76" y2="382" stroke="#65736d"/>
+<line x1="76" y1="382" x2="776" y2="382" stroke="#65736d"/>
+<text x="426.00" y="426" text-anchor="middle" font-size="13" fill="#34423c">Iteracion</text>
+<polyline points="76.00,71.03 309.33,215.00 542.67,238.99 776.00,239.70" fill="none" stroke="#146c5a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="76.00" cy="71.03" r="4" fill="#146c5a"><title>Iteracion 0; x1 = 1</title></circle>
+<circle cx="309.33" cy="215.00" r="4" fill="#146c5a"><title>Iteracion 1; x1 = 0.75</title></circle>
+<circle cx="542.67" cy="238.99" r="4" fill="#146c5a"><title>Iteracion 2; x1 = 0.7083</title></circle>
+<circle cx="776.00" cy="239.70" r="4" fill="#146c5a"><title>Iteracion 3; x1 = 0.7071</title></circle>
+<line x1="76" y1="24" x2="94" y2="24" stroke="#146c5a" stroke-width="3"/>
+<text x="100" y="28" font-size="12" fill="#34423c">x1</text>
+<polyline points="76.00,358.97 309.33,215.00 542.67,238.99 776.00,239.70" fill="none" stroke="#c04b35" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="76.00" cy="358.97" r="4" fill="#c04b35"><title>Iteracion 0; x2 = 0.5</title></circle>
+<circle cx="309.33" cy="215.00" r="4" fill="#c04b35"><title>Iteracion 1; x2 = 0.75</title></circle>
+<circle cx="542.67" cy="238.99" r="4" fill="#c04b35"><title>Iteracion 2; x2 = 0.7083</title></circle>
+<circle cx="776.00" cy="239.70" r="4" fill="#c04b35"><title>Iteracion 3; x2 = 0.7071</title></circle>
+<line x1="188" y1="24" x2="206" y2="24" stroke="#c04b35" stroke-width="3"/>
+<text x="212" y="28" font-size="12" fill="#34423c">x2</text>
+</svg></figure></section>
+  </main>
+</body>
+</html>
