@@ -43,6 +43,8 @@ from mcp.server.mcpserver import MCPServer
 
 import storage
 import visualizacion
+import comun
+import limite
 
 storage.ensure_bucket()
 
@@ -81,7 +83,7 @@ mcp = MCPServer(
 
 def _normalizar(expr: Any) -> str:
     """Expresion de sympy en texto plano imprimible (sstr, no repr)."""
-    return sp.sstr(sp.sympify(expr))
+    return sp.sstr(expr)
 
 
 # =========================================================================
@@ -172,8 +174,8 @@ def _validar_longitud(texto: str, nombre: str = "expresion") -> None:
 
 
 @mcp.tool(name="calcular_derivada")
+@limite.con_limite
 def calcular_derivada(expresion: str, variable: str = "x", orden: int = 1) -> dict[str, Any]:
-
     """HERRAMIENTA OBLIGATORIA: Invoca SIEMPRE esta herramienta para calcular derivadas.
     NUNCA calcules derivadas de memoria ni a mano.
 
@@ -194,8 +196,8 @@ def calcular_derivada(expresion: str, variable: str = "x", orden: int = 1) -> di
         _validar_longitud(expresion)
         if orden < 1 or orden > _MAX_ORDEN_DERIVADA:
             raise ValueError(f"'orden' debe estar entre 1 y {_MAX_ORDEN_DERIVADA}")
-        v = sp.Symbol(variable)
-        f = sp.sympify(expresion)
+        v = comun.simbolo(variable, real=False)
+        f = comun.parsear(expresion, [v])
         df = sp.diff(f, v, orden)
         resultado: dict[str, Any] = {
             "estado": "exito",
@@ -221,6 +223,7 @@ def calcular_derivada(expresion: str, variable: str = "x", orden: int = 1) -> di
 
 
 @mcp.tool(name="calcular_integral")
+@limite.con_limite
 def calcular_integral(
     expresion: str,
     variable: str = "x",
@@ -245,15 +248,16 @@ def calcular_integral(
             _validar_longitud(limite_inferior, "limite_inferior")
         if limite_superior is not None:
             _validar_longitud(limite_superior, "limite_superior")
-        v = sp.Symbol(variable)
-        f = sp.sympify(expresion)
+        v = comun.simbolo(variable, real=False)
+        f = comun.parsear(expresion, [v])
         definido = limite_inferior is not None or limite_superior is not None
         if definido and (limite_inferior is None or limite_superior is None):
             raise ValueError("para la integral definida hay que pasar los dos limites")
 
         if definido:
-            a = sp.sympify(limite_inferior)
-            b = sp.sympify(limite_superior)
+            a = comun.parsear(limite_inferior)
+            b = comun.parsear(limite_superior)
+            r = sp.integrate(f, (v, a, b))
             r = sp.integrate(f, (v, a, b))
             return {
                 "estado": "exito",
@@ -277,6 +281,7 @@ def calcular_integral(
 
 
 @mcp.tool(name="calcular_gradiente")
+@limite.con_limite
 def calcular_gradiente(expresion: str, variables: list[str]) -> dict[str, Any]:
     """Gradiente de una funcion multivariable; y su laplaciano si son 2 variables.
 
@@ -290,8 +295,8 @@ def calcular_gradiente(expresion: str, variables: list[str]) -> dict[str, Any]:
             raise ValueError("'variables' no puede estar vacia")
         if len(variables) > _MAX_VARIABLES_GRADIENTE:
             raise ValueError(f"máximo {_MAX_VARIABLES_GRADIENTE} variables permitidas para el gradiente")
-        simbolos = [sp.Symbol(n) for n in variables]
-        f = sp.sympify(expresion)
+        simbolos = [comun.simbolo(n, real=False) for n in variables]
+        f = comun.parsear(expresion, simbolos)
         grad = [sp.diff(f, v) for v in simbolos]
         salida: dict[str, Any] = {
             "estado": "exito",
@@ -308,6 +313,7 @@ def calcular_gradiente(expresion: str, variables: list[str]) -> dict[str, Any]:
 
 
 @mcp.tool(name="verificar_respuesta")
+@limite.con_limite
 def verificar_respuesta(
     respuesta_alumno: str,
     expresion: str | None = None,
@@ -351,17 +357,17 @@ def verificar_respuesta(
             _validar_longitud(expresion, "expresion")
         if referencia is not None:
             _validar_longitud(referencia, "referencia")
-        v = sp.Symbol(variable)
-        alumno = sp.sympify(respuesta_alumno)
+        v = comun.simbolo(variable, real=False)
+        alumno = comun.parsear(respuesta_alumno, [v, sp.Symbol("C")])
 
         if expresion is not None:
-            objetivo = sp.integrate(sp.sympify(expresion), v)
+            objetivo = sp.integrate(comun.parsear(expresion, [v]), v)
             tipo = "integral indefinida"
             # Dos antiderivadas de la misma funcion difieren en una constante,
             # asi que lo que se compara es "no depende de la variable".
             correcta = v not in sp.simplify(alumno - objetivo).free_symbols
         elif referencia is not None:
-            objetivo = sp.sympify(referencia)
+            objetivo = comun.parsear(referencia, [v])
             tipo = "valor de referencia"
             correcta = sp.simplify(alumno - objetivo) == 0
         else:
@@ -407,6 +413,7 @@ async def estado_del_servidor() -> dict[str, Any]:
             "max_variables_gradiente": _MAX_VARIABLES_GRADIENTE,
             "max_funciones_grafico": _MAX_FUNCIONES,
             "max_ancho_intervalo": _MAX_ANCHO_INTERVALO,
+            "tiempo_max_segundos": limite.TIEMPO_MAX_S,
             "memoria_contenedor": "512MB",
         },
         # False en local (python server.py): los graficos se generan pero no
@@ -440,7 +447,7 @@ def _numero(texto: str, nombre: str) -> float:
     """Limite de un intervalo: acepta valores exactos como "pi" o "2*pi"."""
     _validar_longitud(texto, nombre)
     try:
-        valor = float(sp.sympify(texto))
+        valor = float(comun.parsear(texto))
     except Exception as exc:
         raise visualizacion.GraficoError(f"'{nombre}' no es un numero valido: {texto!r}") from exc
     if not np.isfinite(valor):
@@ -471,19 +478,12 @@ def _expresion_en(texto: str, variables: list[str]) -> sp.Expr:
     un error de numpy incomprensible para el alumno.
     """
     _validar_longitud(texto)
-    simbolos = {n: sp.Symbol(n) for n in variables}
     try:
-        expr = sp.sympify(texto, locals=simbolos)
+        expr = comun.parsear(texto, [sp.Symbol(n) for n in variables])
     except Exception as exc:
         raise visualizacion.GraficoError(
-            f"no se pudo leer {texto!r}: usa sintaxis sympy (x**2, sin(x), sqrt(x), exp(x))"
+            f"no se pudo leer {texto!r}: {exc}"
         ) from exc
-    sobrantes = {str(s) for s in expr.free_symbols} - set(variables)
-    if sobrantes:
-        raise visualizacion.GraficoError(
-            f"{texto!r} usa variables no permitidas {sorted(sobrantes)}; "
-            f"solo puede depender de {variables}"
-        )
     return expr
 
 
@@ -528,6 +528,7 @@ def _con_guia_de_imagen(fn: Any) -> Any:
 
 
 @mcp.tool(name="graficar_funciones")
+@limite.con_limite
 @_con_guia_de_imagen
 def graficar_funciones(
     funciones: list[str],
@@ -558,7 +559,7 @@ def graficar_funciones(
             raise visualizacion.GraficoError("'funciones' no puede estar vacia")
         if len(funciones) > _MAX_FUNCIONES:
             raise visualizacion.GraficoError(f"maximo {_MAX_FUNCIONES} funciones por grafico")
-        x = sp.Symbol(variable)
+        x = comun.simbolo(variable, real=False)
         exprs = [_expresion_en(f, [variable]) for f in funciones]
         a, b = _intervalo(x_min, x_max, "x")
 
@@ -583,6 +584,7 @@ def graficar_funciones(
 
 
 @mcp.tool(name="graficar_superficie")
+@limite.con_limite
 @_con_guia_de_imagen
 def graficar_superficie(
     expresion: str,
@@ -613,7 +615,7 @@ def graficar_superficie(
         plano = punto = None
         extra: dict[str, Any] = {}
         if punto_x is not None:
-            x0, y0 = sp.sympify(punto_x), sp.sympify(punto_y)
+            x0, y0 = comun.parsear(punto_x), comun.parsear(punto_y)
             z0 = sp.simplify(f.subs({x: x0, y: y0}))
             fx0 = sp.simplify(sp.diff(f, x).subs({x: x0, y: y0}))
             fy0 = sp.simplify(sp.diff(f, y).subs({x: x0, y: y0}))
@@ -638,6 +640,7 @@ def graficar_superficie(
 
 
 @mcp.tool(name="graficar_curva")
+@limite.con_limite
 @_con_guia_de_imagen
 def graficar_curva(
     componentes: list[str],
@@ -652,12 +655,12 @@ def graficar_curva(
     `componentes` son 2 expresiones (curva plana) o 3 (curva en el espacio):
       - circunferencia: ["cos(t)", "sin(t)"]
       - helice: ["cos(t)", "sin(t)", "t"], t_max="4*pi"
-    Se marca el punto inicial y, en el plano, el sentido de recorrido.
+      - Se marca el punto inicial y, en el plano, el sentido de recorrido.
     """
     try:
         if len(componentes) not in (2, 3):
             raise visualizacion.GraficoError("'componentes' debe tener 2 (plano) o 3 (espacio) expresiones")
-        t = sp.Symbol(parametro)
+        t = comun.simbolo(parametro, real=False)
         exprs = [_expresion_en(c, [parametro]) for c in componentes]
         a, b = _intervalo(t_min, t_max, "t")
 
@@ -674,6 +677,7 @@ def graficar_curva(
 
 
 @mcp.tool(name="graficar_campo_vectorial")
+@limite.con_limite
 @_con_guia_de_imagen
 def graficar_campo_vectorial(
     P: str,
@@ -847,7 +851,7 @@ def _registrar_candidatas(nombre_modulo: str, candidatas: list[tuple[str, Any]])
             _log(f"[AVISO] tool duplicada {nombre_tool}, se omite")
             continue
         try:
-            mcp.tool(name=nombre_tool, description=_descripcion(fn))(fn)
+            mcp.tool(name=nombre_tool, description=_descripcion(fn))(limite.con_limite(fn))
             _TOOLS_REGISTRADAS.add(nombre_tool)
             registradas += 1
         except Exception as exc:  # noqa: BLE001

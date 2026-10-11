@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 import sympy as sp
+import comun
 
 
 # ============================================================
@@ -9,32 +10,19 @@ import sympy as sp
 # ============================================================
 
 def _simbolo(nombre: str) -> sp.Symbol:
-    return sp.Symbol(nombre)
+    return comun.simbolo(nombre, real=False)
+
+
+def _simbolos(variables: str | None) -> list[sp.Symbol]:
+    return [comun.simbolo(n, real=False) for n in (variables or "").replace(",", " ").split() if n.strip()]
 
 
 def _expresion(texto: str, variables: str | None = None) -> sp.Expr:
-    """Convierte una expresion escrita en sintaxis SymPy a una expresion."""
-    locals_map: dict[str, Any] = {
-        "pi": sp.pi,
-        "E": sp.E,
-        "oo": sp.oo,
-    }
-    if variables:
-        for nombre in variables.replace(",", " ").split():
-            locals_map[nombre.strip()] = sp.Symbol(nombre.strip())
-    return sp.sympify(texto, locals=locals_map)
+    return comun.parsear(texto, _simbolos(variables))
 
 
 def _vector(texto: str, variables: str | None = None) -> sp.Matrix:
-    """Convierte '(a,b,c)' o '[a,b,c]' en un vector columna."""
-    expr = _expresion(texto, variables)
-    if isinstance(expr, (tuple, list)):
-        return sp.Matrix(expr)
-    if isinstance(expr, sp.MatrixBase):
-        return sp.Matrix(expr)
-    raise ValueError(
-        "El vector debe escribirse como (P,Q) o (P,Q,R), usando sintaxis SymPy."
-    )
+    return comun.parsear_vector(texto, _simbolos(variables))
 
 
 def _matrix_latex(matriz: sp.MatrixBase) -> list[list[str]]:

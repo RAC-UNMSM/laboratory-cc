@@ -6,6 +6,7 @@ Contrato: tools/README.md
 
 from __future__ import annotations
 import sympy as sp
+import comun
 
 
 def geometria_analitica_r3(u_str: str, v_str: str) -> dict:
@@ -16,20 +17,8 @@ def geometria_analitica_r3(u_str: str, v_str: str) -> dict:
         v_str: segundo vector en sintaxis de lista o tupla, ej. "[2, -1, 3]".
     """
     try:
-        u_expr = sp.parse_expr(u_str.strip())
-        v_expr = sp.parse_expr(v_str.strip())
-        u = sp.Matrix(u_expr)
-        v = sp.Matrix(v_expr)
-
-        if u.shape not in ((3, 1), (1, 3)) or v.shape not in ((3, 1), (1, 3)):
-            return {
-                "estado": "error",
-                "mensaje": "Los vectores deben ser tridimensionales (3 componentes).",
-            }
-
-        # Asegurar formato columna
-        u = u.reshape(3, 1)
-        v = v.reshape(3, 1)
+        u = comun.parsear_vector(u_str, tamanos=(3,))
+        v = comun.parsear_vector(v_str, tamanos=(3,))
 
         dot_product = u.dot(v)
         cross_product = u.cross(v)
@@ -56,9 +45,8 @@ def superficies(ecuacion_str: str, variables: str = "x, y, z") -> dict:
         variables: variables involucradas separadas por coma, default "x, y, z".
     """
     try:
-        vars_list = [sp.Symbol(v.strip(), real=True) for v in variables.split(",")]
-        local_dict = {str(v): v for v in vars_list}
-        ecuacion = sp.parse_expr(ecuacion_str, local_dict=local_dict)
+        vars_list = [comun.simbolo(v.strip()) for v in variables.split(",") if v.strip()]
+        ecuacion = comun.parsear(ecuacion_str, vars_list)
 
         gradiente = [sp.diff(ecuacion, var) for var in vars_list]
         gradiente_mat = sp.Matrix(gradiente)
@@ -85,8 +73,8 @@ def frenet_serret_curvatura_torsion(r_str: str, t_var: str = "t") -> dict:
         t_var: parámetro de la curva, default "t".
     """
     try:
-        t = sp.Symbol(t_var, real=True)
-        r = sp.Matrix(sp.parse_expr(r_str, local_dict={t_var: t})).reshape(3, 1)
+        t = comun.simbolo(t_var, real=True)
+        r = comun.parsear_vector(r_str, [t], tamanos=(3,))
 
         v = sp.diff(r, t)
         a = sp.diff(v, t)
@@ -132,9 +120,8 @@ def derivadas_parciales_gradiente(expr_str: str, variables: str = "x, y") -> dic
         variables: variables respecto a las cuales derivar, default "x, y".
     """
     try:
-        vars_list = [sp.Symbol(v.strip(), real=True) for v in variables.split(",")]
-        local_dict = {str(v): v for v in vars_list}
-        f = sp.parse_expr(expr_str, local_dict=local_dict)
+        vars_list = [comun.simbolo(v.strip()) for v in variables.split(",") if v.strip()]
+        f = comun.parsear(expr_str, vars_list)
 
         parciales = [sp.diff(f, var) for var in vars_list]
         gradiente = sp.Matrix(parciales)
@@ -164,11 +151,10 @@ def plano_tangente(expr_str: str, x0: str = "0", y0: str = "0") -> dict:
     """
     try:
         x, y = sp.symbols("x y", real=True)
-        local_dict = {"x": x, "y": y}
-        f = sp.parse_expr(expr_str, local_dict=local_dict)
+        f = comun.parsear(expr_str, [x, y])
 
-        p_x0 = sp.sympify(x0)
-        p_y0 = sp.sympify(y0)
+        p_x0 = comun.parsear(x0)
+        p_y0 = comun.parsear(y0)
 
         z0 = sp.simplify(f.subs({x: p_x0, y: p_y0}))
         fx = sp.diff(f, x)
@@ -209,9 +195,8 @@ def optimizacion_lagrange_hessiano(
         restriccion: ecuación g(x, y) = 0 opcional para Lagrange, ej. "x + y - 1".
     """
     try:
-        vars_list = [sp.Symbol(v.strip(), real=True) for v in variables.split(",")]
-        local_dict = {str(v): v for v in vars_list}
-        f = sp.parse_expr(expr_str, local_dict=local_dict)
+        vars_list = [comun.simbolo(v.strip()) for v in variables.split(",") if v.strip()]
+        f = comun.parsear(expr_str, vars_list)
 
         n = len(vars_list)
         hessiano = sp.zeros(n, n)
@@ -224,8 +209,7 @@ def optimizacion_lagrange_hessiano(
         puntos_lagrange = None
         if restriccion:
             lam = sp.Symbol("lambda", real=True)
-            local_dict["lambda"] = lam
-            g = sp.parse_expr(restriccion, local_dict=local_dict)
+            g = comun.parsear(restriccion, vars_list)
 
             # Sistema de Lagrange: grad(f) - lambda * grad(g) = 0 y g = 0
             sistema = [sp.diff(f, var) - lam * sp.diff(g, var) for var in vars_list]

@@ -16,6 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py .
 COPY storage.py .
 COPY visualizacion.py .
+COPY comun.py .
+COPY limite.py .
 COPY tools/ tools/
 COPY skill/ skill/
 

@@ -412,8 +412,8 @@ def centro_masa_e_integracion_num(
         }
 
     elif operacion_tipo in ('trapecio', 'simpson'):
-        if n_tramos <= 0:
-            raise ValueError('n_tramos debe ser un entero positivo.')
+        if n_tramos <= 0 or n_tramos > 5000:
+            raise ValueError('n_tramos debe ser un entero positivo <= 5000.')
         if operacion_tipo == 'simpson' and n_tramos % 2 != 0:
             raise ValueError('El método de Simpson requiere un número par de subintervalos (n_tramos).')
 
