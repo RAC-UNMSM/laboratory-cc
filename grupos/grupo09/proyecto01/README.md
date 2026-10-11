@@ -1,14 +1,13 @@
-# Proyecto 01
+# Proyecto 01 — Grupo 09
 
-Cada grupo debe crear, dentro de esta carpeta (`proyecto01/`), una nueva
-carpeta con el nombre de su tema, **en minúscula**.
+## [`edos-lnl-rf/`](edos-lnl-rf/)
 
-Dentro de esa carpeta, adjuntar un archivo `.md` con la propuesta del
-tema, usando como nombre del archivo el nombre del tema, también en
-minúscula:
+Agente MCP de EDOs lineales y no lineales, retratos de fase, sistemas dinámicos
+caóticos, atractores extraños y fractales. Clasifica cada problema, elige el
+método del balotario del grupo, hace el desarrollo con sympy y scipy, lo
+verifica y publica un informe HTML interactivo con las gráficas y las fórmulas.
 
-```
-proyecto01/
-  <tema-en-minuscula>/
-    <tema-en-minuscula>.md
-```
+- Documentación de uso y de la arquitectura: [`README.md`](edos-lnl-rf/README.md)
+- Propuesta del proyecto: [`edos-lnl-rf.md`](edos-lnl-rf/edos-lnl-rf.md)
+- URL del servidor MCP desplegado:
+  `https://rac-unmsm.vekthos.org/grupo09/grupo09_proyecto01_edos-lnl-rf/mcp`

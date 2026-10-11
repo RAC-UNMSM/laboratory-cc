@@ -139,13 +139,17 @@ queda adentro:
 - **`storage.py`**: la lógica completa (`ensure_bucket`, `subir_imagen`,
   fallar en silencio si SeaweedFS no responde, key random con `uuid4`) es
   genérica y se copia casi entera — es infraestructura compartida del lab,
-  no algo específico de derivadas. Solo cambian estas constantes
-  (líneas 18-23 en este piloto):
+  no algo específico de derivadas. Tampoco hay nombres que cambiar: el
+  bucket y su URL pública los calcula el despliegue a partir de la carpeta
+  del proyecto (grupo + nombre de la carpeta) y llegan por dos variables:
   ```python
-  SEAWEEDFS_S3_URL = "http://seaweedfs:8333"   # queda igual, infra del lab
-  IMG_BUCKET = "derivadas1-imgs"                # → nombre único del bucket del grupo/tema
-  PUBLIC_IMG_BASE_URL = "https://rac-unmsm.vekthos.org/img/derivadas1"  # → ruta que asigne el profesor en Caddy
+  SEAWEEDFS_S3_URL = "http://seaweedfs:8333"                      # queda igual, infra del lab
+  IMG_BUCKET = os.environ.get("LAB_IMG_BUCKET", "")               # queda igual
+  PUBLIC_IMG_BASE_URL = os.environ.get("LAB_PUBLIC_IMG_URL", "")  # queda igual
   ```
+  Para que lleguen al contenedor, `docker-compose.yml` lleva el bloque
+  `environment:` con `LAB_IMG_BUCKET` y `LAB_PUBLIC_IMG_URL`, que también se
+  copia tal cual. La ruta pública de las imágenes se crea sola al desplegar.
   Si el resultado de la tool del grupo no es una imagen (texto, JSON,
   video, etc.), el *contenido* de este módulo cambia para subir ese tipo de
   dato, pero el *patrón* se mantiene: subir a un storage compartido →
@@ -190,7 +194,7 @@ queda adentro:
 |---|---|---|
 | `Dockerfile` | 1 — tal cual | Nada, salvo la lista de módulos en `COPY` si cambian de nombre |
 | `docker-compose.yml` | 1 — tal cual | Nombre del servicio y `mem_limit`; el resto es obligatorio y fijo |
-| `storage.py` | 2 — se edita | 2-3 constantes (`IMG_BUCKET`, `PUBLIC_IMG_BASE_URL`); la lógica se mantiene |
+| `storage.py` | 1 — tal cual | Nada: el bucket y la URL llegan por `LAB_IMG_BUCKET` / `LAB_PUBLIC_IMG_URL` |
 | `requirements.txt` | 2 — se edita | Librerías del tema, siempre con `mcp` como base |
 | `server.py` | 2 — se edita | Nombre del server, tool(s), docstring(s), llamadas a los módulos — la estructura de orquestador no cambia |
 | `validacion.py` | 3 — se reescribe | Contenido 100% nuevo, solo se conserva el rol "validar entradas sin lógica de negocio" |

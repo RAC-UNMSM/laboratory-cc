@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  mcp-calculadora:
+    build: .
+    container_name: ${LAB_CONTAINER_NAME}
+    mem_limit: 512m
+    expose:
+      - "8000"
+    environment:
+      LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}
+      LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}
+    restart: unless-stopped
+
+networks:
+  default:
+    name: lab_net
+    external: true

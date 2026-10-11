@@ -12,7 +12,7 @@ Para un grupo nuevo (`grupoNN`):
        <tema>/
          docker-compose.yml
    ```
-   El identificador completo de esa app, en todos lados (Dagster, Portainer,
+   El identificador completo de esa app, en todos lados (Portainer, los logs,
    la URL pública), sale de concatenar los tres niveles con `_`:
    **`grupoNN_semanaNN_<tema>`** (ej. `grupo01_semana02_mcpn8n`) — a
    propósito repetido con el número de grupo adentro, para que sea
@@ -38,18 +38,17 @@ Para un grupo nuevo (`grupoNN`):
    - `container_name: lab-grupoNN_semanaNN_<tema>` fijo (el identificador
      completo del punto 2), y unirse a la red externa `lab_net` (copiar el
      bloque `networks:` del ejemplo).
-5. **No hace falta tocar nada del repo de infraestructura.** El asset de
-   Dagster se genera solo: el code-location escanea
-   `grupos/<grupo>/<semana>/<tema>/docker-compose.yml` en cada recarga (que
-   dispara el agente de deploy tras cada merge a `main`) y crea el asset
-   automáticamente, con el identificador completo del punto 2 — agregar la
-   carpeta con su `docker-compose.yml` ya es suficiente.
+5. **No hace falta tocar nada del repo de infraestructura.** El despliegue
+   descubre la app solo: tras cada merge a `main` busca
+   `grupos/<grupo>/<semana>/<tema>/docker-compose.yml` y despliega las
+   carpetas que cambiaron, con el identificador completo del punto 2 —
+   agregar la carpeta con su `docker-compose.yml` ya es suficiente.
 6. Si la app necesita ruta pública (para que el grupo la use en el
    navegador), agregar la ruta correspondiente en `caddy/Caddyfile` del
    repo de infraestructura (`handle /grupoNN/<identificador-completo>* { ...
    reverse_proxy lab-<identificador-completo>:<puerto> }`) — esa parte sí la
    hace el profesor, no va en este repo.
-7. Abrir PR contra `main`. El profesor (CODEOWNERS) revisa y mergea — el
-   despliegue real ocurre solo, automáticamente, cuando el agente de deploy
-   detecta el merge (nunca hay botón de "Materialize" que un alumno pueda
-   apretar).
+7. Abrir PR contra `main`. El profesor revisa y mergea (solo él
+   puede actualizar `main`) — el despliegue real ocurre solo,
+   automáticamente, al llegar el merge (nunca hay un botón de despliegue
+   que un alumno pueda apretar).

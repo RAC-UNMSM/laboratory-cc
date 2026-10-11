@@ -1,4 +1,18 @@
-# Plantilla de grupo
+# Grupo 05
+
+Proyecto de Redes, Arquitectura y Comunicaciones - Práctica, UNMSM, con contenido de Álgebra lineal.
+
+## Integrantes y proyecto
+
+- [Integrantes](Integrantes/README.md): nombres, correos y usuarios de los seis miembros, con fichas individuales.
+- [Propuesta del proyecto 01](proyecto01/inversa_tl_mcp/inversa_tl_mcp.md): transformaciones lineales, inversas y encriptación con matrices.
+- [Instalación y uso del MCP](proyecto01/inversa_tl_mcp/README.md).
+
+El servidor expone once herramientas MCP para vectores, polinomios, matrices, bases personalizadas y cifrado Hill. La carpeta sigue la convención de entrega de `proyecto01/README.md`; contiene Compose y una demostración local.
+
+## Referencia de despliegue del laboratorio
+
+Se conserva a continuación la referencia de la plantilla original para las entregas semanales.
 
 Para un grupo nuevo (`grupoNN`):
 

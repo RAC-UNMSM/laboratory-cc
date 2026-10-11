@@ -12,7 +12,7 @@ Para un grupo nuevo (`grupoNN`):
        <tema>/
          docker-compose.yml
    ```
-   El identificador completo de esa app, en todos lados (Dagster, Portainer,
+   El identificador completo de esa app, en todos lados (Portainer, los logs,
    la URL pública), sale de concatenar los tres niveles con `_`:
    **`grupoNN_semanaNN_<tema>`** (ej. `grupo01_semana02_mcpn8n`) — a
    propósito repetido con el número de grupo adentro, para que sea
@@ -42,19 +42,22 @@ Para un grupo nuevo (`grupoNN`):
      de escribirla mal), y unirse a la red externa `lab_net` (copiar el
      bloque `networks:` del ejemplo). Si la app necesita conocer su propia
      ruta pública (como el `N8N_PATH`/`WEBHOOK_URL` del ejemplo de n8n),
-     usar igual la variable automática `${LAB_PUBLIC_PATH}`.
-5. **No hace falta tocar nada del repo de infraestructura.** El asset de
-   Dagster se genera solo: el code-location escanea
-   `grupos/<grupo>/<semana>/<tema>/docker-compose.yml` en cada recarga (que
-   dispara el agente de deploy tras cada merge a `main`) y crea el asset
-   automáticamente, con el identificador completo del punto 2 — agregar la
-   carpeta con su `docker-compose.yml` ya es suficiente.
-6. Si la app necesita ruta pública (para que el grupo la use en el
-   navegador), agregar la ruta correspondiente en `caddy/Caddyfile` del
-   repo de infraestructura (`handle ${LAB_PUBLIC_PATH}* { ... reverse_proxy
-   ${LAB_CONTAINER_NAME}:<puerto> }`) — esa parte sí la hace el profesor, no
-   va en este repo.
-7. Abrir PR contra `main`. El profesor (CODEOWNERS) revisa y mergea — el
-   despliegue real ocurre solo, automáticamente, cuando el agente de deploy
-   detecta el merge (nunca hay botón de "Materialize" que un alumno pueda
-   apretar).
+     usar igual la variable automática `${LAB_PUBLIC_PATH}`. Para el
+     storage de imágenes hay otras dos, `${LAB_IMG_BUCKET}` y
+     `${LAB_PUBLIC_IMG_URL}`, que se pasan al contenedor con `environment:`
+     (ver `grupos/g01/semana01/derivadas1/docker-compose.yml`).
+5. **No hace falta tocar nada del repo de infraestructura.** El despliegue
+   descubre la app solo: tras cada merge a `main` busca
+   `grupos/<grupo>/<semana>/<tema>/docker-compose.yml` y despliega las
+   carpetas que cambiaron, con el identificador completo del punto 2 —
+   agregar la carpeta con su `docker-compose.yml` ya es suficiente.
+6. La ruta pública de un servidor MCP propio (carpeta con `server.py`,
+   escuchando en el puerto 8000) se crea sola al desplegar:
+   `${LAB_PUBLIC_PATH}` hacia `${LAB_CONTAINER_NAME}:8000`, y la de imágenes
+   si tiene `storage.py`. Cualquier otra app que necesite ruta pública (una
+   imagen ya hecha, otro puerto) la agrega el profesor a mano en el repo de
+   infraestructura: hay que pedírsela.
+7. Abrir PR contra `main`. El profesor revisa y mergea (solo él
+   puede actualizar `main`) — el despliegue real ocurre solo,
+   automáticamente, al llegar el merge (nunca hay un botón de despliegue
+   que un alumno pueda apretar).

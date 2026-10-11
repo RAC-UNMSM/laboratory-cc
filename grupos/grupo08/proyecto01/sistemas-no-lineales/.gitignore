@@ -24,3 +24,6 @@ htmlcov/
 .vscode/
 .idea/
 .vscode/
+
+# Historial de ejercicios que genera el servidor al ejecutarse
+config/proyecto_config.json

@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "tema": {
+    "id": "tema_04",
+    "titulo": "Sistemas Dinámicos Caóticos",
+    "orden": 4,
+    "origen": {
+      "archivo": "balotario.tex",
+      "seccion_latex": "Tema 4: Sistemas Dinámicos Caóticos",
+      "lineas": [2578, 3130]
+    },
+    "notas": "Los cinco problemas tienen solución desarrollada en el .tex (4.2 a 4.5 se completaron después del 4.1) y el agente los resuelve con su procedimiento: 4.1, 4.2 y 4.3 en matematica/analisis_caos.py (mapa unidimensional, duplicación de periodo, Feigenbaum), 4.4 y 4.5 en matematica/caos_en_flujos.py (disipatividad y elipsoide de Lorenz, teorema del espectro de Lyapunov contrastado por el método QR).\n\nLa mayoría no son problemas de valor inicial: son mapas discretos, estimaciones o demostraciones. Por eso cada problema trae `solicitud`, los argumentos con que se pide a `resolver_caos_fractales_y_atractores` junto con el enunciado; para los que nombran el sistema (mapa tienda, mapa logístico, Lorenz) el enunciado basta, porque el servidor conoce sus ecuaciones. Las cifras de `solucion_esperada.valores` son las que el agente calcula y verifica; coinciden con las del .tex."
+  },
+  "problemas": [
+    {
+      "id": "4.1",
+      "orden": 1,
+      "titulo": "Mapa tienda: exponente de Lyapunov y horizonte de predicción",
+      "enunciado": "Considere el mapa tienda (Tent Map) $f: [0,1] \\to [0,1]$ definido por $f(x) = 2x$ si $0 \\le x \\le 1/2$ y $f(x) = 2(1-x)$ si $1/2 < x \\le 1$. Calcule analíticamente su exponente de Lyapunov $\\lambda$ y determine el tiempo característico en que dos condiciones iniciales separadas por $\\delta_0 = 10^{-10}$ divergen hasta una distancia de orden 1.",
+      "tipo": "mapa_discreto_unidimensional",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "f(x) = \\begin{cases} 2x, & 0 \\le x \\le 1/2 \\\\ 2(1-x), & 1/2 < x \\le 1 \\end{cases}",
+        "forma": "mapa_discreto",
+        "dimension": 1,
+        "dominio": [0.0, 1.0],
+        "variables_estado": ["x"],
+        "definida_a_trozos": true,
+        "trozos": [
+          { "condicion": "0 <= x <= 1/2", "expresion": "2*x" },
+          { "condicion": "1/2 < x <= 1", "expresion": "2*(1 - x)" }
+        ],
+        "parametros": {},
+        "notas": "No se expresa como `campo` porque el esquema de `campo` describe el lado derecho de una EDO continua, no una iteración."
+      },
+      "solucion_esperada": {
+        "tipo": "analitico_discreto",
+        "solucion_en_tex": true,
+        "latex": "|f'(x)| = 2 \\; \\forall x \\neq 1/2 \\implies \\lambda = \\ln 2 \\approx 0.69315 > 0; \\qquad n^* = 34",
+        "valores": {
+          "exponente_lyapunov": 0.6931471805599453,
+          "exponente_lyapunov_expresion": "log(2)",
+          "entropia_kolmogorov_sinai": 0.6931471805599453,
+          "iteraciones_hasta_orden_uno": 34,
+          "delta_inicial": 1e-10
+        },
+        "puntos_fijos": [
+          { "punto": [0.0], "clasificacion_balotario": "inestable", "latex": "x_1^* = 0" },
+          { "punto": [0.6666666666666666], "clasificacion_balotario": "inestable", "latex": "x_2^* = 2/3" }
+        ],
+        "datos_adicionales": {
+          "derivada_latex": "f'(x) = +2 \\text{ en } (0,1/2), \\; -2 \\text{ en } (1/2,1)",
+          "divergencia_latex": "\\delta_n = \\delta_0 2^n",
+          "horizonte_latex": "n^* \\propto \\ln(1/\\delta_0)",
+          "conclusion": "La tasa uniforme de expansión |f'| = 2 da un exponente de Lyapunov constante lambda = ln 2, que coincide con la entropía métrica de Kolmogorov-Sinai. La pérdida de predictibilidad es intrínseca: no viene del ruido externo sino de la amplificación exponencial, que restringe el horizonte determinista a un tiempo finito."
+        },
+        "notas": "Los valores registrados son los que el .tex demuestra y los que reproduce el agente."
+      },
+      "verificacion": {
+        "exponente_exacto": true,
+        "horizonte_de_prediccion": true,
+        "nota": "Es la prueba de aceptación de `matematica/analisis_caos.py`: λ = ln 2 exacto (|f'| = 2 casi en todas partes), contrastado con un promedio numérico en precisión arbitraria, y n* = 34 para δ₀ = 10⁻¹⁰. Se pide con tipo_de_sistema = \"mapa_discreto\" y el mapa en `trozos` ([{expresion, desde, hasta}]) o como 1 - Abs(1 - 2*x)."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "El enunciado nombra el mapa tienda: basta con pasarlo. Con las ecuaciones, tipo_de_sistema='mapa_discreto' y el mapa en `trozos` o como 1 - Abs(1 - 2*x)."
+      }
+    },
+    {
+      "id": "4.2",
+      "orden": 2,
+      "titulo": "Mapa logístico: primer umbral de duplicación de periodo",
+      "enunciado": "Para el mapa logístico $x_{n+1} = r x_n(1 - x_n)$ con $x \\in [0,1]$: determine analíticamente el valor crítico $r_1$ donde la órbita de periodo 1 pierde estabilidad y nace la órbita de periodo 2.",
+      "tipo": "mapa_discreto_unidimensional",
+      "dificultad": "intermedia",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "x_{n+1} = r x_n (1 - x_n), \\qquad x \\in [0,1]",
+        "forma": "mapa_discreto",
+        "dimension": 1,
+        "dominio": [0.0, 1.0],
+        "variables_estado": ["x"],
+        "definida_a_trozos": false,
+        "trozos": [{ "condicion": "0 <= x <= 1", "expresion": "r*x*(1 - x)" }],
+        "parametros": {},
+        "parametro_de_barrido": "r",
+        "parametro": "r",
+        "rango_parametro": [0.0, 4.0]
+      },
+      "solucion_esperada": {
+        "tipo": "umbral_de_bifurcacion",
+        "solucion_en_tex": true,
+        "latex": "x_1^* = 0,\\; x_2^* = 1 - \\tfrac{1}{r};\\quad f'(x_2^*) = 2 - r;\\quad p, q = \\frac{(r+1) \\pm \\sqrt{(r+1)(r-3)}}{2r};\\quad (f^2)'(p) = -r^2 + 2r + 4;\\quad r_1 = 3,\\; r_2 = 1 + \\sqrt{6}",
+        "valores": {
+          "r_1": 3.0,
+          "r_1_expresion": "3",
+          "r_2": 3.449489742783178,
+          "r_2_expresion": "1 + sqrt(6)",
+          "puntos_fijos": ["0", "1 - 1/r"],
+          "multiplicadores": ["r", "2 - r"],
+          "discriminante_periodo_2": "r**2*(r - 3)*(r + 1)",
+          "multiplicador_periodo_2": "-r**2 + 2*r + 4",
+          "estable_punto_fijo_no_trivial": [1.0, 3.0],
+          "estable_periodo_2": [3.0, 3.449489742783178]
+        },
+        "notas": "r₁ = 3: el multiplicador 2 − r del punto fijo x₂* = 1 − 1/r vale −1 y nace la órbita de periodo 2, estable hasta r₂ = 1 + √6, donde su multiplicador −r² + 2r + 4 vale −1."
+      },
+      "verificacion": {
+        "factorizacion_f2": true,
+        "orbita_periodo_2_iterada": true,
+        "periodo_4_tras_r2": true,
+        "nota": "Prueba de aceptación de matematica.analisis_caos.desarrollar_duplicacion_periodo: puntos fijos y multiplicadores exactos con sympy, f²(x) − x factorizado por f(x) − x, multiplicador del 2-ciclo por Vieta y comprobación iterando el mapa antes de r₁, entre r₁ y r₂ y después de r₂."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "El enunciado nombra el mapa logístico y pregunta por el periodo 2: el servidor toma r como parámetro simbólico en [0, 4] y x ∈ [0, 1]."
+      }
+    },
+    {
+      "id": "4.3",
+      "orden": 3,
+      "titulo": "Cascada de Feigenbaum y umbral de acumulación caótica",
+      "enunciado": "La transición al caos en mapas unimodales sigue una cascada infinita de duplicaciones de periodo $2^n$ que ocurren en parámetros $r_n$. Si $r_1 = 3$ y $r_2 = 1 + \\sqrt{6} \\approx 3.44949$, estime el umbral crítico de acumulación caótica $r_\\infty$ usando la constante de Feigenbaum $\\delta \\approx 4.6692016$.",
+      "tipo": "analisis_asintotico_mapas",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "r_\\infty \\text{ a partir de } r_1, r_2 \\text{ y } \\delta",
+        "forma": "demostracion",
+        "dimension": 1,
+        "variables_estado": [],
+        "parametros": {}
+      },
+      "datos_del_enunciado": {
+        "r_1": 3.0,
+        "r_2": 3.449489742783178,
+        "r_2_expresion": "1 + sqrt(6)",
+        "delta_feigenbaum": 4.6692016
+      },
+      "solucion_esperada": {
+        "tipo": "estimacion_asintotica",
+        "solucion_en_tex": true,
+        "latex": "r_\\infty \\approx r_2 + \\frac{r_2 - r_1}{\\delta - 1} \\approx 3.57199,\\qquad r_3 \\approx r_2 + \\frac{r_2 - r_1}{\\delta} \\approx 3.54576",
+        "valores": {
+          "d_1": 0.4494897427831779,
+          "r_infinito_estimado": 3.5719931622690897,
+          "r_3_estimado": 3.545756681178637,
+          "r_3_numerico": 3.5440903595519226,
+          "r_infinito_numerico": 3.569945671870944,
+          "error_relativo": 0.0005735,
+          "primer_cociente": 4.751446218178204
+        },
+        "notas": "La serie geométrica de razón 1/δ suma 1/(δ − 1). El valor numérico de referencia sale de resolver f^p(x) = x, (f^p)'(x) = −1 para p = 2, 4, ..., 64 en el mapa logístico."
+      },
+      "verificacion": {
+        "suma_geometrica": true,
+        "umbrales_numericos": true,
+        "razones_tienden_a_delta": true,
+        "nota": "Prueba de aceptación de matematica.analisis_caos.desarrollar_feigenbaum."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": { "datos": { "r_1": 3.0, "r_2": 3.449489742783178, "delta": 4.6692016 } },
+        "nota": "Sin ecuación. Si no se pasan los datos se leen del enunciado (r_1 = 3, r_2 ≈ 3.44949, δ ≈ 4.6692016)."
+      }
+    },
+    {
+      "id": "4.4",
+      "orden": 4,
+      "titulo": "Lorenz: disipatividad y elipsoide atrapante",
+      "enunciado": "El sistema de Lorenz (1963) está dado por $\\dot{x} = \\sigma(y - x)$, $\\dot{y} = r x - y - x z$, $\\dot{z} = x y - b z$ con $\\sigma, r, b > 0$. (a) Demuestre que el flujo es estrictamente disipativo y calcule la tasa de contracción de volumen en el espacio de fases. (b) Demuestre que todas las trayectorias entran eventualmente y permanecen atrapadas en un elipsoide acotado de $\\mathbb{R}^3$.",
+      "tipo": "demostracion_sobre_edo",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\dot{x} = \\sigma(y-x), \\qquad \\dot{y} = rx - y - xz, \\qquad \\dot{z} = xy - bz",
+        "forma": "sistema_primer_orden",
+        "dimension": 3,
+        "autonomo": true,
+        "variable_independiente": "t",
+        "variables_estado": ["x", "y", "z"],
+        "campo": ["sigma*(y - x)", "r*x - y - x*z", "x*y - b*z"],
+        "parametros": { "sigma": 10.0, "r": 28.0, "b": 2.6666666666666665 },
+        "notas": "Parámetros canónicos para la parte numérica; la demostración se hace con σ, r, b > 0 simbólicos y solo al final se sustituyen."
+      },
+      "solucion_esperada": {
+        "tipo": "demostracion",
+        "solucion_en_tex": true,
+        "latex": "\\nabla\\cdot\\mathbf{f} = -(\\sigma + 1 + b) < 0,\\quad V(t) = V(0)\\,e^{-(\\sigma+1+b)t};\\quad V = r x^2 + \\sigma y^2 + \\sigma (z - 2r)^2,\\quad \\dot V = -2\\sigma(Q - b r^2),\\quad V^* = \\frac{2 b r^2}{\\kappa},\\; \\kappa = \\min\\{1, 1/\\sigma, b/(2\\sigma)\\}",
+        "valores": {
+          "divergencia": "-b - sigma - 1",
+          "divergencia_canonica": -13.666666666666666,
+          "contraccion_por_unidad_de_tiempo": 1.1604918121968607e-06,
+          "funcion_lyapunov": "r*x**2 + sigma*y**2 + sigma*(z - 2*r)**2",
+          "Q": "r*x**2 + y**2 + b*(z - r)**2",
+          "kappa": "Min(1, 1/sigma, b/(2*sigma))",
+          "kappa_canonico": 0.1,
+          "V_estrella_canonico": 41813.33333333333
+        },
+        "notas": "Valores canónicos σ = 10, r = 28, b = 8/3."
+      },
+      "verificacion": {
+        "liouville_numerico": true,
+        "cota_de_gronwall": true,
+        "terminan_en_el_elipsoide": true,
+        "nota": "Prueba de aceptación de matematica.caos_en_flujos.desarrollar_disipatividad: la función de Lyapunov no se escribe a mano, se busca (V = Σ aᵢ(xᵢ − cᵢ)² con los términos cruzados y cúbicos de V̇ anulados) y sale la del .tex."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "El enunciado nombra a Lorenz y pide la disipatividad y el elipsoide: basta con pasarlo."
+      }
+    },
+    {
+      "id": "4.5",
+      "orden": 5,
+      "titulo": "Espectro de Lyapunov de un flujo caótico 3D disipativo",
+      "enunciado": "Demuestre que para cualquier flujo suave tridimensional disipativo $\\dot{\\mathbf{x}} = \\mathbf{f}(\\mathbf{x})$ que posea un atractor caótico acotado que no contenga puntos de equilibrio, el espectro de exponentes de Lyapunov $(\\lambda_1, \\lambda_2, \\lambda_3)$ debe satisfacer rigurosamente $\\lambda_1 > 0$, $\\lambda_2 = 0$, $\\lambda_3 < 0$, con $\\lambda_1 + \\lambda_2 + \\lambda_3 < 0$.",
+      "tipo": "demostracion_teorica",
+      "dificultad": "avanzada",
+      "verificable_con_solver": true,
+      "ecuacion": {
+        "latex": "\\lambda_1 > 0, \\quad \\lambda_2 = 0, \\quad \\lambda_3 < 0, \\quad \\sum \\lambda_i < 0",
+        "forma": "demostracion",
+        "dimension": 3,
+        "variables_estado": [],
+        "parametros": {}
+      },
+      "solucion_esperada": {
+        "tipo": "demostracion",
+        "solucion_en_tex": true,
+        "latex": "\\lambda_1 > 0,\\quad \\lambda_2 = 0,\\quad \\lambda_3 < -\\lambda_1 < 0,\\quad \\sum_i \\lambda_i = \\langle \\nabla\\cdot\\mathbf{f}\\rangle < 0",
+        "valores": {
+          "lorenz_referencia": [0.906, 0.0, -14.572],
+          "rossler_referencia": [0.07, 0.0, -5.39],
+          "suma_lorenz": -13.666666666666666
+        },
+        "notas": "Los espectros de referencia son los que cita la conclusión del .tex; el agente los recalcula."
+      },
+      "verificacion": {
+        "f_resuelve_la_variacional": true,
+        "suma_igual_divergencia": true,
+        "exponente_nulo": true,
+        "nota": "Prueba de aceptación de matematica.caos_en_flujos.desarrollar_espectro: la demostración paso a paso y el espectro de Lorenz y de Rössler por el método QR (matematica/espectro_lyapunov.py)."
+      },
+      "solicitud": {
+        "herramienta": "resolver_caos_fractales_y_atractores",
+        "argumentos": {},
+        "nota": "Teorema general: sin ecuación se ilustra con Lorenz y Rössler; con un flujo 3D se comprueba en ese flujo."
+      }
+    }
+  ]
+}
