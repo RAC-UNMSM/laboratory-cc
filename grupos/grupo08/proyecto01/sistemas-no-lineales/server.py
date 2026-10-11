@@ -4,15 +4,24 @@ from pathlib import Path
 from typing import List, Dict, Any
 import importlib
 import json
+import os
 import re
 import sympy as sp
 import numpy as np
 
 from resultado import ResultadoMetodo, EstadoMetodo
+from expresiones import parsear_expresion
 from reportes import guardar_reporte_html
 from validacion import validar_entrada, resultado_error
 
-mcp = FastMCP("sistemas-no-lineales")
+# En el contenedor el servidor escucha por HTTP (puerto 8000); para usarlo
+# desde un cliente local por stdio, exportar MCP_TRANSPORT=stdio.
+TRANSPORTE = os.environ.get("MCP_TRANSPORT", "streamable-http")
+mcp = FastMCP(
+    "sistemas-no-lineales",
+    host=os.environ.get("MCP_HOST", "0.0.0.0"),
+    port=int(os.environ.get("MCP_PORT", "8000")),
+)
 PROJECT_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = PROJECT_DIR / "salida-mathjax"
 CONFIG_PATH = PROJECT_DIR / "config" / "proyecto_config.json"
@@ -31,13 +40,11 @@ _METODOS_DISPONIBLES = {
 
 
 def _compilar_funciones(expresiones: List[str], variables: List[str]):
-    simbolos = sp.symbols(' '.join(variables))
-    if not isinstance(simbolos, (tuple, list)):
-        simbolos = (simbolos,)
+    simbolos = tuple(sp.Symbol(v) for v in variables)
 
     funciones = []
     for expr in expresiones:
-        f_sym = sp.sympify(expr)
+        f_sym = parsear_expresion(expr, variables)
         f_num = sp.lambdify(simbolos, f_sym, modules=['numpy'])
 
         def wrapper(x, f_num=f_num):
@@ -213,10 +220,7 @@ def _construir_contexto_ejercicio(
     resultado: Dict[str, Any],
 ) -> Dict[str, Any]:
     simbolos = [sp.Symbol(variable) for variable in variables]
-    expresiones_sym = [
-        sp.sympify(expresion, locals=dict(zip(variables, simbolos)))
-        for expresion in expresiones
-    ]
+    expresiones_sym = [parsear_expresion(expresion, variables) for expresion in expresiones]
     vector_funciones = r"\begin{bmatrix}" + r"\\".join(
         sp.latex(expresion) for expresion in expresiones_sym
     ) + r"\end{bmatrix}"
@@ -454,4 +458,4 @@ def resolver_ejercicio(
 
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport=TRANSPORTE)
