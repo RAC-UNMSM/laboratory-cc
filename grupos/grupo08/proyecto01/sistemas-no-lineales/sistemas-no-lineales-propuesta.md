@@ -211,30 +211,24 @@ La comparación se realizará sobre resultados calculados por el servidor y no m
 # 8. Arquitectura del proyecto
 
 ```text
-grupoXX/
-└── semanaNN/
-    └── sistemas-no-lineales-mcp/
-        ├── server.py
-        ├── validacion.py
-        │
-        ├── metodos/
-        │   ├── punto_fijo.py
-        │   ├── newton_sistemas.py
-        │   ├── cuasi_newton.py
-        │   ├── descenso.py
-        │   └── homotopia.py
-        │
-        ├── convergencia.py
-        ├── visualizacion.py
-        ├── reportes.py
-        ├── prompts.py
-        │
-        ├── tests/
-        ├── examples/
-        │
-        ├── requirements.txt
-        ├── Dockerfile
-        └── README.md
+grupos/
+└── grupo08/
+     └── proyecto01/
+          └── sistemas-no-lineales/
+               ├── server.py
+               ├── validacion.py
+               ├── resultado.py
+               ├── identificadores.py
+               ├── convergencia.py
+               ├── visualizacion.py
+               ├── reportes.py
+               ├── Dockerfile
+               ├── requirements.txt
+               ├── metodos/
+               ├── tests/
+               │   ├── test_visualizacion.py
+               │   └── test_reportes.py
+               └── examples/
 ```
 
 ### Función de los principales archivos
@@ -251,8 +245,11 @@ Implementan los métodos numéricos.
 `convergencia.py`
 Realiza cálculos y diagnósticos relacionados con error, residuo y comportamiento de convergencia.
 
+`identificadores.py`
+Genera IDs UUID hexadecimales para nombrar cada archivo de salida sin sobrescribir otros resultados. Los ejercicios nuevos deben guardar cualquier texto o binario mediante `guardar_archivo_identificado`.
+
 `visualizacion.py`
-Genera tablas y gráficos.
+Genera tablas y gráficos; sus pruebas se encuentran en `tests/test_visualizacion.py`.
 
 `reportes.py`
 Genera los informes HTML y LaTeX.

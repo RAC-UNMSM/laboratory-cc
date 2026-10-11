@@ -1,0 +1,26 @@
+# Lo que no debe entrar a la imagen
+.git
+.gitignore
+.dockerignore
+.vscode/
+.env
+.env.*
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Pruebas, ejemplos y salidas generadas
+tests/
+examples/
+pytest.ini
+requirements-dev.txt
+salida-mathjax/
+config/
+*.md

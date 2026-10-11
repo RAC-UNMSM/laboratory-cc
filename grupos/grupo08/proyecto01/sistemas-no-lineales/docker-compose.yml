@@ -1,0 +1,34 @@
+services:
+  sistemas-no-lineales:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${LAB_CONTAINER_NAME}
+    restart: unless-stopped
+    mem_limit: 512m
+    # El servidor MCP escucha por HTTP (streamable-http) en el puerto 8000.
+    environment:
+      MCP_TRANSPORT: streamable-http
+      MCP_PORT: "8000"
+    expose:
+      - "8000"
+    # Solo se escribe en los volúmenes de abajo y en /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - sistemas_no_lineales_salida:/app/salida-mathjax
+      - sistemas_no_lineales_config:/app/config
+
+volumes:
+  sistemas_no_lineales_salida:
+  sistemas_no_lineales_config:
+
+networks:
+  default:
+    name: lab_net
+    external: true
