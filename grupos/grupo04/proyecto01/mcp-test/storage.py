@@ -77,20 +77,6 @@ def _object_url(key: str) -> str:
     )
 
 
-def ensure_bucket() -> None:
-    """Crea el bucket si aún no existe; la operación es idempotente."""
-    bucket_url = f"{SEAWEEDFS_S3_URL.rstrip('/')}/{quote(IMG_BUCKET, safe='')}/"
-    request = urllib.request.Request(bucket_url, method="PUT")
-    try:
-        with urllib.request.urlopen(request, timeout=5):
-            pass
-    except urllib.error.HTTPError as exc:
-        if exc.code not in {409, 412}:
-            raise RuntimeError(
-                f"SeaweedFS no pudo preparar el bucket ({exc.code})."
-            ) from exc
-
-
 def report_metadata(filename: str) -> dict:
     """Devuelve enlaces públicos de vista previa y descarga del PDF."""
     key = resolve_pdf(filename)
@@ -115,7 +101,6 @@ def persist_pdf(pdf_bytes: bytes, report_name: str) -> dict:
     base_name = clean_report_name(report_name)
     key = f"{base_name}_{secrets.token_urlsafe(18)}.pdf"
 
-    ensure_bucket()
     request = urllib.request.Request(
         _object_url(key),
         data=bytes(pdf_bytes),

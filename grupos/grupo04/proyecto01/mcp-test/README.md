@@ -53,3 +53,21 @@ En Inspector, agrega una conexión Streamable HTTP a http://127.0.0.1:<puerto-as
 - ejecucion.txt: pasos detallados de Docker, Inspector y diagnóstico.
 
 La integración pública requiere que el administrador despliegue la app en lab_net, configure Caddy y asigne LAB_DOMAIN/LAB_PUBLIC_PATH.
+
+
+
+
+-- CAMBIAR EL DOMINIO PORQUE SIEMPRE CAMBIA EN EL DOCKER
+
+
+docker inspect lab-grupo04_proyecto01_mcp-test --format '{{range .Config.Env}}{{println .}}{{end}}' | Select-String 'LAB_DOMAIN|LAB_PUBLIC_PATH'
+
+
+$env:LAB_DOMAIN = "wiadeuserrant.win"
+$env:LAB_CONTAINER_NAME = "lab-grupo04_proyecto01_mcp-test"
+docker compose up --build -d --force-recreate
+
+
+docker port lab-grupo04_proyecto01_mcp-test 8000/tcp
+
+.\host.exe tunnel --config .\config.yml run

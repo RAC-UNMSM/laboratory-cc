@@ -329,7 +329,9 @@ def resolver_sistema_lineal(matrix: list[list[float]], vector: list[float],
         matrix: Matriz cuadrada finita de hasta 250 por 250.
         vector: Vector b de la misma dimensión.
         method: gaussian, lu, jacobi, gauss_seidel, conjugate_gradient, gmres, qr o svd.
-        tolerance, max_iter: Criterios de los métodos iterativos.
+        tolerance: Tolerancia positiva; max_iter: entre 1 y 10000.
+        En métodos iterativos, se devuelven como máximo 40 filas de historial
+        (las primeras 20 y las últimas 20), con aviso si se omiten iteraciones.
         preconditioner: none o jacobi para CG/GMRES.
         level: Nivel de presentación; include_report: habilita el PDF.
 
@@ -726,9 +728,11 @@ def resolver_valores_propios_dispersos(size: int, entries: list[list[float]],
     """Calcula pares propios de matriz real simétrica COO sin convertirla a densa.
 
     Args:
-        size: Orden entre 2 y 10000.
-        entries: Tripletas [fila,columna,valor] con índices base 0; matrix debe ser simétrica.
+        size: Orden entre 2 y 2000.
+        entries: Entre 1 y 20000 tripletas [fila,columna,valor], índices base 0; matrix debe ser simétrica.
         count: Cantidad entre 1 y min(20,size-1).
+        Cada vector propio devuelve hasta 20 componentes iniciales; el resultado
+        avisa si se recortaron componentes.
         which: LM, SM, LA o SA según ARPACK.
         tolerance, max_iter: Criterios del método Lanczos/ARPACK.
         level: Nivel de presentación; include_report genera PDF opcional.

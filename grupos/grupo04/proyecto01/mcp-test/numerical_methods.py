@@ -341,6 +341,7 @@ def solve_linear(matrix: list[list[float]], vector: list[float],
                       "conjugate_gradient", "gmres", "qr", "svd"}:
         raise ValueError("Método de sistema lineal no soportado.")
     rows: list[list[Any]] = []
+    trace_total = 0
     x = np.zeros(n)
     status, termination = "success", "Solución calculada."
     if method == "gaussian":
@@ -387,6 +388,7 @@ def solve_linear(matrix: list[list[float]], vector: list[float],
                     x[i] = (b[i] - A[i, :i] @ x[:i] - A[i, i + 1:] @ old[i + 1:]) / A[i, i]
             residual = float(np.linalg.norm(A @ x - b))
             rows.append([k, residual, float(np.linalg.norm(x - old))])
+            trace_total += 1
             if residual <= tol * (1 + float(np.linalg.norm(b))):
                 break
         else:
@@ -411,6 +413,7 @@ def solve_linear(matrix: list[list[float]], vector: list[float],
             r -= alpha * Ap
             residual = float(np.linalg.norm(r))
             rows.append([k, residual])
+            trace_total += 1
             if residual <= tol * (1 + float(np.linalg.norm(b))):
                 break
             z = r / diag if preconditioner == "jacobi" else r.copy()
@@ -445,6 +448,7 @@ def solve_linear(matrix: list[list[float]], vector: list[float],
                 x = np.column_stack(V[:j + 1]) @ y
                 residual = float(np.linalg.norm(A @ x - b))
                 rows.append([j + 1, residual])
+                trace_total += 1
                 if residual <= tol * (1 + float(np.linalg.norm(b))):
                     break
                 if happy_breakdown:
@@ -461,23 +465,28 @@ def solve_linear(matrix: list[list[float]], vector: list[float],
     condition_number = float(np.linalg.cond(A))
     if not math.isfinite(condition_number):
         condition_number = None
+    warnings = []
     if method in {"jacobi", "gauss_seidel", "conjugate_gradient", "gmres"} and rows:
         if residual > tol * (1 + float(np.linalg.norm(b))):
             status, termination = "no_convergence", termination if status != "success" else "Residuo sobre tolerancia."
+        if len(rows) > 40:
+            omitted = len(rows) - 40
+            rows = rows[:20] + rows[-20:]
+            warnings.append(f"Se omitieron {omitted} filas intermedias del historial de iteraciones.")
     return pack_result(
         "linear_system", method,
         {"matrix": A.tolist(), "vector": b.tolist(), "tolerance": tol,
          "max_iter": int(max_iter), "preconditioner": preconditioner},
         {"solution": x.tolist(), "residual_norm": residual},
         {"residual_norm": residual, "condition_number": condition_number,
-         "iterations": len(rows), "converged": status == "success", "termination": termination},
+         "iterations": trace_total, "converged": status == "success", "termination": termination},
         ["Se resolvió A x = b.", "El residuo se calcula como ||A x − b||₂."],
         [table("Eliminación/iteraciones", ["k/columna", "residuo/fila", "pivote/paso", "factor"],
                rows)],
         [{"name": "Residuo por iteración", "series": [
             {"label": "||Ax-b||₂", "x": [r[0] for r in rows if len(r) > 1],
              "y": [r[1] for r in rows if len(r) > 1]}]}],
-        status=status)
+        warnings=warnings, status=status)
 
 
 
@@ -1628,10 +1637,10 @@ def solve_sparse_eigenvalues(size: int, entries: list[list[float]], count: int =
     """Calcula pares propios dominantes de una matriz simétrica en formato COO disperso."""
     from scipy.sparse.linalg import eigsh
     size, count, max_iter = int(size), int(count), int(max_iter)
-    if not 2 <= size <= 10000 or not 1 <= count <= min(20, size-1):
-        raise ValueError("Se requiere 2<=size<=10000 y 1<=count<=min(20,size-1).")
-    if not isinstance(entries, list) or not 1 <= len(entries) <= 200000:
-        raise ValueError("entries debe contener entre 1 y 200000 tripletas COO.")
+    if not 2 <= size <= 2000 or not 1 <= count <= min(20, size-1):
+        raise ValueError("Se requiere 2<=size<=2000 y 1<=count<=min(20,size-1).")
+    if not isinstance(entries, list) or not 1 <= len(entries) <= 20000:
+        raise ValueError("entries debe contener entre 1 y 20000 tripletas COO.")
     row_ids, col_ids, values = [], [], []
     for index, item in enumerate(entries):
         if not isinstance(item, (list, tuple)) or len(item) != 3:
@@ -1661,10 +1670,19 @@ def solve_sparse_eigenvalues(size: int, entries: list[list[float]], count: int =
     else:
         order = np.argsort(vals)
     pairs = []
+    warnings = []
+    preview_components = min(size, 20)
+    if size > preview_components:
+        warnings.append(
+            f"Los vectores propios se recortaron a sus primeras {preview_components} componentes; "
+            f"se omitieron {size - preview_components} componentes por vector."
+        )
     for i in order:
         vector = vectors[:, i]
         value = float(vals[i])
-        pairs.append({"value": value, "vector": vector.tolist(),
+        pairs.append({"value": value, "vector": vector[:preview_components].tolist(),
+                      "vector_components_returned": preview_components,
+                      "vector_components_total": size,
                       "residual": float(np.linalg.norm(matrix @ vector - value * vector))})
     return pack_result("sparse_eigenvalues", "Lanczos / ARPACK (eigsh)",
         {"size": size, "entries": entries, "count": count, "which": which,
@@ -1677,7 +1695,8 @@ def solve_sparse_eigenvalues(size: int, entries: list[list[float]], count: int =
         [table("Pares propios", ["valor", "vector", "residuo"],
                [[p["value"], p["vector"], p["residual"]] for p in pairs])],
         [{"name": "Residuos propios", "series": [{"label": "residuo",
-          "x": list(range(1, len(pairs)+1)), "y": [p["residual"] for p in pairs]}]}])
+          "x": list(range(1, len(pairs)+1)), "y": [p["residual"] for p in pairs]}]}],
+        warnings=warnings)
 
 
 def integrate_adaptive(expression: str, a: float, b: float,
