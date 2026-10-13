@@ -1,0 +1,15 @@
+{#- Pie que core/combinado.py añade al final de cada reporte copiado dentro del combinado.
+    Usa las clases .btn del propio reporte y avisa a la página contenedora con postMessage. -#}
+<div class="wrap" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-top:8px;padding-bottom:40px">
+{% if n > 1 %}
+<button class="btn" type="button" onclick="parent.postMessage({loteIr: {{ n - 2 }}}, '*')">← Ejercicio {{ n - 1 }}</button>
+{% else %}
+<button class="btn" type="button" onclick="parent.postMessage({loteIndice: true}, '*')">☰ Índice de ejercicios</button>
+{% endif %}
+<span style="color:var(--mu);font-size:13px">Ejercicio {{ n }} de {{ total }}</span>
+{% if siguiente %}
+<button class="btn pri" type="button" onclick="parent.postMessage({loteIr: {{ n }}}, '*')">Siguiente ejercicio ({{ n + 1 }}) →</button>
+{% else %}
+<button class="btn pri" type="button" onclick="parent.postMessage({loteIndice: true}, '*')">Fin · volver al índice</button>
+{% endif %}
+</div>

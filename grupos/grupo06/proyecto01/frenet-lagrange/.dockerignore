@@ -1,0 +1,15 @@
+# Solo entra a la imagen lo que el servidor necesita en producción
+__pycache__/
+*.pyc
+.pytest_cache/
+resultados/
+*.html
+*.png
+.git/
+.venv/
+venv/
+tests/
+legado/
+ejemplos/
+despliegue/
+requirements-dev.txt

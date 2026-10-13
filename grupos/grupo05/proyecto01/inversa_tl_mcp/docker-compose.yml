@@ -1,0 +1,18 @@
+services:
+  mcp-algebra:
+    build: .
+    container_name: ${LAB_CONTAINER_NAME}
+    mem_limit: 512m
+    expose:
+      - "8000"
+    restart: unless-stopped
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+      LAB_IMG_BUCKET: ${LAB_IMG_BUCKET}
+      LAB_PUBLIC_IMG_URL: ${LAB_PUBLIC_IMG_URL}
+
+networks:
+  default:
+    name: lab_net
+    external: true

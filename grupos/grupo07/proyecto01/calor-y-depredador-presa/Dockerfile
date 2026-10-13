@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del código fuente del proyecto
 COPY . .
 
-# Exponer el puerto estándar de FastMCP (SSE)
+# # Exponer el puerto estándar de FastMCP (streamable-http)
 EXPOSE 8000
 
 # Ejecutar el servidor. 

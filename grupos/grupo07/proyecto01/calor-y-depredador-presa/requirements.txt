@@ -1,5 +1,4 @@
-numpy==2.1.1
-scipy==1.14.1
-matplotlib==3.9.2
-mcp[cli]==2.3.0 
-anyio
+mcp==2.3.0
+numpy==2.2.3
+scipy==1.15.2
+matplotlib==3.10.1

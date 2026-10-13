@@ -1,86 +1,64 @@
 import base64
-import os
 from datetime import datetime
 
-def generar_reporte_lotka_volterra_html(
-    presas_max: float, mes_presas_max: float, presas_min: float, mes_presas_min: float,
-    dep_max: float, mes_dep_max: float, dep_min: float, mes_dep_min: float,
-    png_bytes: bytes, nombre_archivo: str
-) -> str:
-    """
-    Genera un HTML autocontenido con diseño académico (estilo Grupo 09) para el modelo Lotka-Volterra.
-    """
-    b64_img = base64.b64encode(png_bytes).decode("utf-8")
-    fecha_generacion = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    
-    html_content = f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Informe - Lotka-Volterra</title>
-    <style>
-        /* CSS Basado en el rigor académico (Estilo Grupo 09) */
-        :root {{
+ESTILOS_COMUNES = """
+        :root {
             --bg-color: #f6f5ef;
             --text-color: #333333;
             --accent-color: #3b5b50;
             --border-color: #e2dfd2;
             --box-bg: #fdfdfc;
-        }}
-        body {{
+        }
+        body {
             font-family: 'Georgia', serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
             padding: 40px 20px;
             line-height: 1.6;
-        }}
-        .container {{
+        }
+        .container {
             max-width: 950px;
             margin: 0 auto;
             background-color: transparent;
-        }}
-        /* Header Superior */
-        header {{
+        }
+        header {
             border-bottom: 2px solid var(--border-color);
             padding-bottom: 20px;
             margin-bottom: 30px;
-        }}
-        .university-tag {{
+        }
+        .university-tag {
             font-family: 'Courier New', Courier, monospace;
             font-size: 0.85rem;
             color: #777;
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: 10px;
-        }}
-        h1 {{
+        }
+        h1 {
             font-size: 2.8rem;
             font-weight: normal;
             margin: 0 0 10px 0;
             color: #1a1a1a;
-        }}
-        .subtitle-bar {{
+        }
+        .subtitle-bar {
             display: flex;
             align-items: center;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-size: 0.9rem;
             color: #555;
-        }}
-        .dot-separator {{
+        }
+        .dot-separator {
             margin: 0 10px;
             color: #a3c4bc;
-        }}
-        
-        /* Enunciado y Contenido */
-        .enunciado-box {{
+        }
+        .enunciado-box {
             background-color: var(--box-bg);
             border: 1px solid var(--border-color);
             padding: 25px;
             margin-bottom: 40px;
-        }}
-        .section-tag {{
+        }
+        .section-tag {
             font-family: 'Segoe UI', sans-serif;
             font-size: 0.75rem;
             text-transform: uppercase;
@@ -88,25 +66,21 @@ def generar_reporte_lotka_volterra_html(
             color: #888;
             margin-bottom: 15px;
             display: block;
-        }}
-        
-        /* Gráfico */
-        .grafico-container {{
+        }
+        .grafico-container {
             background-color: var(--box-bg);
             border: 1px solid var(--border-color);
             padding: 30px;
             text-align: center;
             margin-bottom: 40px;
-        }}
-        .grafico-container img {{
+        }
+        .grafico-container img {
             max-width: 100%;
             height: auto;
             border-radius: 4px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }}
-        
-        /* Tablas de Validación Académica */
-        h3 {{
+        }
+        h3 {
             font-family: 'Georgia', serif;
             font-size: 1.4rem;
             font-weight: bold;
@@ -114,15 +88,15 @@ def generar_reporte_lotka_volterra_html(
             margin-bottom: 20px;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 10px;
-        }}
-        table {{
+        }
+        table {
             width: 100%;
             border-collapse: collapse;
             font-family: 'Segoe UI', sans-serif;
             font-size: 0.9rem;
             margin-bottom: 40px;
-        }}
-        th {{
+        }
+        th {
             text-align: left;
             padding: 12px;
             border-bottom: 2px solid var(--border-color);
@@ -130,13 +104,13 @@ def generar_reporte_lotka_volterra_html(
             text-transform: uppercase;
             letter-spacing: 1px;
             font-size: 0.75rem;
-        }}
-        td {{
+        }
+        td {
             padding: 15px 12px;
             border-bottom: 1px solid var(--border-color);
             vertical-align: top;
-        }}
-        .status-badge {{
+        }
+        .status-badge {
             display: inline-block;
             padding: 3px 8px;
             border: 1px solid #c3e6cb;
@@ -145,22 +119,38 @@ def generar_reporte_lotka_volterra_html(
             font-size: 0.75rem;
             font-weight: bold;
             margin-right: 10px;
-        }}
-        .numeric-value {{
+        }
+        .numeric-value {
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold;
             color: #333;
-        }}
-        
-        /* Conclusiones */
-        .conclusion-list li {{
+        }
+        .conclusion-list li {
             margin-bottom: 15px;
-        }}
-    </style>
+        }
+"""
+
+def generar_reporte_lotka_volterra_html(
+    presas_max: float, mes_presas_max: float, presas_min: float, mes_presas_min: float,
+    dep_max: float, mes_dep_max: float, dep_min: float, mes_dep_min: float,
+    png_bytes: bytes
+) -> str:
+    """Genera un HTML autocontenido para la simulación de Lotka-Volterra."""
+    b64_img = base64.b64encode(png_bytes).decode("utf-8")
+    fecha_generacion = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    amplitud_presas = presas_max - presas_min
+    desfase_temporal = abs(mes_dep_max - mes_presas_max)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe - Dinámica Lotka-Volterra</title>
+    <style>{ESTILOS_COMUNES}</style>
 </head>
 <body>
     <div class="container">
-        <!-- HEADER ACADÉMICO -->
         <header>
             <div class="university-tag">UNMSM · LABORATORIO · GRUPO 07</div>
             <h1>Informe del análisis</h1>
@@ -171,252 +161,100 @@ def generar_reporte_lotka_volterra_html(
             </div>
         </header>
 
-        <!-- ENUNCIADO TEÓRICO -->
         <div class="enunciado-box">
-            <span class="section-tag">Planteamiento Dinámico</span>
+            <span class="section-tag">Planteamiento Biológico (EDO)</span>
             <p>
-                <strong>Modelo Biológico (Ecuaciones de Lotka-Volterra):</strong> Se analiza la interacción no lineal entre dos especies (presas y depredadores) en un ecosistema cerrado. El sistema está regido por un par de ecuaciones diferenciales ordinarias (EDOs) acopladas de primer orden.
+                <strong>Modelo Presa-Depredador (Lotka-Volterra):</strong> Se analiza la interacción biológica bidireccional entre dos especies en un entorno cerrado, modelada por el sistema de ecuaciones diferenciales no lineales:
+                <br><br>
+                <em>dx/dt = αx - βxy</em> (Ecuación de la Presa)<br>
+                <em>dy/dt = δxy - γy</em> (Ecuación del Depredador)
             </p>
             <p>
-                Las ecuaciones modelan el crecimiento poblacional de las presas (con tasa intrínseca α y tasa de mortalidad por depredación β) frente a la dinámica de los depredadores (con tasa de crecimiento por caza δ y tasa de mortalidad natural γ).
+                La resolución numérica se ha ejecutado utilizando métodos de integración iterativos para proyectar la evolución poblacional y su trayectoria en el plano de fase.
             </p>
         </div>
 
-        <!-- GRÁFICO -->
         <div class="grafico-container">
-            <span class="section-tag" style="text-align: left;">Series Temporales y Plano de Fase</span>
+            <span class="section-tag" style="text-align: left;">Series Temporales y Órbita en el Plano de Fase</span>
             <img src="data:image/png;base64,{b64_img}" alt="Gráficos Lotka-Volterra" />
         </div>
 
-        <!-- TABLA DE VERIFICACIÓN FÍSICA -->
-        <h3>Interpretación de Extremos Poblacionales (Órbitas Periódicas)</h3>
+        <h3>Análisis de Hitos Estructurales</h3>
         <table>
             <thead>
                 <tr>
                     <th>Métrica Analizada</th>
-                    <th>Valor Calculado (Población)</th>
-                    <th>Ocurrencia Temporal (Mes)</th>
+                    <th>Valor Calculado</th>
+                    <th>Ocurrencia Temporal</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
                     <td>
-                        <span class="status-badge">✓ MÁXIMO</span>
-                        <strong>pico_presas</strong>
-                        <div style="color: #666; margin-top: 5px;">Máxima abundancia de la especie presa.</div>
+                        <span class="status-badge">✓ PICO POBLACIONAL</span>
+                        <strong>Máximo de Presas</strong>
+                        <div style="color: #666; margin-top: 5px;">Punto de máxima saturación del nicho por parte de la presa.</div>
                     </td>
-                    <td class="numeric-value">{presas_max:.2f} ind.</td>
-                    <td class="numeric-value">t = {mes_presas_max:.2f}</td>
+                    <td class="numeric-value" style="color: #1f77b4;">{presas_max:.2f}</td>
+                    <td class="numeric-value">Mes {mes_presas_max:.2f}</td>
                 </tr>
                 <tr>
                     <td>
-                        <span class="status-badge">✓ MÍNIMO</span>
-                        <strong>valle_presas</strong>
-                        <div style="color: #666; margin-top: 5px;">Punto crítico de escasez de la especie presa.</div>
+                        <span class="status-badge">✓ PICO POBLACIONAL</span>
+                        <strong>Máximo de Depredadores</strong>
+                        <div style="color: #666; margin-top: 5px;">Punto de máxima abundancia predatoria.</div>
                     </td>
-                    <td class="numeric-value">{presas_min:.2f} ind.</td>
-                    <td class="numeric-value">t = {mes_presas_min:.2f}</td>
+                    <td class="numeric-value" style="color: #d9534f;">{dep_max:.2f}</td>
+                    <td class="numeric-value">Mes {mes_dep_max:.2f}</td>
                 </tr>
                 <tr>
                     <td>
-                        <span class="status-badge" style="color: #856404; background-color: #fff3cd; border-color: #ffeeba;">✓ MÁXIMO</span>
-                        <strong>pico_depredadores</strong>
-                        <div style="color: #666; margin-top: 5px;">Máxima abundancia de depredadores (cúspide de caza).</div>
+                        <span class="status-badge">✓ DESFASE</span>
+                        <strong>Retraso de Respuesta (Lag)</strong>
+                        <div style="color: #666; margin-top: 5px;">Diferencia de tiempo entre el pico de presas y el pico de depredadores.</div>
                     </td>
-                    <td class="numeric-value">{dep_max:.2f} ind.</td>
-                    <td class="numeric-value">t = {mes_dep_max:.2f}</td>
+                    <td class="numeric-value">{desfase_temporal:.2f} meses</td>
+                    <td class="numeric-value">-</td>
                 </tr>
                 <tr>
                     <td>
-                        <span class="status-badge" style="color: #856404; background-color: #fff3cd; border-color: #ffeeba;">✓ MÍNIMO</span>
-                        <strong>valle_depredadores</strong>
-                        <div style="color: #666; margin-top: 5px;">Colapso poblacional de depredadores por escasez de alimento.</div>
+                        <span class="status-badge">✓ FLUCTUACIÓN</span>
+                        <strong>Amplitud de Presas (Δx)</strong>
+                        <div style="color: #666; margin-top: 5px;">Diferencia entre el pico máximo y el valle mínimo ({presas_min:.2f}).</div>
                     </td>
-                    <td class="numeric-value">{dep_min:.2f} ind.</td>
-                    <td class="numeric-value">t = {mes_dep_min:.2f}</td>
+                    <td class="numeric-value">{amplitud_presas:.2f}</td>
+                    <td class="numeric-value">Valle en Mes {mes_presas_min:.2f} (Dep. mín: {dep_min:.2f} en Mes {mes_dep_min:.2f})</td>
                 </tr>
             </tbody>
         </table>
 
-        <!-- CONCLUSIONES -->
         <h3>Conclusiones Dinámicas</h3>
         <ul class="conclusion-list">
-            <li>El sistema exhibe un comportamiento oscilatorio sostenido. Como es característico de las órbitas concéntricas de Lotka-Volterra, existe un desfase temporal evidente: el pico poblacional de los depredadores (mes {mes_dep_max:.2f}) ocurre siempre después del pico de las presas (mes {mes_presas_max:.2f}).</li>
-            <li>La amplitud de las oscilaciones está determinada estrictamente por las condiciones iniciales proporcionadas, lo que confirma que el modelo es conservativo y no posee atractores límite estructurales estables.</li>
+            <li>El sistema exhibe un comportamiento cíclico característico (atractor periódico), evidenciado por la órbita cerrada en el plano de fase.</li>
+            <li>Existe un desfase temporal de <strong>{desfase_temporal:.2f} meses</strong> entre el auge de las presas y el auge consecuente de los depredadores, confirmando que la población predatoria es estrictamente dependiente de la abundancia de su fuente de alimento.</li>
         </ul>
-        
     </div>
 </body>
-</html>
-"""
-    
-    directorio_actual = os.path.dirname(os.path.abspath(__file__))
-    ruta_html = os.path.join(directorio_actual, nombre_archivo)
-    
-    with open(ruta_html, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-        
-    return ruta_html
-
+</html>"""
 
 
 def generar_reporte_calor_html(
-    difusividad: float, tiempo_total: float, temp_max: float, temp_min: float, temp_prom: float, png_bytes: bytes, nombre_archivo: str
+    difusividad: float, tiempo_total: float, temp_max: float, temp_min: float, temp_prom: float, png_bytes: bytes
 ) -> str:
-    """
-    Genera un HTML con diseño académico avanzado (estilo Grupo 09) para la Ecuación del Calor.
-    """
+    """Genera un HTML autocontenido para la Ecuación del Calor 2D."""
     b64_img = base64.b64encode(png_bytes).decode("utf-8")
     fecha_generacion = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    
-    html_content = f"""<!DOCTYPE html>
+
+    return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Informe - Ecuación del Calor 2D</title>
-    <style>
-        /* CSS Basado en el rigor académico (Estilo Grupo 09) */
-        :root {{
-            --bg-color: #f6f5ef;
-            --text-color: #333333;
-            --accent-color: #3b5b50;
-            --border-color: #e2dfd2;
-            --box-bg: #fdfdfc;
-        }}
-        body {{
-            font-family: 'Georgia', serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 40px 20px;
-            line-height: 1.6;
-        }}
-        .container {{
-            max-width: 950px;
-            margin: 0 auto;
-            background-color: transparent;
-        }}
-        /* Header Superior */
-        header {{
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }}
-        .university-tag {{
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.85rem;
-            color: #777;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-        }}
-        h1 {{
-            font-size: 2.8rem;
-            font-weight: normal;
-            margin: 0 0 10px 0;
-            color: #1a1a1a;
-        }}
-        .subtitle-bar {{
-            display: flex;
-            align-items: center;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 0.9rem;
-            color: #555;
-        }}
-        .dot-separator {{
-            margin: 0 10px;
-            color: #a3c4bc;
-        }}
-        
-        /* Enunciado y Contenido */
-        .enunciado-box {{
-            background-color: var(--box-bg);
-            border: 1px solid var(--border-color);
-            padding: 25px;
-            margin-bottom: 40px;
-        }}
-        .section-tag {{
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: #888;
-            margin-bottom: 15px;
-            display: block;
-        }}
-        
-        /* Gráfico */
-        .grafico-container {{
-            background-color: var(--box-bg);
-            border: 1px solid var(--border-color);
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 40px;
-        }}
-        .grafico-container img {{
-            max-width: 100%;
-            height: auto;
-            border-radius: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }}
-        
-        /* Tablas de Validación Académica */
-        h3 {{
-            font-family: 'Georgia', serif;
-            font-size: 1.4rem;
-            font-weight: bold;
-            margin-top: 40px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 0.9rem;
-            margin-bottom: 40px;
-        }}
-        th {{
-            text-align: left;
-            padding: 12px;
-            border-bottom: 2px solid var(--border-color);
-            color: #777;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-size: 0.75rem;
-        }}
-        td {{
-            padding: 15px 12px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: top;
-        }}
-        .status-badge {{
-            display: inline-block;
-            padding: 3px 8px;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-            background-color: #d4edda;
-            font-size: 0.75rem;
-            font-weight: bold;
-            margin-right: 10px;
-        }}
-        .numeric-value {{
-            font-family: 'Courier New', Courier, monospace;
-            font-weight: bold;
-            color: #333;
-        }}
-        
-        /* Conclusiones */
-        .conclusion-list li {{
-            margin-bottom: 15px;
-        }}
-    </style>
+    <style>{ESTILOS_COMUNES}</style>
 </head>
 <body>
     <div class="container">
-        <!-- HEADER ACADÉMICO -->
         <header>
             <div class="university-tag">UNMSM · LABORATORIO · GRUPO 07</div>
             <h1>Informe del análisis</h1>
@@ -427,7 +265,6 @@ def generar_reporte_calor_html(
             </div>
         </header>
 
-        <!-- ENUNCIADO TEÓRICO -->
         <div class="enunciado-box">
             <span class="section-tag">Planteamiento Termodinámico</span>
             <p>
@@ -438,13 +275,11 @@ def generar_reporte_calor_html(
             </p>
         </div>
 
-        <!-- GRÁFICO -->
         <div class="grafico-container">
             <span class="section-tag" style="text-align: left;">Distribución Espacial de Temperatura (Heatmap)</span>
             <img src="data:image/png;base64,{b64_img}" alt="Mapa de Calor 2D" />
         </div>
 
-        <!-- TABLA DE VERIFICACIÓN FÍSICA -->
         <h3>Interpretación y Estado Global Termodinámico</h3>
         <table>
             <thead>
@@ -494,186 +329,35 @@ def generar_reporte_calor_html(
             </tbody>
         </table>
 
-        <!-- CONCLUSIONES -->
         <h3>Conclusiones Dinámicas</h3>
         <ul class="conclusion-list">
             <li>Tras <strong>{tiempo_total} segundos</strong> de evolución, la distribución térmica evidencia el flujo de energía desde las zonas de alto gradiente hacia las de menor temperatura, acorde a la Ley de Fourier.</li>
             <li>El sistema muestra que la temperatura máxima desciende a <strong>{temp_max:.2f} °C</strong>, mientras que la temperatura global tiende a homogenizarse alrededor de un promedio de <strong>{temp_prom:.2f} °C</strong>, validando la naturaleza puramente disipativa de la ecuación.</li>
         </ul>
-        
     </div>
 </body>
-</html>
-"""
-    
-    directorio_actual = os.path.dirname(os.path.abspath(__file__))
-    ruta_html = os.path.join(directorio_actual, nombre_archivo)
-    
-    with open(ruta_html, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-        
-    return ruta_html
+</html>"""
 
 
 def generar_reporte_decaimiento_html(
-    n0: float, lam: float, t_max: float, n_final: float, png_bytes: bytes, nombre_archivo: str
+    n0: float, lam: float, t_max: float, n_final: float, png_bytes: bytes
 ) -> str:
-    """
-    Genera un HTML con diseño académico avanzado (estilo Grupo 09).
-    """
+    """Genera un HTML autocontenido para el modelo de Decaimiento Radiactivo."""
     b64_img = base64.b64encode(png_bytes).decode("utf-8")
     fecha_generacion = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    
-    # Cálculos matemáticos extra para el reporte
-    vida_media = 0.693 / lam if lam > 0 else 0
+    vida_media = 0.693147 / lam if lam > 0 else 0
     porcentaje_perdido = ((n0 - n_final) / n0) * 100 if n0 > 0 else 0
-    
-    html_content = f"""<!DOCTYPE html>
+
+    return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Informe - Decaimiento Radiactivo</title>
-    <style>
-        /* CSS Basado en el rigor académico (Estilo Grupo 09) */
-        :root {{
-            --bg-color: #f6f5ef;
-            --text-color: #333333;
-            --accent-color: #3b5b50;
-            --border-color: #e2dfd2;
-            --box-bg: #fdfdfc;
-        }}
-        body {{
-            font-family: 'Georgia', serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 40px 20px;
-            line-height: 1.6;
-        }}
-        .container {{
-            max-width: 950px;
-            margin: 0 auto;
-            background-color: transparent;
-        }}
-        /* Header Superior */
-        header {{
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }}
-        .university-tag {{
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.85rem;
-            color: #777;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-        }}
-        h1 {{
-            font-size: 2.8rem;
-            font-weight: normal;
-            margin: 0 0 10px 0;
-            color: #1a1a1a;
-        }}
-        .subtitle-bar {{
-            display: flex;
-            align-items: center;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 0.9rem;
-            color: #555;
-        }}
-        .dot-separator {{
-            margin: 0 10px;
-            color: #a3c4bc;
-        }}
-        
-        /* Enunciado y Contenido */
-        .enunciado-box {{
-            background-color: var(--box-bg);
-            border: 1px solid var(--border-color);
-            padding: 25px;
-            margin-bottom: 40px;
-        }}
-        .section-tag {{
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: #888;
-            margin-bottom: 15px;
-            display: block;
-        }}
-        
-        /* Gráfico */
-        .grafico-container {{
-            background-color: var(--box-bg);
-            border: 1px solid var(--border-color);
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 40px;
-        }}
-        .grafico-container img {{
-            max-width: 100%;
-            height: auto;
-        }}
-        
-        /* Tablas de Validación Académica */
-        h3 {{
-            font-family: 'Georgia', serif;
-            font-size: 1.4rem;
-            font-weight: bold;
-            margin-top: 40px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 0.9rem;
-            margin-bottom: 40px;
-        }}
-        th {{
-            text-align: left;
-            padding: 12px;
-            border-bottom: 2px solid var(--border-color);
-            color: #777;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-size: 0.75rem;
-        }}
-        td {{
-            padding: 15px 12px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: top;
-        }}
-        .status-badge {{
-            display: inline-block;
-            padding: 3px 8px;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-            background-color: #d4edda;
-            font-size: 0.75rem;
-            font-weight: bold;
-            margin-right: 10px;
-        }}
-        .numeric-value {{
-            font-family: 'Courier New', Courier, monospace;
-            font-weight: bold;
-            color: #333;
-        }}
-        
-        /* Conclusiones */
-        .conclusion-list li {{
-            margin-bottom: 15px;
-        }}
-    </style>
+    <style>{ESTILOS_COMUNES}</style>
 </head>
 <body>
     <div class="container">
-        <!-- HEADER ACADÉMICO -->
         <header>
             <div class="university-tag">UNMSM · LABORATORIO · GRUPO 07</div>
             <h1>Informe del análisis</h1>
@@ -684,7 +368,6 @@ def generar_reporte_decaimiento_html(
             </div>
         </header>
 
-        <!-- ENUNCIADO TEÓRICO -->
         <div class="enunciado-box">
             <span class="section-tag">Planteamiento Físico</span>
             <p>
@@ -695,13 +378,11 @@ def generar_reporte_decaimiento_html(
             </p>
         </div>
 
-        <!-- GRÁFICO -->
         <div class="grafico-container">
             <span class="section-tag" style="text-align: left;">Evolución Temporal del Sistema</span>
             <img src="data:image/png;base64,{b64_img}" alt="Curva de Decaimiento" />
         </div>
 
-        <!-- TABLA DE VERIFICACIÓN FÍSICA -->
         <h3>Interpretación y Verificación Física</h3>
         <table>
             <thead>
@@ -742,22 +423,11 @@ def generar_reporte_decaimiento_html(
             </tbody>
         </table>
 
-        <!-- CONCLUSIONES -->
         <h3>Conclusiones Dinámicas</h3>
         <ul class="conclusion-list">
             <li>Al finalizar el tiempo de simulación de <strong>{t_max} segundos</strong>, la cantidad remanente de sustancia es de <strong>{n_final:.4f}</strong> unidades.</li>
-            <li>El sistema muestra un comportamiento asintótico hacia cero, característico de los procesos de disipación de masa sin fuentes externas de recarga, cumpliendo con la conservación estricta de la energía.</li>
+            <li>El sistema muestra un comportamiento asintótico hacia cero, característico de los procesos de disipación de masa sin fuentes externas de recarga.</li>
         </ul>
-        
     </div>
 </body>
-</html>
-"""
-    
-    directorio_actual = os.path.dirname(os.path.abspath(__file__))
-    ruta_html = os.path.join(directorio_actual, nombre_archivo)
-    
-    with open(ruta_html, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-        
-    return ruta_html
+</html>"""

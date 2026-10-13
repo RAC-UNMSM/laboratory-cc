@@ -36,6 +36,14 @@ def validar_parametros_lotka(alpha: float, beta: float, delta: float, gamma: flo
     if t_max > 5000:
         raise ValidationError(f"Límite excedido: Un tiempo de {t_max} requeriría demasiado cómputo. Usa un valor menor a 5000.")
 
+    # 5. Límite de cómputo: el integrador da más pasos cuanto mayores son las tasas
+    carga = max(alpha, beta, delta, gamma) * t_max
+    if carga > 20000:
+        raise ValidationError(
+            f"Límite excedido: tasas tan altas durante {t_max} meses requieren demasiado cómputo. "
+            f"Reduce tiempo_max o las tasas (tasa máxima × tiempo debe ser menor a 20000)."
+        )
+
 
 def validar_parametros_calor(difusividad: float, tamaño_malla: int, tiempo_total: float, 
                              longitud_placa: float, radio_fuente: float) -> None:
@@ -63,6 +71,16 @@ def validar_parametros_calor(difusividad: float, tamaño_malla: int, tiempo_tota
     # 5. Tiempo
     if tiempo_total <= 0:
         raise ValidationError("Error temporal: El tiempo de simulación térmica debe ser mayor a 0.")
+
+    # 6. Límite de cómputo: mismos pasos que calculará resolver_calor_2d
+    dx = longitud_placa / (tamaño_malla - 1)
+    dt = 0.9 * (dx ** 2) / (4 * difusividad)
+    pasos = tiempo_total / dt
+    if pasos > 20000:
+        raise ValidationError(
+            f"Límite excedido: esta configuración requiere {pasos:,.0f} pasos de tiempo "
+            f"(máximo 20000). Reduce tiempo_total o tamaño_malla, o usa una placa más grande."
+        )
 
 
 def validar_parametros_decaimiento(n0: float, lam: float, t_max: float) -> None:

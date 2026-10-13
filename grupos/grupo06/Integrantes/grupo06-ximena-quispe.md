@@ -1,0 +1,1 @@
+Soy Ximena Quispe y pertenezco al grupo 06
