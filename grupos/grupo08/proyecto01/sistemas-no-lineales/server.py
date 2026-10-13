@@ -1,30 +1,21 @@
-from mcp.server.fastmcp import FastMCP
-from datetime import datetime, timezone
-from pathlib import Path
+from mcp.server.mcpserver import MCPServer
 from typing import List, Dict, Any
 import importlib
-import json
 import os
-import re
 import sympy as sp
 import numpy as np
 
 from resultado import ResultadoMetodo, EstadoMetodo
 from expresiones import parsear_expresion
-from reportes import guardar_reporte_html
+from identificadores import crear_identificador
+from reportes import generar_reporte_html
+from storage import subir_reporte
 from validacion import validar_entrada, resultado_error
 
 # En el contenedor el servidor escucha por HTTP (puerto 8000); para usarlo
 # desde un cliente local por stdio, exportar MCP_TRANSPORT=stdio.
 TRANSPORTE = os.environ.get("MCP_TRANSPORT", "streamable-http")
-mcp = FastMCP(
-    "sistemas-no-lineales",
-    host=os.environ.get("MCP_HOST", "0.0.0.0"),
-    port=int(os.environ.get("MCP_PORT", "8000")),
-)
-PROJECT_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = PROJECT_DIR / "salida-mathjax"
-CONFIG_PATH = PROJECT_DIR / "config" / "proyecto_config.json"
+mcp = MCPServer("grupo08-sistemas-no-lineales")
 
 _METODOS_DISPONIBLES = {
     "newton_sistemas": ("metodos.newton_sistemas", "newton_sistemas"),
@@ -175,36 +166,6 @@ def homotopia_continuacion(
     )
 
 
-def _configuracion_inicial() -> Dict[str, Any]:
-    return {
-        "proyecto": "Sistemas No Lineales",
-        "grupo": "Grupo 08",
-        "rama": "feature-viz-reportes",
-        "version": "1.0.0",
-        "rutas": {
-            "codigo": ".",
-            "reportes": "salida-mathjax/",
-            "imagenes": "salida-mathjax/imagenes/",
-            "tests": "tests/",
-        },
-        "configuracion_numerica": {"tolerancia": 1e-8, "max_iteraciones": 100},
-        "metodos": [
-            "punto_fijo_varias_variables",
-            "newton_sistemas",
-            "cuasi_newton_broyden",
-            "descenso_mas_rapido",
-            "homotopia_continuacion",
-        ],
-        "ejercicios": [],
-        "dependencias": ["mcp", "numpy", "sympy", "pydantic"],
-        "comandos": {
-            "servidor": "python server.py",
-            "tests": "python -m pytest tests -v",
-        },
-        "fecha_ultima_actualizacion": None,
-    }
-
-
 def _formatear_vector_tex(vector: List[float]) -> str:
     return r"\begin{bmatrix}" + r"\\".join(f"{valor:.8g}" for valor in vector) + r"\end{bmatrix}"
 
@@ -328,22 +289,6 @@ def _construir_contexto_ejercicio(
     }
 
 
-def _registrar_ejercicio(ejercicio: Dict[str, Any]) -> None:
-    if CONFIG_PATH.exists():
-        configuracion = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    else:
-        configuracion = _configuracion_inicial()
-    configuracion.setdefault("ejercicios", []).append(ejercicio)
-    configuracion["fecha_ultima_actualizacion"] = datetime.now(timezone.utc).isoformat()
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temporal = CONFIG_PATH.with_suffix(".tmp")
-    temporal.write_text(
-        json.dumps(configuracion, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    temporal.replace(CONFIG_PATH)
-
-
 def _resolver_ejercicio(
     enunciado: str,
     expresiones: List[str],
@@ -353,7 +298,7 @@ def _resolver_ejercicio(
     tolerancia: float = 1e-8,
     max_iter: int = 100,
 ) -> Dict[str, Any]:
-    """Ejecuta un método, genera su HTML y registra el ejercicio en el JSON."""
+    """Ejecuta un método, genera su HTML y lo sube al storage del laboratorio."""
     if not enunciado.strip():
         return {"status": "invalid_input", "message": "El enunciado no puede estar vacío."}
     if metodo not in _METODOS_DISPONIBLES:
@@ -378,7 +323,7 @@ def _resolver_ejercicio(
     estado = getattr(estado, "value", estado)
     resultado["status"] = estado
     if estado == EstadoMetodo.INVALID_INPUT.value:
-        return {"resultado": resultado, "status": "invalid_input", "reporte_html": None}
+        return {"resultado": resultado, "status": "invalid_input", "reporte_url": None}
 
     contexto = _construir_contexto_ejercicio(
         enunciado,
@@ -394,34 +339,24 @@ def _resolver_ejercicio(
     if contexto["residuo_final"] is not None:
         resultado["final_residual"] = contexto["residuo_final"]
 
-    id_base = re.sub(r"[^a-z0-9]+", "-", metodo.lower()).strip("-")
-    base_reporte = OUTPUT_DIR / f"reporte_{id_base}.html"
-    reporte = guardar_reporte_html(
+    identificador = crear_identificador()
+    html = generar_reporte_html(
         resultado,
-        base_reporte,
-        titulo=f"Resolucion: {metodo}",
-        contexto=contexto,
+        f"Resolucion: {metodo}",
+        identificador,
+        contexto,
     )
-    identificador = reporte.stem.rsplit("_", 1)[-1]
-    registro = {
-        "id": identificador,
-        "enunciado": enunciado,
-        "metodo": resultado.get("method", metodo),
-        "estado": resultado.get("status"),
-        "reporte_html": reporte.relative_to(OUTPUT_DIR.parent).as_posix(),
-        "imagenes": [],
-        "solucion": resultado.get("solution"),
-        "residuo_final": resultado.get("final_residual"),
-        "fecha_generacion": datetime.now(timezone.utc).isoformat(),
-    }
-    _registrar_ejercicio(registro)
+    reporte_url = subir_reporte(html, identificador)
     return {
         "status": resultado.get("status"),
         "resultado": resultado,
-        "reporte_html": str(reporte.resolve()),
-        "configuracion_json": str(CONFIG_PATH.resolve()),
+        "reporte_url": reporte_url,
         "id": identificador,
-        "mensaje": "Ejercicio resuelto; reporte HTML con LaTeX y trayectoria generado.",
+        "mensaje": (
+            "Ejercicio resuelto. Muestra al usuario el enlace de reporte_url."
+            if reporte_url
+            else "Ejercicio resuelto. El reporte no se pudo publicar."
+        ),
     }
 
 
@@ -435,14 +370,15 @@ def resolver_ejercicio(
     tolerancia: float = 1e-8,
     max_iter: int = 100,
 ) -> Dict[str, Any]:
-    """Resuelve un ejercicio y genera automáticamente un HTML en salida-mathjax.
+    """Resuelve un ejercicio y publica un reporte HTML con un enlace público.
 
     Usa esta herramienta cuando el usuario envíe un ejercicio del tema. Primero
     interpreta el enunciado y entrega expresiones, variables, x0 y método en forma
     estructurada. Si el método o el punto inicial faltan en el enunciado, pregunta
     al usuario antes de invocar la herramienta. El reporte incluye formulación TeX,
-    pasos del método, tabla de trayectoria, verificación y gráfica SVG; también
-    registra el ejercicio en config/proyecto_config.json.
+    pasos del método, tabla de trayectoria, verificación y gráfica SVG. La respuesta
+    trae reporte_url, un enlace público al reporte: muéstraselo siempre al
+    usuario (si es null, el reporte no se pudo publicar).
     Métodos aceptados: newton_sistemas, punto_fijo_varias_variables,
     cuasi_newton_broyden, descenso_mas_rapido, homotopia_continuacion.
     """
@@ -458,4 +394,11 @@ def resolver_ejercicio(
 
 
 if __name__ == "__main__":
-    mcp.run(transport=TRANSPORTE)
+    if TRANSPORTE == "streamable-http":
+        mcp.run(
+            transport=TRANSPORTE,
+            host=os.environ.get("MCP_HOST", "0.0.0.0"),
+            port=int(os.environ.get("MCP_PORT", "8000")),
+        )
+    else:
+        mcp.run(transport=TRANSPORTE)

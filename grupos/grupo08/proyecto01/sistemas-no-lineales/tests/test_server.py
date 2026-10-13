@@ -31,15 +31,20 @@ def test_ejecutar_metodo_modulo_no_implementado():
     assert "Módulo no implementado" in res["warnings"][0]
 
 
-def test_resolver_ejercicio_genera_html_y_actualiza_configuracion(tmp_path, monkeypatch):
-    import json
-    from pathlib import Path
+def test_resolver_ejercicio_sube_reporte_y_devuelve_url(monkeypatch):
     import server
 
-    monkeypatch.setattr(server, "OUTPUT_DIR", tmp_path / "salida-mathjax")
-    monkeypatch.setattr(server, "CONFIG_PATH", tmp_path / "config" / "proyecto_config.json")
+    subidos = {}
+
+    def falso_subir(html, identificador):
+        subidos["html"] = html
+        subidos["id"] = identificador
+        return f"https://ejemplo.test/reporte_{identificador}.html"
+
+    monkeypatch.setattr(server, "subir_reporte", falso_subir)
+    enunciado = "Resolver la circunferencia unitaria y la recta y=x."
     respuesta = server._resolver_ejercicio(
-        enunciado="Resolver la circunferencia unitaria y la recta y=x.",
+        enunciado=enunciado,
         expresiones=["x**2 + y**2 - 1", "x - y"],
         variables=["x", "y"],
         x0=[1.0, 0.5],
@@ -48,14 +53,22 @@ def test_resolver_ejercicio_genera_html_y_actualiza_configuracion(tmp_path, monk
         max_iter=50,
     )
 
-    reporte = Path(respuesta["reporte_html"])
-    contenido = reporte.read_text(encoding="utf-8")
-    configuracion = json.loads(server.CONFIG_PATH.read_text(encoding="utf-8"))
-
     assert respuesta["status"] == "converged"
-    assert reporte.parent == server.OUTPUT_DIR
-    assert "mathjax@3/es5/tex-svg.js" in contenido
-    assert "Iteraciones" in contenido
-    assert respuesta["id"] in contenido
-    assert configuracion["ejercicios"][0]["reporte_html"] == reporte.relative_to(server.OUTPUT_DIR.parent).as_posix()
-    assert configuracion["ejercicios"][0]["estado"] == "converged"
+    assert respuesta["reporte_url"] == f"https://ejemplo.test/reporte_{respuesta['id']}.html"
+    assert subidos["id"] == respuesta["id"]
+    assert "mathjax@3/es5/tex-svg.js" in subidos["html"]
+    assert enunciado in subidos["html"]
+
+
+def test_resolver_ejercicio_sin_storage_devuelve_url_nula():
+    import server
+
+    respuesta = server._resolver_ejercicio(
+        enunciado="Resolver la circunferencia unitaria y la recta y=x.",
+        expresiones=["x**2 + y**2 - 1", "x - y"],
+        variables=["x", "y"],
+        x0=[1.0, 0.5],
+        metodo="newton_sistemas",
+    )
+    assert respuesta["status"] == "converged"
+    assert respuesta["reporte_url"] is None

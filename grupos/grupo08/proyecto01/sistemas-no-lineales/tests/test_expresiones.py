@@ -53,5 +53,3 @@ def test_transporte_por_defecto_es_http():
     import server
 
     assert server.TRANSPORTE == "streamable-http"
-    assert server.mcp.settings.port == 8000
-    assert server.mcp.settings.host == "0.0.0.0"

@@ -25,5 +25,5 @@ htmlcov/
 .idea/
 .vscode/
 
-# Historial de ejercicios que genera el servidor al ejecutarse
-config/proyecto_config.json
+# Salidas generadas por los ejemplos locales
+salida-mathjax/
