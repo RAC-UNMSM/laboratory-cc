@@ -51,6 +51,9 @@ PUERTO_MCP = 8000
 MCP_PIN = "mcp==2.1.1"
 SEAWEEDFS_URL = "http://seaweedfs:8333"
 MEM_LIMIT_BASE_MB = 512
+# El servidor alcanza cada contenedor por su nombre dentro de la red de Docker,
+# y el DNS no resuelve nombres de más de 63 caracteres (routes.py, MAX_NOMBRE_DNS).
+MAX_NOMBRE_CONTENEDOR = 63
 # deployer.py del repo de infraestructura: BUILD_TIMEOUT y HEALTH_TIMEOUT.
 BUILD_MIN = 15
 SALUD_SEG = 60
@@ -1664,6 +1667,16 @@ def revisar_app(app: Path, repo: Path, grupo_dir: Path, rep: Reporte, nuevos: li
     rep.en(seccion)
     datos = {"id": app_id, "compose": False, "env_compose": set(), "puerto": PUERTO_MCP, "dir": app,
              "ubicada": ubicada, "solo_imagen": False, "envv_compose": {}, "envv_docker": {}}
+
+    contenedor = f"lab-{app_id}"
+    if len(contenedor) > MAX_NOMBRE_CONTENEDOR:
+        maximo_carpeta = MAX_NOMBRE_CONTENEDOR - len(f"lab-{grupo}_{semana}_")
+        rep.error(
+            f"El contenedor se llamaría `{contenedor}`: {len(contenedor)} caracteres, y el máximo es "
+            f"{MAX_NOMBRE_CONTENEDOR}. Con un nombre más largo la app levanta, pero el servidor no puede encontrarla en "
+            f"la red y la dirección pública responde error 502. Acorta la carpeta del proyecto (`{tema}`, "
+            f"{len(tema)} caracteres) a {maximo_carpeta} como máximo, con `git mv`, y ajusta el nombre del servidor en `server.py`."
+        )
 
     codigo = Codigo(app, rep, repo)
     revisar_compose(app, repo, rep, datos)
