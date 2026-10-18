@@ -1,0 +1,29 @@
+# Entornos virtuales de Python (nombres comunes en el grupo)
+.venv/
+venv/
+env/
+ENV/
+.ENTORNO/
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+**/.ENTORNO/
+
+# Archivos temporales de Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Reportes creados al usar la aplicación
+reports/*
+!reports/.gitkeep
+
+# Archivos exclusivos del antiguo túnel local del MCP grupo04
+/proyecto01/mcp-test/app.py
+/proyecto01/mcp-test/host.exe
+/proyecto01/mcp-test/config.yml
+
+# Entorno virtual local de mcp-test
+/proyecto01/mcp-test/.ENTORNO/
+/proyecto01/mcp-test/.ENTORNO/**
