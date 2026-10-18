@@ -394,11 +394,7 @@ def resolver_ejercicio(
 
 
 if __name__ == "__main__":
-    if TRANSPORTE == "streamable-http":
-        mcp.run(
-            transport=TRANSPORTE,
-            host=os.environ.get("MCP_HOST", "0.0.0.0"),
-            port=int(os.environ.get("MCP_PORT", "8000")),
-        )
+    if TRANSPORTE == "stdio":
+        mcp.run(transport="stdio")
     else:
-        mcp.run(transport=TRANSPORTE)
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
